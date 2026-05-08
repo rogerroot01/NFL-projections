@@ -129,12 +129,14 @@ family_tab_ui <- function(id, label) {
         selectInput(paste0(id, "_split"), "File", choices = NULL),
         selectInput(paste0(id, "_market"), "Market", choices = market_labels, selected = "all"),
         selectInput(paste0(id, "_result_col"), "Game table result column", choices = NULL),
-        actionButton(paste0(id, "_reload"), "Reload CSVs", class = "btn-primary"),
+        actionButton(paste0(id, "_load"), "Load selected file", class = "btn-primary"),
+        actionButton(paste0(id, "_reload"), "Clear cache", class = "btn-default"),
         tags$hr(),
         downloadButton(paste0(id, "_download_file"), "Download selected file")
       ),
-      mainPanel(
-        h4("Backtest summary"),
+        mainPanel(
+          tags$p(tags$small("Choose a file and result column to load details. The app reads one CSV at a time to keep startup light.")),
+          h4("Backtest summary"),
         DTOutput(paste0(id, "_summary")),
         tags$hr(),
         h4("Prediction columns"),
@@ -202,10 +204,14 @@ server <- function(input, output, session) {
       updateSelectInput(session, paste0(id, "_split"), choices = stats::setNames(choices$path, choices$label), selected = choices$path[1])
     })
 
-    current_df <- reactive({
+    current_path <- eventReactive(input[[paste0(id, "_load")]], {
       path <- input[[paste0(id, "_split")]]
       req(path)
-      read_model_file(path)
+      path
+    }, ignoreInit = TRUE)
+
+    current_df <- reactive({
+      read_model_file(current_path())
     })
 
     current_summary <- reactive({
@@ -222,6 +228,7 @@ server <- function(input, output, session) {
     })
 
     output[[paste0(id, "_summary")]] <- renderDT({
+      req(input[[paste0(id, "_load")]] > 0)
       current_summary() %>%
         mutate(win_pct = scales::percent(win_pct, accuracy = 0.1)) %>%
         select(Market = market_label, `Result column` = result_col, `Projection column` = projection_col, Picks = picks, Wins = wins, Losses = losses, `Win %` = win_pct) %>%
@@ -229,12 +236,14 @@ server <- function(input, output, session) {
     })
 
     output[[paste0(id, "_pred_cols")]] <- renderDT({
+      req(input[[paste0(id, "_load")]] > 0)
       df <- current_df()
       tibble(`Prediction column` = prediction_cols(df)) %>%
         datatable(rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
     })
 
     output[[paste0(id, "_games")]] <- renderDT({
+      req(input[[paste0(id, "_load")]] > 0)
       df <- current_df()
       result_col <- input[[paste0(id, "_result_col")]]
       req(result_col)
@@ -242,6 +251,7 @@ server <- function(input, output, session) {
       proj_col <- proj_col[proj_col %in% names(df)][1] %||% NA_character_
       cols <- unique(c(key_cols(df), proj_col, result_col))
       display <- df %>% select(any_of(cols))
+      display <- display %>% dplyr::slice_head(n = 500)
       datatable(display, rownames = FALSE, options = list(pageLength = 20, scrollX = TRUE, autoWidth = TRUE)) %>%
         formatRound(columns = names(display)[vapply(display, is.numeric, logical(1))], digits = 2)
     })
@@ -373,9 +383,10 @@ server <- function(input, output, session) {
       ) %>%
       filter(agree_pct >= input$cons_agree / 100) %>%
       arrange(season, week, game_id)
-  }, ignoreInit = FALSE)
+  }, ignoreInit = TRUE)
 
   output$cons_summary <- renderDT({
+    req(input$cons_run > 0)
     df <- consensus_rows()
     if (nrow(df) == 0) return(datatable(tibble(Message = "No consensus rows for the current selections."), rownames = FALSE))
     tibble(
@@ -391,14 +402,19 @@ server <- function(input, output, session) {
   })
 
   output$cons_games <- renderDT({
+    req(input$cons_run > 0)
     consensus_rows() %>%
+      dplyr::slice_head(n = 1000) %>%
       mutate(agree_pct = scales::percent(agree_pct, accuracy = 0.1)) %>%
       datatable(rownames = FALSE, options = list(pageLength = 25, scrollX = TRUE, autoWidth = TRUE))
   })
 
   output$cons_download <- downloadHandler(
     filename = function() paste0("projection_consensus_", Sys.Date(), ".csv"),
-    content = function(file) write_csv(consensus_rows(), file)
+    content = function(file) {
+      req(input$cons_run > 0)
+      write_csv(consensus_rows(), file)
+    }
   )
 }
 
