@@ -51,11 +51,51 @@ file_inventory <- function() {
 
 inventory <- file_inventory()
 file_cache <- new.env(parent = emptyenv())
+header_cache <- new.env(parent = emptyenv())
+
+file_header <- function(path) {
+  key <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  if (!exists(key, envir = header_cache, inherits = FALSE)) {
+    assign(key, names(suppressMessages(readr::read_csv(path, n_max = 0, show_col_types = FALSE, progress = FALSE))), envir = header_cache)
+  }
+  get(key, envir = header_cache, inherits = FALSE)
+}
+
+prediction_cols_from_names <- function(cols) {
+  cols[str_detect(cols, regex("ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy", TRUE)) &
+         !str_detect(cols, "^Cover_|_target|_cover$")]
+}
+
+key_cols_from_names <- function(cols) {
+  intersect(
+    c("game_id", "season", "week", "game_date", "posteam", "defteam", "home_team", "away_team",
+      "home_score", "away_score", "spread_line", "total_line"),
+    cols
+  )
+}
+
+cols_needed_for_file <- function(path) {
+  cols <- file_header(path)
+  cover_cols <- grep("^Cover_", cols, value = TRUE)
+  cover_projection_cols <- unique(unlist(purrr::map(cover_cols, projection_candidates_for_cover), use.names = FALSE))
+  unique(c(
+    key_cols_from_names(cols),
+    cover_cols,
+    prediction_cols_from_names(cols),
+    cover_projection_cols
+  )) %>%
+    intersect(cols)
+}
 
 read_model_file <- function(path) {
   key <- normalizePath(path, winslash = "/", mustWork = FALSE)
   if (!exists(key, envir = file_cache, inherits = FALSE)) {
-    assign(key, suppressMessages(readr::read_csv(path, show_col_types = FALSE, progress = FALSE)), envir = file_cache)
+    cols <- cols_needed_for_file(path)
+    assign(
+      key,
+      suppressMessages(readr::read_csv(path, col_select = dplyr::all_of(cols), show_col_types = FALSE, progress = FALSE)),
+      envir = file_cache
+    )
   }
   get(key, envir = file_cache, inherits = FALSE)
 }
@@ -106,17 +146,11 @@ detect_cover_summary <- function(df) {
 }
 
 prediction_cols <- function(df) {
-  cols <- names(df)
-  cols[str_detect(cols, regex("ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy", TRUE)) &
-         !str_detect(cols, "^Cover_|_target|_cover$")]
+  prediction_cols_from_names(names(df))
 }
 
 key_cols <- function(df) {
-  intersect(
-    c("game_id", "season", "week", "game_date", "posteam", "defteam", "home_team", "away_team",
-      "home_score", "away_score", "spread_line", "total_line"),
-    names(df)
-  )
+  key_cols_from_names(names(df))
 }
 
 family_tab_ui <- function(id, label) {
@@ -237,8 +271,7 @@ server <- function(input, output, session) {
 
     output[[paste0(id, "_pred_cols")]] <- renderDT({
       req(input[[paste0(id, "_load")]] > 0)
-      df <- current_df()
-      tibble(`Prediction column` = prediction_cols(df)) %>%
+      tibble(`Prediction column` = prediction_cols_from_names(file_header(current_path()))) %>%
         datatable(rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
     })
 
@@ -249,11 +282,13 @@ server <- function(input, output, session) {
       req(result_col)
       proj_col <- projection_candidates_for_cover(result_col)
       proj_col <- proj_col[proj_col %in% names(df)][1] %||% NA_character_
-      cols <- unique(c(key_cols(df), proj_col, result_col))
+      cols <- unique(stats::na.omit(c(key_cols(df), proj_col, result_col)))
       display <- df %>% select(any_of(cols))
       display <- display %>% dplyr::slice_head(n = 500)
-      datatable(display, rownames = FALSE, options = list(pageLength = 20, scrollX = TRUE, autoWidth = TRUE)) %>%
-        formatRound(columns = names(display)[vapply(display, is.numeric, logical(1))], digits = 2)
+      dt <- datatable(display, rownames = FALSE, options = list(pageLength = 20, scrollX = TRUE, autoWidth = TRUE))
+      numeric_display_cols <- names(display)[vapply(display, is.numeric, logical(1))]
+      if (length(numeric_display_cols) > 0) dt <- formatRound(dt, columns = numeric_display_cols, digits = 2)
+      dt
     })
 
     output[[paste0(id, "_download_file")]] <- downloadHandler(
