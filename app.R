@@ -538,11 +538,11 @@ server <- function(input, output, session) {
       mutate(
         season = as.integer(season),
         week = as.integer(week),
-        avg_projection = round(avg_projection, 1),
-        market_line = round(market_line, 1),
-        avg_edge = round(avg_edge, 1),
-        agree_pct = round(100 * agree_pct, 0),
-        actual_side = round(actual_side, 0)
+        avg_projection = sprintf("%.1f", avg_projection),
+        market_line = sprintf("%.1f", market_line),
+        avg_edge = sprintf("%.1f", avg_edge),
+        agree_pct = paste0(sprintf("%.0f", 100 * agree_pct), "%"),
+        actual_side = ifelse(is.na(actual_side), NA_character_, as.character(as.integer(actual_side)))
       ) %>%
       dplyr::slice_head(n = 50)
   })
