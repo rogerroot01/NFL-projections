@@ -261,11 +261,13 @@ ui <- fluidPage(
         padding: 32px;
         color: #f7fbff;
         background:
-          radial-gradient(circle at 50% 92%, rgba(255,255,255,0.24) 0, rgba(255,255,255,0.08) 14%, rgba(255,255,255,0) 32%),
-          linear-gradient(90deg, rgba(255,255,255,0.11) 1px, transparent 1px),
-          repeating-linear-gradient(0deg, rgba(255,255,255,0.26) 0 2px, transparent 2px 76px),
-          linear-gradient(135deg, #062316 0%, #0d5b36 45%, #092414 100%);
-        background-size: auto, 72px 100%, 100% 76px, auto;
+          radial-gradient(circle at 18% 12%, rgba(255,255,255,0.26) 0, rgba(255,255,255,0.08) 18%, rgba(255,255,255,0) 33%),
+          radial-gradient(circle at 82% 8%, rgba(255,255,255,0.2) 0, rgba(255,255,255,0.06) 16%, rgba(255,255,255,0) 30%),
+          linear-gradient(90deg, transparent 0 7%, rgba(255,255,255,0.26) 7% calc(7% + 3px), transparent calc(7% + 3px) 18%, rgba(255,255,255,0.2) 18% calc(18% + 2px), transparent calc(18% + 2px) 29%, rgba(255,255,255,0.2) 29% calc(29% + 2px), transparent calc(29% + 2px) 40%, rgba(255,255,255,0.2) 40% calc(40% + 2px), transparent calc(40% + 2px) 50%, rgba(255,255,255,0.58) 50% calc(50% + 4px), transparent calc(50% + 4px) 60%, rgba(255,255,255,0.2) 60% calc(60% + 2px), transparent calc(60% + 2px) 71%, rgba(255,255,255,0.2) 71% calc(71% + 2px), transparent calc(71% + 2px) 82%, rgba(255,255,255,0.2) 82% calc(82% + 2px), transparent calc(82% + 2px) 93%, rgba(255,255,255,0.26) 93% calc(93% + 3px), transparent calc(93% + 3px) 100%),
+          repeating-linear-gradient(90deg, rgba(255,255,255,0.22) 0 2px, transparent 2px 12px, rgba(255,255,255,0.12) 12px 14px, transparent 14px 42px),
+          repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 5px),
+          linear-gradient(180deg, #0f5b33 0%, #0a4629 42%, #06351f 100%);
+        background-size: auto, auto, auto, 86px 100%, auto, auto;
       }
 
       #splash_screen::before {
@@ -273,9 +275,24 @@ ui <- fluidPage(
         position: absolute;
         inset: 0;
         background:
-          linear-gradient(90deg, rgba(255,255,255,0.34) 0 3px, transparent 3px calc(50% - 2px), rgba(255,255,255,0.52) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px) 100%),
-          radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 48%, rgba(0,0,0,0.42) 100%);
-        opacity: 0.9;
+          repeating-linear-gradient(90deg, transparent 0 68px, rgba(255,255,255,0.42) 68px 72px, transparent 72px 136px),
+          linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 36%, rgba(0,0,0,0.24) 100%),
+          radial-gradient(ellipse at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.12) 48%, rgba(0,0,0,0.52) 100%);
+        opacity: 0.82;
+        pointer-events: none;
+      }
+
+      #splash_screen::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(0deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 100%),
+          linear-gradient(90deg, transparent 0 calc(50% - 3px), rgba(255,255,255,0.68) calc(50% - 3px) calc(50% + 3px), transparent calc(50% + 3px) 100%);
+        background-size: 100% 110px, auto;
+        transform: perspective(850px) rotateX(58deg) translateY(24%);
+        transform-origin: center bottom;
+        opacity: 0.6;
         pointer-events: none;
       }
 
@@ -291,40 +308,12 @@ ui <- fluidPage(
         backdrop-filter: blur(8px);
       }
 
-      .ensemble-shield {
-        width: 116px;
-        height: 134px;
-        margin: 0 auto 22px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 6px;
-        color: #ffffff;
-        background: linear-gradient(180deg, #183b72 0%, #10234e 52%, #b51f2c 53%, #7f101a 100%);
-        border: 3px solid #ffffff;
-        border-radius: 18px 18px 34px 34px;
-        box-shadow: inset 0 0 0 2px rgba(255,255,255,0.22), 0 16px 40px rgba(0,0,0,0.34);
-        font-family: Georgia, 'Times New Roman', serif;
-        letter-spacing: 2px;
-      }
-
-      .ensemble-shield .shield-stars {
-        font-size: 14px;
-        letter-spacing: 4px;
-        line-height: 1;
-      }
-
-      .ensemble-shield .shield-nfl {
-        font-size: 36px;
-        font-weight: 800;
-        line-height: 0.95;
-      }
-
-      .ensemble-shield .shield-model {
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 1px;
-        text-transform: uppercase;
+      .splash-nfl-logo {
+        width: 132px;
+        height: auto;
+        margin: 0 auto 24px;
+        display: block;
+        filter: drop-shadow(0 14px 28px rgba(0,0,0,0.45));
       }
 
       .splash-title {
@@ -385,12 +374,7 @@ ui <- fluidPage(
     id = "splash_screen",
     div(
       class = "splash-card",
-      div(
-        class = "ensemble-shield",
-        div(class = "shield-stars", "* * *"),
-        div(class = "shield-nfl", "NFL"),
-        div(class = "shield-model", "Model")
-      ),
+      tags$img(src = "nfl-logo.png", class = "splash-nfl-logo", alt = "NFL logo"),
       h1(class = "splash-title", "NFL Ensemble Model"),
       div(class = "splash-subtitle", "Projection wrangler for model families, market edges, consensus signals, and future-game scouting."),
       actionButton("splash_enter", "Enter Model")

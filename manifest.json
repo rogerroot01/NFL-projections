@@ -1861,7 +1861,7 @@
   },
   "files": {
     "app.R": {
-      "checksum": "a50dcc89faaf88140e06499683f655d3"
+      "checksum": "ae45a62c040cde0240440598d3f07a58"
     },
     "data/compact_models.rds": {
       "checksum": "c30dcb73bec1cce3cfb42f1bbc9efab1"
@@ -1871,6 +1871,9 @@
     },
     "prepare_data.R": {
       "checksum": "b0a1ac7383e5acf5c3a990c051c61c82"
+    },
+    "www/nfl-logo.png": {
+      "checksum": "c670e7645fac5e432943f566e4a94169"
     }
   },
   "users": null
