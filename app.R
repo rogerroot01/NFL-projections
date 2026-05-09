@@ -263,7 +263,7 @@ ui <- fluidPage(
         padding: 32px;
         color: #f7fbff;
         background:
-          linear-gradient(180deg, rgba(0,0,0,0.1), rgba(0,0,0,0.45)),
+          linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.12)),
           url('stadium-splash.png') center center / cover no-repeat;
       }
 
@@ -273,9 +273,9 @@ ui <- fluidPage(
         inset: 0;
         z-index: 0;
         background:
-          radial-gradient(ellipse at 50% 48%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 46%, rgba(0,0,0,0.56) 100%),
-          linear-gradient(180deg, rgba(0,0,0,0.16), rgba(0,0,0,0.05) 38%, rgba(0,0,0,0.36));
-        opacity: 0.95;
+          radial-gradient(ellipse at 50% 48%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.04) 52%, rgba(0,0,0,0.22) 100%),
+          linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0) 42%, rgba(0,0,0,0.08));
+        opacity: 0.45;
         pointer-events: none;
       }
 

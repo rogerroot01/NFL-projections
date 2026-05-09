@@ -1861,7 +1861,7 @@
   },
   "files": {
     "app.R": {
-      "checksum": "27408592c7cc3866aff096f8ee5e03cd"
+      "checksum": "6414a7f70f3df7666540b18153498f5a"
     },
     "data/compact_models.rds": {
       "checksum": "c30dcb73bec1cce3cfb42f1bbc9efab1"
@@ -1873,10 +1873,10 @@
       "checksum": "b0a1ac7383e5acf5c3a990c051c61c82"
     },
     "www/ensemble-icon.png": {
-      "checksum": "482343e9a42fb4a54fa38b70f14410b4"
+      "checksum": "33e48f584eb62b03fa6b1a88519156e6"
     },
     "www/favicon.ico": {
-      "checksum": "482343e9a42fb4a54fa38b70f14410b4"
+      "checksum": "33e48f584eb62b03fa6b1a88519156e6"
     },
     "www/nfl-logo.png": {
       "checksum": "3819418d80b64caeacae11466f13de22"
