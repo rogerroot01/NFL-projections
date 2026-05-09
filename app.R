@@ -76,6 +76,7 @@ family_labels <- c(
 market_labels <- c(
   all = "All markets",
   spread = "Spread / score diff",
+  straight_up = "Straight up",
   total = "Total",
   home_implied = "Home implied",
   away_implied = "Away implied",
@@ -513,7 +514,7 @@ ui <- fluidPage(
           selectInput(
             "cons_market",
             "Market",
-            choices = c("Spread" = "spread", "Total" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
+            choices = c("Spread" = "spread", "Straight up" = "straight_up", "Total" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
             selected = "spread"
           ),
           selectInput(
@@ -535,6 +536,9 @@ ui <- fluidPage(
           downloadButton("cons_download", "Download consensus rows")
         ),
         mainPanel(
+          h4("Consensus status"),
+          verbatimTextOutput("cons_status", placeholder = TRUE),
+          tags$hr(),
           h4("Consensus summary"),
           tableOutput("cons_summary"),
           tags$hr(),
@@ -725,6 +729,8 @@ server <- function(input, output, session) {
   bind_family("scoreslatereg", "ScoresLateReg")
   bind_family("billy", "Billy")
 
+  consensus_status <- reactiveVal("Ready.")
+
   output$file_table <- renderTable({
     inventory %>%
       select(Season = season, Family = family_label, Split = split, File = file)
@@ -741,6 +747,8 @@ server <- function(input, output, session) {
     cols <- prediction_cols(df)
     cols <- cols[!str_detect(cols, "^Cover_")]
     if (market == "spread") {
+      cols[str_detect(cols, "ScoreDiff|ImpliedScoreDiff|Billy")]
+    } else if (market == "straight_up") {
       cols[str_detect(cols, "ScoreDiff|ImpliedScoreDiff|Billy")]
     } else if (market == "total") {
       cols[str_detect(cols, "Total|ScoreTotal|TotalScore")]
@@ -882,12 +890,12 @@ server <- function(input, output, session) {
       raw <- suppressWarnings(as.numeric(df[[col]]))
       split <- meta$split
       pred <- raw
-      if (market == "spread" && str_detect(split, "^away")) pred <- -pred
+      if (market %in% c("spread", "straight_up") && str_detect(split, "^away")) pred <- -pred
       if (market == "home_implied" && str_detect(split, "^away") && str_detect(col, "^(Score_|Score$|Score_final|ImpliedTeamScored)")) pred <- NA_real_
       if (market == "home_implied" && str_detect(split, "^home") && str_detect(col, "OppScore|ImpliedOppScored")) pred <- NA_real_
       if (market == "away_implied" && str_detect(split, "^home") && str_detect(col, "^(Score_|Score$|Score_final|ImpliedTeamScored)")) pred <- NA_real_
       if (market == "away_implied" && str_detect(split, "^away") && str_detect(col, "OppScore|ImpliedOppScored")) pred <- NA_real_
-      if (market == "spread") {
+      if (market %in% c("spread", "straight_up")) {
         pred <- pred + base$spread_injury_adj
       } else if (market == "total") {
         pred <- pred + base$total_injury_adj
@@ -899,6 +907,8 @@ server <- function(input, output, session) {
 
       line <- if (market == "spread") {
         base$spread_line
+      } else if (market == "straight_up") {
+        rep(0, nrow(base))
       } else if (market == "total") {
         base$total_line
       } else if (market == "home_implied") {
@@ -907,7 +917,7 @@ server <- function(input, output, session) {
         (base$total_line + base$spread_line) / 2
       }
 
-      actual <- if (market == "spread") {
+      actual <- if (market %in% c("spread", "straight_up")) {
         base$home_score - base$away_score
       } else if (market == "total") {
         base$home_score + base$away_score
@@ -942,28 +952,44 @@ server <- function(input, output, session) {
   }
 
   consensus_rows <- eventReactive(input$cons_run, {
-    req(input$cons_families, input$cons_market, input$cons_line_source, input$cons_injury_source, input$cons_min_win)
+    consensus_status("Building consensus...")
+    families <- input$cons_families %||% names(family_labels)
+    market <- input$cons_market %||% "spread"
+    line_source <- input$cons_line_source %||% "closing"
+    injury_source <- input$cons_injury_source %||% "none"
+    min_win <- (input$cons_min_win %||% 40) / 100
+    min_agree <- (input$cons_agree %||% 50) / 100
     withProgress(message = "Building consensus, please wait...", value = 0, {
       selected_seasons <- unique(c(as.integer(input$cons_seasons %||% integer()), as.integer(input$cons_future_seasons %||% integer())))
-      if (length(selected_seasons) == 0 || all(is.na(selected_seasons))) return(tibble())
+      if (length(selected_seasons) == 0 || all(is.na(selected_seasons))) {
+        consensus_status("No seasons selected.")
+        return(tibble())
+      }
       selected <- inventory %>%
-        filter(family %in% input$cons_families, season %in% selected_seasons)
+        filter(family %in% families, season %in% selected_seasons)
+      if (nrow(selected) == 0) {
+        consensus_status("No model files matched the selected families and seasons.")
+        return(tibble())
+      }
 
       incProgress(0.2, detail = "Collecting model projections")
       long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
         long_predictions_for_file(
           tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
-          input$cons_market,
-          input$cons_min_win / 100,
-          input$cons_line_source,
-          input$cons_injury_source
+          market,
+          min_win,
+          line_source,
+          injury_source
         )
       })
 
-      if (nrow(long) == 0) return(tibble())
+      if (nrow(long) == 0) {
+        consensus_status("No projections passed the current selections.")
+        return(tibble())
+      }
 
       incProgress(0.7, detail = "Averaging model signals")
-      long %>%
+      rows <- long %>%
         group_by(game_id, season, week, home_team, away_team) %>%
         summarise(
           projections = n(),
@@ -974,11 +1000,11 @@ server <- function(input, output, session) {
           agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
           consensus_pick = case_when(
             all(is.na(pick)) ~ NA_character_,
-            input$cons_market == "spread" & sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Home",
-            input$cons_market == "spread" & sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Away",
-            input$cons_market == "spread" & avg_projection > market_line ~ "Home",
-            input$cons_market == "spread" & avg_projection < market_line ~ "Away",
-            input$cons_market == "spread" ~ NA_character_,
+            market %in% c("spread", "straight_up") & sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Home",
+            market %in% c("spread", "straight_up") & sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Away",
+            market %in% c("spread", "straight_up") & avg_projection > market_line ~ "Home",
+            market %in% c("spread", "straight_up") & avg_projection < market_line ~ "Away",
+            market %in% c("spread", "straight_up") ~ NA_character_,
             sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Over",
             sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Under",
             avg_projection > market_line ~ "Over",
@@ -989,24 +1015,39 @@ server <- function(input, output, session) {
           correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
           .groups = "drop"
         ) %>%
-        filter(is.na(agree_pct) | agree_pct >= input$cons_agree / 100) %>%
+        filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
         arrange(season, week, game_id)
+      consensus_status(paste0("Complete. Built ", nrow(rows), " consensus rows from ", nrow(selected), " model files."))
+      rows
     })
   }, ignoreInit = TRUE)
+
+  output$cons_status <- renderText({
+    consensus_status()
+  })
 
   output$cons_summary <- renderTable({
     req(input$cons_run > 0)
     df <- consensus_rows()
     if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
-    tibble(
-      Games = nrow(df),
-      `Avg projections per game` = mean(df$projections),
-      `Avg models per game` = mean(df$models_used),
-      `Avg agreement` = mean(df$agree_pct),
-      Wins = sum(df$correct %in% TRUE, na.rm = TRUE),
-      Losses = sum(df$correct %in% FALSE, na.rm = TRUE),
-      Pushes = sum(is.na(df$correct)),
-      `Win %` = ifelse(sum(!is.na(df$correct)) > 0, sum(df$correct %in% TRUE, na.rm = TRUE) / sum(!is.na(df$correct)), NA_real_)
+    summarize_consensus <- function(data, label) {
+      tibble(
+        Season = label,
+        Games = nrow(data),
+        `Avg projections per game` = mean(data$projections),
+        `Avg models per game` = mean(data$models_used),
+        `Avg agreement` = mean(data$agree_pct),
+        Wins = sum(data$correct %in% TRUE, na.rm = TRUE),
+        Losses = sum(data$correct %in% FALSE, na.rm = TRUE),
+        Pushes = sum(is.na(data$correct)),
+        `Win %` = ifelse(sum(!is.na(data$correct)) > 0, sum(data$correct %in% TRUE, na.rm = TRUE) / sum(!is.na(data$correct)), NA_real_)
+      )
+    }
+    bind_rows(
+      summarize_consensus(df, "Total"),
+      df %>%
+        group_split(season) %>%
+        map_dfr(~ summarize_consensus(.x, as.character(first(.x$season))))
     ) %>%
       mutate(
         `Avg projections per game` = sprintf("%.0f", `Avg projections per game`),
