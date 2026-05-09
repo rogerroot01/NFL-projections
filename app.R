@@ -974,10 +974,16 @@ server <- function(input, output, session) {
           agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
           consensus_pick = case_when(
             all(is.na(pick)) ~ NA_character_,
-            input$cons_market == "spread" & mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Home",
-            input$cons_market == "spread" ~ "Away",
-            mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Over",
-            TRUE ~ "Under"
+            input$cons_market == "spread" & sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Home",
+            input$cons_market == "spread" & sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Away",
+            input$cons_market == "spread" & avg_projection > market_line ~ "Home",
+            input$cons_market == "spread" & avg_projection < market_line ~ "Away",
+            input$cons_market == "spread" ~ NA_character_,
+            sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Over",
+            sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Under",
+            avg_projection > market_line ~ "Over",
+            avg_projection < market_line ~ "Under",
+            TRUE ~ NA_character_
           ),
           actual_side = first_non_na(actual_side),
           correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
