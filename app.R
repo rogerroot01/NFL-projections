@@ -172,11 +172,13 @@ family_tab_ui <- function(id, label) {
         selectInput(paste0(id, "_market"), "Market", choices = market_labels, selected = "all"),
         selectInput(paste0(id, "_split"), "Inspect file", choices = NULL),
         selectInput(paste0(id, "_result_col"), "Inspect result column", choices = NULL),
+        actionButton(paste0(id, "_build"), "Build family summary", class = "btn-primary"),
+        actionButton(paste0(id, "_preview"), "Preview selected file", class = "btn-default"),
         tags$hr(),
         downloadButton(paste0(id, "_download_summary"), "Download summary CSV")
       ),
         mainPanel(
-          tags$p(tags$small("Summaries include all files in this family for the selected season. The file dropdown is only for inspecting one compact preview.")),
+          tags$p(tags$small("Click Build family summary to summarize all files in this family for the selected season. Preview selected file is optional.")),
           h4("Backtest summary by file and result column"),
           tableOutput(paste0(id, "_summary")),
           tags$hr(),
@@ -260,6 +262,7 @@ server <- function(input, output, session) {
     })
 
     family_summary <- reactive({
+      req(input[[paste0(id, "_build")]] > 0)
       market <- input[[paste0(id, "_market")]] %||% "all"
       family_files_for_season() %>%
         pmap_dfr(function(path, file, season, family, family_label, split) {
@@ -272,20 +275,22 @@ server <- function(input, output, session) {
         arrange(desc(WinPct), desc(Picks), File, Result)
     })
 
-    observe({
+    observeEvent(input[[paste0(id, "_preview")]], {
       df <- current_df()
       s <- detect_cover_summary(df)
       market <- input[[paste0(id, "_market")]] %||% "all"
       if (!identical(market, "all")) s <- s %>% filter(market == !!market)
       choices <- stats::setNames(s$result_col, paste0(s$market_label, " - ", s$result_col))
       updateSelectInput(session, paste0(id, "_result_col"), choices = choices, selected = choices[1])
-    })
+    }, ignoreInit = TRUE)
 
     output[[paste0(id, "_summary")]] <- renderTable({
+      req(input[[paste0(id, "_build")]] > 0)
       family_summary() %>% dplyr::slice_head(n = 60)
     })
 
     output[[paste0(id, "_games")]] <- renderTable({
+      req(input[[paste0(id, "_preview")]] > 0)
       df <- current_df()
       result_col <- input[[paste0(id, "_result_col")]]
       req(result_col)
