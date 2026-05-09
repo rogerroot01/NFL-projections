@@ -49,11 +49,25 @@ file_inventory <- function() {
     arrange(family, season, split)
 }
 
-inventory <- file_inventory()
+inventory_rds <- file.path(app_data_dir, "model_inventory.rds")
+compact_models_rds <- file.path(app_data_dir, "compact_models.rds")
+
+inventory <- if (file.exists(inventory_rds)) {
+  readRDS(inventory_rds) %>%
+    mutate(path = file.path(getwd(), path))
+} else {
+  file_inventory()
+}
+
+compact_models <- if (file.exists(compact_models_rds)) readRDS(compact_models_rds) else NULL
 file_cache <- new.env(parent = emptyenv())
 header_cache <- new.env(parent = emptyenv())
 
 file_header <- function(path) {
+  if (!is.null(compact_models)) {
+    nm <- basename(path)
+    if (nm %in% names(compact_models)) return(names(compact_models[[nm]]))
+  }
   key <- normalizePath(path, winslash = "/", mustWork = FALSE)
   if (!exists(key, envir = header_cache, inherits = FALSE)) {
     assign(key, names(suppressMessages(readr::read_csv(path, n_max = 0, show_col_types = FALSE, progress = FALSE))), envir = header_cache)
@@ -88,6 +102,10 @@ cols_needed_for_file <- function(path) {
 }
 
 read_model_file <- function(path) {
+  if (!is.null(compact_models)) {
+    nm <- basename(path)
+    if (nm %in% names(compact_models)) return(compact_models[[nm]])
+  }
   key <- normalizePath(path, winslash = "/", mustWork = FALSE)
   if (!exists(key, envir = file_cache, inherits = FALSE)) {
     cols <- cols_needed_for_file(path)

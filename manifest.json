@@ -1988,7 +1988,7 @@
   },
   "files": {
     "app.R": {
-      "checksum": "125d53c9e54cd7a572c5191526c4bf9c"
+      "checksum": "87156df416972f49c40a8d92e08adfe4"
     },
     "data - Copy/2024_Billy_away.csv": {
       "checksum": "7634a4176b02b55514b69d87a74dd42f"
@@ -2169,6 +2169,15 @@
     },
     "data/2026_ScoresTrees_home.csv": {
       "checksum": "fd6ea924cf03fc337c4b98199daf2252"
+    },
+    "data/compact_models.rds": {
+      "checksum": "c30dcb73bec1cce3cfb42f1bbc9efab1"
+    },
+    "data/model_inventory.rds": {
+      "checksum": "cc6aa5b5aa95e4c82b5649a10daa27fa"
+    },
+    "prepare_data.R": {
+      "checksum": "b0a1ac7383e5acf5c3a990c051c61c82"
     }
   },
   "users": null
