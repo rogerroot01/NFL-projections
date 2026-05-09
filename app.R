@@ -179,18 +179,18 @@ family_tab_ui <- function(id, label) {
         downloadButton(paste0(id, "_download_file"), "Download selected file")
       ),
         mainPanel(
-          tags$p(tags$small("Choose a file and result column to load details. The app reads one CSV at a time to keep startup light.")),
+          tags$p(tags$small("Choose a file and click Load selected file. This diagnostic version renders only small base tables first so we can avoid server disconnects.")),
           h4("Backtest summary"),
-        DTOutput(paste0(id, "_summary")),
-        tags$hr(),
-        h4("Prediction columns"),
-        DTOutput(paste0(id, "_pred_cols")),
-        tags$hr(),
-        h4("Game-level rows"),
-        DTOutput(paste0(id, "_games"))
+          tableOutput(paste0(id, "_summary")),
+          tags$hr(),
+          h4("Prediction columns"),
+          tableOutput(paste0(id, "_pred_cols")),
+          tags$hr(),
+          h4("Game-level rows"),
+          tableOutput(paste0(id, "_games"))
+        )
       )
     )
-  )
 }
 
 ui <- fluidPage(
@@ -283,21 +283,19 @@ server <- function(input, output, session) {
       updateSelectInput(session, paste0(id, "_result_col"), choices = choices, selected = choices[1])
     })
 
-    output[[paste0(id, "_summary")]] <- renderDT({
+    output[[paste0(id, "_summary")]] <- renderTable({
       req(input[[paste0(id, "_load")]] > 0)
       current_summary() %>%
-        mutate(win_pct = scales::percent(win_pct, accuracy = 0.1)) %>%
-        select(Market = market_label, `Result column` = result_col, `Projection column` = projection_col, Picks = picks, Wins = wins, Losses = losses, `Win %` = win_pct) %>%
-        datatable(rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
+        mutate(win_pct = round(100 * win_pct, 1)) %>%
+        select(Market = market_label, Result = result_col, Projection = projection_col, Picks = picks, Wins = wins, Losses = losses, WinPct = win_pct)
     })
 
-    output[[paste0(id, "_pred_cols")]] <- renderDT({
+    output[[paste0(id, "_pred_cols")]] <- renderTable({
       req(input[[paste0(id, "_load")]] > 0)
-      tibble(`Prediction column` = prediction_cols_from_names(file_header(current_path()))) %>%
-        datatable(rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
+      tibble(PredictionColumn = head(prediction_cols_from_names(file_header(current_path())), 25))
     })
 
-    output[[paste0(id, "_games")]] <- renderDT({
+    output[[paste0(id, "_games")]] <- renderTable({
       req(input[[paste0(id, "_load")]] > 0)
       df <- current_df()
       result_col <- input[[paste0(id, "_result_col")]]
@@ -306,11 +304,7 @@ server <- function(input, output, session) {
       proj_col <- proj_col[proj_col %in% names(df)][1] %||% NA_character_
       cols <- unique(stats::na.omit(c(key_cols(df), proj_col, result_col)))
       display <- df %>% select(any_of(cols))
-      display <- display %>% dplyr::slice_head(n = 500)
-      dt <- datatable(display, rownames = FALSE, options = list(pageLength = 20, scrollX = TRUE, autoWidth = TRUE))
-      numeric_display_cols <- names(display)[vapply(display, is.numeric, logical(1))]
-      if (length(numeric_display_cols) > 0) dt <- formatRound(dt, columns = numeric_display_cols, digits = 2)
-      dt
+      display %>% dplyr::slice_head(n = 20)
     })
 
     output[[paste0(id, "_download_file")]] <- downloadHandler(
