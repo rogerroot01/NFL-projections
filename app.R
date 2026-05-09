@@ -263,11 +263,8 @@ ui <- fluidPage(
         padding: 32px;
         color: #f7fbff;
         background:
-          radial-gradient(circle at 18% 9%, rgba(255,255,255,0.28) 0, rgba(255,255,255,0.08) 17%, rgba(255,255,255,0) 31%),
-          radial-gradient(circle at 82% 9%, rgba(255,255,255,0.24) 0, rgba(255,255,255,0.07) 16%, rgba(255,255,255,0) 31%),
-          radial-gradient(ellipse at 50% 122%, rgba(0,0,0,0.48), rgba(0,0,0,0) 46%),
-          repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 3px, rgba(0,0,0,0.04) 3px 8px),
-          linear-gradient(180deg, #167c45 0%, #0c6537 48%, #064223 100%);
+          linear-gradient(180deg, rgba(0,0,0,0.1), rgba(0,0,0,0.45)),
+          url('stadium-splash.png') center center / cover no-repeat;
       }
 
       #splash_screen::before {
@@ -276,35 +273,14 @@ ui <- fluidPage(
         inset: 0;
         z-index: 0;
         background:
-          repeating-linear-gradient(0deg,
-            transparent 0 70px,
-            rgba(255,255,255,0.76) 70px 74px,
-            transparent 74px 150px
-          ) 0 -22px,
-          radial-gradient(ellipse at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 48%, rgba(0,0,0,0.5) 100%);
-        opacity: 0.88;
+          radial-gradient(ellipse at 50% 48%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 46%, rgba(0,0,0,0.56) 100%),
+          linear-gradient(180deg, rgba(0,0,0,0.16), rgba(0,0,0,0.05) 38%, rgba(0,0,0,0.36));
+        opacity: 0.95;
         pointer-events: none;
       }
 
       #splash_screen::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-        background:
-          repeating-linear-gradient(0deg,
-            transparent 0 30px,
-            rgba(255,255,255,0.84) 30px 34px,
-            transparent 34px 150px
-          ) 30% -22px / 92px 100% no-repeat,
-          repeating-linear-gradient(0deg,
-            transparent 0 30px,
-            rgba(255,255,255,0.84) 30px 34px,
-            transparent 34px 150px
-          ) 70% -22px / 92px 100% no-repeat,
-          linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0) 34%, rgba(0,0,0,0.28) 100%);
-        opacity: 0.76;
-        pointer-events: none;
+        display: none;
       }
 
       .splash-card {
