@@ -942,9 +942,9 @@ server <- function(input, output, session) {
       } else if (market == "total") {
         base$total_line
       } else if (market == "home_implied") {
-        (base$total_line - base$spread_line) / 2
-      } else {
         (base$total_line + base$spread_line) / 2
+      } else {
+        (base$total_line - base$spread_line) / 2
       }
 
       actual <- if (market %in% c("spread", "straight_up")) {
@@ -1044,6 +1044,7 @@ server <- function(input, output, session) {
             TRUE ~ NA_character_
           ),
           actual_side = first_non_na(actual_side),
+          actual_result = first_non_na(actual),
           correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
           .groups = "drop"
         ) %>%
@@ -1105,6 +1106,7 @@ server <- function(input, output, session) {
         avg_projection = sprintf("%.1f", avg_projection),
         market_line = ifelse(is.na(market_line), NA_character_, sprintf("%.1f", market_line)),
         avg_edge = ifelse(is.na(avg_edge), NA_character_, sprintf("%.1f", avg_edge)),
+        actual_result = ifelse(is.na(actual_result), NA_character_, sprintf("%.1f", actual_result)),
         agree_pct = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
         actual_side = ifelse(is.na(actual_side), NA_character_, as.character(as.integer(actual_side)))
       )
