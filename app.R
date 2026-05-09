@@ -170,20 +170,17 @@ family_tab_ui <- function(id, label) {
         width = 3,
         selectInput(paste0(id, "_season"), "Season", choices = sort(unique(inventory$season)), selected = max(inventory$season)),
         selectInput(paste0(id, "_market"), "Market", choices = market_labels, selected = "all"),
-        selectInput(paste0(id, "_split"), "Inspect file", choices = NULL),
-        selectInput(paste0(id, "_result_col"), "Inspect result column", choices = NULL),
         actionButton(paste0(id, "_build"), "Build family summary", class = "btn-primary"),
-        actionButton(paste0(id, "_preview"), "Preview selected file", class = "btn-default"),
         tags$hr(),
         downloadButton(paste0(id, "_download_summary"), "Download summary CSV")
       ),
         mainPanel(
           tags$p(tags$small("Click Build family summary to summarize all files in this family for the selected season. Preview selected file is optional.")),
-          h4("Backtest summary by file and result column"),
-          tableOutput(paste0(id, "_summary")),
+          h4("Build status"),
+          verbatimTextOutput(paste0(id, "_status"), placeholder = TRUE),
           tags$hr(),
-          h4("Selected file preview"),
-          tableOutput(paste0(id, "_games"))
+          h4("Backtest summary by file and result column"),
+          verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE)
         )
       )
     )
@@ -250,17 +247,6 @@ server <- function(input, output, session) {
       fam_files %>% filter(season == as.integer(input[[paste0(id, "_season")]]))
     })
 
-    observe({
-      choices <- family_files_for_season() %>% mutate(label = paste(split, "-", file))
-      updateSelectInput(session, paste0(id, "_split"), choices = stats::setNames(choices$path, choices$label), selected = choices$path[1])
-    })
-
-    current_df <- reactive({
-      path <- input[[paste0(id, "_split")]]
-      req(path)
-      read_model_file(path)
-    })
-
     family_summary <- reactive({
       req(input[[paste0(id, "_build")]] > 0)
       market <- input[[paste0(id, "_market")]] %||% "all"
@@ -275,29 +261,24 @@ server <- function(input, output, session) {
         arrange(desc(WinPct), desc(Picks), File, Result)
     })
 
-    observeEvent(input[[paste0(id, "_preview")]], {
-      df <- current_df()
-      s <- detect_cover_summary(df)
-      market <- input[[paste0(id, "_market")]] %||% "all"
-      if (!identical(market, "all")) s <- s %>% filter(market == !!market)
-      choices <- stats::setNames(s$result_col, paste0(s$market_label, " - ", s$result_col))
-      updateSelectInput(session, paste0(id, "_result_col"), choices = choices, selected = choices[1])
-    }, ignoreInit = TRUE)
-
-    output[[paste0(id, "_summary")]] <- renderTable({
+    output[[paste0(id, "_status")]] <- renderText({
       req(input[[paste0(id, "_build")]] > 0)
-      family_summary() %>% dplyr::slice_head(n = 60)
+      s <- family_summary()
+      paste(
+        paste("Family:", family_key),
+        paste("Season:", input[[paste0(id, "_season")]]),
+        paste("Market:", input[[paste0(id, "_market")]]),
+        paste("Files included:", nrow(family_files_for_season())),
+        paste("Summary rows:", nrow(s)),
+        sep = "\n"
+      )
     })
 
-    output[[paste0(id, "_games")]] <- renderTable({
-      req(input[[paste0(id, "_preview")]] > 0)
-      df <- current_df()
-      result_col <- input[[paste0(id, "_result_col")]]
-      req(result_col)
-      proj_col <- projection_candidates_for_cover(result_col)
-      proj_col <- proj_col[proj_col %in% names(df)][1] %||% NA_character_
-      cols <- unique(stats::na.omit(c(key_cols(df), proj_col, result_col)))
-      df %>% select(any_of(cols)) %>% dplyr::slice_head(n = 20)
+    output[[paste0(id, "_summary")]] <- renderText({
+      req(input[[paste0(id, "_build")]] > 0)
+      s <- family_summary() %>% dplyr::slice_head(n = 80)
+      if (nrow(s) == 0) return("No summary rows for this selection.")
+      paste(capture.output(print(s, n = 80, width = 180)), collapse = "\n")
     })
 
     output[[paste0(id, "_download_summary")]] <- downloadHandler(
