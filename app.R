@@ -27,6 +27,8 @@ market_labels <- c(
   score = "Team score"
 )
 
+market_choices <- stats::setNames(names(market_labels), market_labels)
+
 parse_model_file <- function(path) {
   nm <- basename(path)
   m <- str_match(nm, "^(\\d{4})_(.+)_(home|away|home_score|away_score)\\.csv$")
@@ -212,7 +214,7 @@ family_tab_ui <- function(id, label) {
       sidebarPanel(
         width = 3,
         selectInput(paste0(id, "_season"), "Backtest season", choices = backtest_seasons, selected = max(backtest_seasons)),
-        selectInput(paste0(id, "_market"), "Market", choices = market_labels, selected = "all"),
+        selectInput(paste0(id, "_market"), "Market", choices = market_choices, selected = "all"),
         actionButton(paste0(id, "_build"), "Build family summary", class = "btn-primary"),
         tags$hr(),
         downloadButton(paste0(id, "_download_summary"), "Download summary CSV")
@@ -258,7 +260,12 @@ ui <- fluidPage(
           width = 3,
           checkboxGroupInput("cons_families", "Families", choices = stats::setNames(names(family_labels), family_labels), selected = names(family_labels)),
           checkboxGroupInput("cons_seasons", "Seasons", choices = sort(unique(inventory$season)), selected = sort(unique(inventory$season))[sort(unique(inventory$season)) < 2026]),
-          selectInput("cons_market", "Market", choices = c(spread = "Spread", total = "Total", home_implied = "Home implied", away_implied = "Away implied"), selected = "spread"),
+          selectInput(
+            "cons_market",
+            "Market",
+            choices = c("Spread" = "spread", "Total" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
+            selected = "spread"
+          ),
           sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           actionButton("cons_run", "Build consensus", class = "btn-primary"),
           tags$hr(),
