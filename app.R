@@ -287,14 +287,14 @@ family_tab_ui <- function(id, label) {
       ),
         mainPanel(
           tags$p(tags$small("Click Build family summary to summarize graded files in this family for the selected season. Future seasons with blank cover results are excluded from this backtest selector.")),
+          h4("Future projection preview"),
+          DTOutput(paste0(id, "_future_preview")),
+          tags$hr(),
           h4("Build status"),
           verbatimTextOutput(paste0(id, "_status"), placeholder = TRUE),
           tags$hr(),
           h4("Backtest summary by file and result column"),
-          verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE),
-          tags$hr(),
-          h4("Future projection preview"),
-          DTOutput(paste0(id, "_future_preview"))
+          verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE)
         )
       )
     )
@@ -652,8 +652,10 @@ server <- function(input, output, session) {
     })
 
     output[[paste0(id, "_summary")]] <- renderPrint({
+      if (is.null(input[[paste0(id, "_build")]]) || input[[paste0(id, "_build")]] <= 0) {
+        return(invisible(NULL))
+      }
       tryCatch({
-        req(input[[paste0(id, "_build")]] > 0)
         s <- family_summary() %>% dplyr::slice_head(n = 80)
         if (nrow(s) == 0) {
           fd <- file_debug_summary(family_files_for_season())
@@ -1023,6 +1025,10 @@ server <- function(input, output, session) {
       rows
     })
   }, ignoreInit = TRUE)
+
+  observeEvent(input$cons_run, {
+    consensus_rows()
+  }, ignoreInit = TRUE, priority = 100)
 
   output$cons_status <- renderText({
     consensus_status()
