@@ -162,6 +162,10 @@ key_cols <- function(df) {
   key_cols_from_names(names(df))
 }
 
+norm_key <- function(x) {
+  str_replace_all(str_to_lower(as.character(x)), "[^a-z0-9]", "")
+}
+
 family_tab_ui <- function(id, label) {
   tabPanel(
     label,
@@ -240,11 +244,24 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   bind_family <- function(id, family_key) {
-    fam_files <- inventory %>% filter(family == family_key)
+    family_key_norm <- norm_key(family_key)
+    target_label_norm <- norm_key(family_labels[[family_key]] %||% family_key)
 
     family_files_for_season <- reactive({
       req(input[[paste0(id, "_season")]])
-      fam_files %>% filter(season == as.integer(input[[paste0(id, "_season")]]))
+      inventory %>%
+        mutate(
+          family_norm = norm_key(family),
+          family_label_norm = norm_key(family_label),
+          file_norm = norm_key(file)
+        ) %>%
+        filter(
+          season == as.integer(input[[paste0(id, "_season")]]),
+          family_norm == family_key_norm |
+            family_label_norm == target_label_norm |
+            str_detect(file_norm, fixed(family_key_norm))
+        ) %>%
+        select(path, file, season, family, family_label, split)
     })
 
     family_summary <- reactive({
@@ -270,6 +287,8 @@ server <- function(input, output, session) {
         paste("Market:", input[[paste0(id, "_market")]]),
         paste("Files included:", nrow(family_files_for_season())),
         paste("Summary rows:", nrow(s)),
+        paste("Available families:", paste(sort(unique(inventory$family)), collapse = ", ")),
+        paste("Available seasons:", paste(sort(unique(inventory$season)), collapse = ", ")),
         sep = "\n"
       )
     })
