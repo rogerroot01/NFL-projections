@@ -268,6 +268,7 @@ ui <- fluidPage(
             selected = "spread"
           ),
           sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
+          sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
           actionButton("cons_run", "Build consensus", class = "btn-primary"),
           tags$hr(),
           downloadButton("cons_download", "Download consensus rows")
@@ -416,10 +417,16 @@ server <- function(input, output, session) {
     }
   }
 
-  long_predictions_for_file <- function(meta, market) {
+  long_predictions_for_file <- function(meta, market, min_win_pct = 0.40) {
     df <- read_model_file(meta$path)
     cols <- projection_columns_for_market(df, market)
     if (length(cols) == 0) return(tibble())
+
+    score_lookup <- detect_cover_summary(df)
+    if (!identical(market, "all")) score_lookup <- filter(score_lookup, market == !!market)
+    score_lookup <- score_lookup %>%
+      filter(!is.na(projection_col)) %>%
+      select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
 
     base <- df %>%
       transmute(
@@ -435,6 +442,17 @@ server <- function(input, output, session) {
       )
 
     out <- map_dfr(cols, function(col) {
+      model_score <- score_lookup %>% filter(projection_col == col) %>% dplyr::slice_head(n = 1)
+      if (nrow(model_score) == 0) {
+        model_result_col <- NA_character_
+        model_picks <- NA_integer_
+        model_win_pct <- NA_real_
+      } else {
+        model_result_col <- model_score$model_result_col
+        model_picks <- model_score$model_picks
+        model_win_pct <- model_score$model_win_pct
+      }
+
       raw <- suppressWarnings(as.numeric(df[[col]]))
       split <- meta$split
       pred <- raw
@@ -476,20 +494,29 @@ server <- function(input, output, session) {
         market_line = line,
         pick = pick,
         actual_side = actual_side,
-        correct = ifelse(!is.na(pick) & !is.na(actual_side), pick == actual_side, NA)
+        correct = ifelse(!is.na(pick) & !is.na(actual_side), pick == actual_side, NA),
+        model_result_col = model_result_col,
+        model_picks = model_picks,
+        model_win_pct = model_win_pct
       ))
     })
 
-    out %>% filter(!is.na(projection), !is.na(pick))
+    out %>%
+      filter(!is.na(projection), !is.na(pick)) %>%
+      filter(!is.na(model_win_pct), model_win_pct >= min_win_pct)
   }
 
   consensus_rows <- eventReactive(input$cons_run, {
-    req(input$cons_families, input$cons_seasons, input$cons_market)
+    req(input$cons_families, input$cons_seasons, input$cons_market, input$cons_min_win)
     selected <- inventory %>%
       filter(family %in% input$cons_families, season %in% as.integer(input$cons_seasons))
 
     long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
-      long_predictions_for_file(tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split), input$cons_market)
+      long_predictions_for_file(
+        tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
+        input$cons_market,
+        input$cons_min_win / 100
+      )
     })
 
     if (nrow(long) == 0) return(tibble())
@@ -498,6 +525,7 @@ server <- function(input, output, session) {
       group_by(game_id, season, week, home_team, away_team) %>%
       summarise(
         projections = n(),
+        models_used = n_distinct(paste(file, projection_col, sep = "::")),
         avg_projection = mean(projection, na.rm = TRUE),
         market_line = first(na.omit(market_line)),
         avg_edge = avg_projection - market_line,
@@ -523,6 +551,7 @@ server <- function(input, output, session) {
     tibble(
       Games = nrow(df),
       `Avg projections per game` = mean(df$projections),
+      `Avg models per game` = mean(df$models_used),
       `Avg agreement` = mean(df$agree_pct),
       Wins = sum(df$correct %in% TRUE, na.rm = TRUE),
       Losses = sum(df$correct %in% FALSE, na.rm = TRUE),
