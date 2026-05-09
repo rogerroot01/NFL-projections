@@ -4,6 +4,7 @@ library(purrr)
 library(readr)
 library(stringr)
 library(tidyr)
+library(DT)
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
@@ -236,14 +237,165 @@ family_tab_ui <- function(id, label) {
           verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE),
           tags$hr(),
           h4("Future projection preview"),
-          tableOutput(paste0(id, "_future_preview"))
+          DTOutput(paste0(id, "_future_preview"))
         )
       )
     )
 }
 
 ui <- fluidPage(
-  tags$head(tags$title("Projection Model Wrangler")),
+  tags$head(
+    tags$title("NFL Ensemble Model"),
+    tags$style(HTML("
+      body.splash-active {
+        overflow: hidden;
+      }
+
+      #splash_screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        color: #f7fbff;
+        background:
+          radial-gradient(circle at 50% 92%, rgba(255,255,255,0.24) 0, rgba(255,255,255,0.08) 14%, rgba(255,255,255,0) 32%),
+          linear-gradient(90deg, rgba(255,255,255,0.11) 1px, transparent 1px),
+          repeating-linear-gradient(0deg, rgba(255,255,255,0.26) 0 2px, transparent 2px 76px),
+          linear-gradient(135deg, #062316 0%, #0d5b36 45%, #092414 100%);
+        background-size: auto, 72px 100%, 100% 76px, auto;
+      }
+
+      #splash_screen::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(255,255,255,0.34) 0 3px, transparent 3px calc(50% - 2px), rgba(255,255,255,0.52) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px) 100%),
+          radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 48%, rgba(0,0,0,0.42) 100%);
+        opacity: 0.9;
+        pointer-events: none;
+      }
+
+      .splash-card {
+        position: relative;
+        width: min(760px, 94vw);
+        padding: 44px 40px 38px;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.26);
+        border-radius: 14px;
+        background: rgba(3, 13, 20, 0.66);
+        box-shadow: 0 28px 80px rgba(0,0,0,0.42);
+        backdrop-filter: blur(8px);
+      }
+
+      .ensemble-shield {
+        width: 116px;
+        height: 134px;
+        margin: 0 auto 22px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6px;
+        color: #ffffff;
+        background: linear-gradient(180deg, #183b72 0%, #10234e 52%, #b51f2c 53%, #7f101a 100%);
+        border: 3px solid #ffffff;
+        border-radius: 18px 18px 34px 34px;
+        box-shadow: inset 0 0 0 2px rgba(255,255,255,0.22), 0 16px 40px rgba(0,0,0,0.34);
+        font-family: Georgia, 'Times New Roman', serif;
+        letter-spacing: 2px;
+      }
+
+      .ensemble-shield .shield-stars {
+        font-size: 14px;
+        letter-spacing: 4px;
+        line-height: 1;
+      }
+
+      .ensemble-shield .shield-nfl {
+        font-size: 36px;
+        font-weight: 800;
+        line-height: 0.95;
+      }
+
+      .ensemble-shield .shield-model {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      .splash-title {
+        margin: 0;
+        font-size: clamp(40px, 7vw, 72px);
+        line-height: 0.95;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .splash-subtitle {
+        margin: 16px auto 30px;
+        max-width: 620px;
+        font-size: 19px;
+        line-height: 1.45;
+        color: rgba(247,251,255,0.86);
+      }
+
+      #splash_enter {
+        min-width: 190px;
+        padding: 13px 22px;
+        border: 0;
+        border-radius: 7px;
+        background: #f4f8ff;
+        color: #10234e;
+        font-weight: 800;
+        font-size: 17px;
+        box-shadow: 0 10px 24px rgba(0,0,0,0.26);
+      }
+
+      #splash_enter:hover,
+      #splash_enter:focus {
+        background: #ffffff;
+        color: #081733;
+      }
+
+      #splash_screen.splash-hidden {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 220ms ease, visibility 220ms ease;
+      }
+    ")),
+    tags$script(HTML("
+      document.addEventListener('DOMContentLoaded', function() {
+        document.body.classList.add('splash-active');
+        var splash = document.getElementById('splash_screen');
+        var enter = document.getElementById('splash_enter');
+        if (enter && splash) {
+          enter.addEventListener('click', function() {
+            splash.classList.add('splash-hidden');
+            document.body.classList.remove('splash-active');
+          });
+        }
+      });
+    "))
+  ),
+  div(
+    id = "splash_screen",
+    div(
+      class = "splash-card",
+      div(
+        class = "ensemble-shield",
+        div(class = "shield-stars", "* * *"),
+        div(class = "shield-nfl", "NFL"),
+        div(class = "shield-model", "Model")
+      ),
+      h1(class = "splash-title", "NFL Ensemble Model"),
+      div(class = "splash-subtitle", "Projection wrangler for model families, market edges, consensus signals, and future-game scouting."),
+      actionButton("splash_enter", "Enter Model")
+    )
+  ),
   titlePanel("Projection Model Wrangler"),
   if (!compact_data_available) {
     div(
@@ -289,7 +441,7 @@ ui <- fluidPage(
           tableOutput("cons_summary"),
           tags$hr(),
           h4("Consensus game-level rows"),
-          tableOutput("cons_games")
+          DTOutput("cons_games")
         )
       )
     ),
@@ -422,24 +574,42 @@ server <- function(input, output, session) {
       content = function(file) write_csv(family_summary(), file)
     )
 
-    output[[paste0(id, "_future_preview")]] <- renderTable({
+    output[[paste0(id, "_future_preview")]] <- renderDT({
       req(input[[paste0(id, "_build")]] > 0)
       files <- family_future_files()
-      if (nrow(files) == 0) return(tibble(Message = "No future projection files for this family/season selection."))
+      if (nrow(files) == 0) {
+        return(datatable(tibble(Message = "No future projection files for this family/season selection."), rownames = FALSE))
+      }
       market <- input[[paste0(id, "_market")]] %||% "all"
       rows <- pmap_dfr(files, function(path, file, season, family, family_label, split) {
         df <- read_model_file(path)
         cols <- if (identical(market, "all")) prediction_cols(df) else projection_columns_for_market(df, market)
         cols <- cols[cols %in% names(df)]
         if (length(cols) == 0) return(tibble())
-        keep <- unique(c("game_id", "season", "week", "home_team", "away_team", "spread_line", "total_line", head(cols, 8)))
+        keep <- unique(c("game_id", "season", "week", "home_team", "away_team", "spread_line", "total_line", cols))
         keep <- keep[keep %in% names(df)]
         df %>%
           select(all_of(keep)) %>%
           mutate(File = file, Split = split, .before = 1)
       })
-      if (nrow(rows) == 0) return(tibble(Message = "No future projection columns for this selection."))
-      rows %>% dplyr::slice_head(n = 50)
+      if (nrow(rows) == 0) {
+        return(datatable(tibble(Message = "No future projection columns for this selection."), rownames = FALSE))
+      }
+      rows <- rows %>%
+        mutate(
+          season = as.integer(season),
+          week = as.integer(week)
+        )
+      datatable(
+        rows,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 25,
+          lengthMenu = c(10, 25, 50, 100),
+          scrollX = TRUE
+        )
+      )
     })
   }
 
@@ -659,10 +829,9 @@ server <- function(input, output, session) {
       )
   })
 
-  output$cons_games <- renderTable({
+  output$cons_games <- renderDT({
     req(input$cons_run > 0)
-    consensus_rows() %>%
-      dplyr::slice_head(n = 1000) %>%
+    rows <- consensus_rows() %>%
       mutate(
         season = as.integer(season),
         week = as.integer(week),
@@ -671,8 +840,17 @@ server <- function(input, output, session) {
         avg_edge = ifelse(is.na(avg_edge), NA_character_, sprintf("%.1f", avg_edge)),
         agree_pct = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
         actual_side = ifelse(is.na(actual_side), NA_character_, as.character(as.integer(actual_side)))
-      ) %>%
-      dplyr::slice_head(n = 50)
+      )
+    datatable(
+      rows,
+      rownames = FALSE,
+      filter = "top",
+      options = list(
+        pageLength = 25,
+        lengthMenu = c(10, 25, 50, 100),
+        scrollX = TRUE
+      )
+    )
   })
 
   output$cons_download <- downloadHandler(
