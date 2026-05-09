@@ -760,6 +760,7 @@ server <- function(input, output, session) {
   }
 
   historical_model_scores <- function(market) {
+    score_market <- if (identical(market, "straight_up")) "spread" else market
     selected <- inventory %>% filter(season %in% backtest_seasons)
     rows <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
       detect_cover_summary(read_model_file(path)) %>%
@@ -774,7 +775,7 @@ server <- function(input, output, session) {
         )
     })
     if (nrow(rows) == 0) return(tibble())
-    if (!identical(market, "all")) rows <- rows %>% filter(market == !!market)
+    if (!identical(score_market, "all")) rows <- rows %>% filter(market == !!score_market)
     rows %>%
       group_by(family, family_label, split, market, projection_col) %>%
       summarise(
@@ -793,7 +794,8 @@ server <- function(input, output, session) {
     if (length(cols) == 0) return(tibble())
 
     score_lookup <- detect_cover_summary(df)
-    if (!identical(market, "all")) score_lookup <- filter(score_lookup, market == !!market)
+    score_market <- if (identical(market, "straight_up")) "spread" else market
+    if (!identical(score_market, "all")) score_lookup <- filter(score_lookup, market == !!score_market)
     score_lookup <- score_lookup %>%
       filter(!is.na(projection_col)) %>%
       select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
