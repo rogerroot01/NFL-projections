@@ -261,13 +261,10 @@ ui <- fluidPage(
         padding: 32px;
         color: #f7fbff;
         background:
-          radial-gradient(circle at 18% 12%, rgba(255,255,255,0.26) 0, rgba(255,255,255,0.08) 18%, rgba(255,255,255,0) 33%),
-          radial-gradient(circle at 82% 8%, rgba(255,255,255,0.2) 0, rgba(255,255,255,0.06) 16%, rgba(255,255,255,0) 30%),
-          linear-gradient(90deg, transparent 0 7%, rgba(255,255,255,0.26) 7% calc(7% + 3px), transparent calc(7% + 3px) 18%, rgba(255,255,255,0.2) 18% calc(18% + 2px), transparent calc(18% + 2px) 29%, rgba(255,255,255,0.2) 29% calc(29% + 2px), transparent calc(29% + 2px) 40%, rgba(255,255,255,0.2) 40% calc(40% + 2px), transparent calc(40% + 2px) 50%, rgba(255,255,255,0.58) 50% calc(50% + 4px), transparent calc(50% + 4px) 60%, rgba(255,255,255,0.2) 60% calc(60% + 2px), transparent calc(60% + 2px) 71%, rgba(255,255,255,0.2) 71% calc(71% + 2px), transparent calc(71% + 2px) 82%, rgba(255,255,255,0.2) 82% calc(82% + 2px), transparent calc(82% + 2px) 93%, rgba(255,255,255,0.26) 93% calc(93% + 3px), transparent calc(93% + 3px) 100%),
-          repeating-linear-gradient(90deg, rgba(255,255,255,0.22) 0 2px, transparent 2px 12px, rgba(255,255,255,0.12) 12px 14px, transparent 14px 42px),
-          repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 5px),
-          linear-gradient(180deg, #0f5b33 0%, #0a4629 42%, #06351f 100%);
-        background-size: auto, auto, auto, 86px 100%, auto, auto;
+          radial-gradient(circle at 18% 8%, rgba(255,255,255,0.28) 0, rgba(255,255,255,0.08) 17%, rgba(255,255,255,0) 31%),
+          radial-gradient(circle at 82% 8%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.07) 16%, rgba(255,255,255,0) 31%),
+          repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 3px, rgba(0,0,0,0.03) 3px 7px),
+          linear-gradient(180deg, #168047 0%, #0e6c3a 44%, #07522c 100%);
       }
 
       #splash_screen::before {
@@ -275,10 +272,10 @@ ui <- fluidPage(
         position: absolute;
         inset: 0;
         background:
-          repeating-linear-gradient(90deg, transparent 0 68px, rgba(255,255,255,0.42) 68px 72px, transparent 72px 136px),
-          linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 36%, rgba(0,0,0,0.24) 100%),
-          radial-gradient(ellipse at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.12) 48%, rgba(0,0,0,0.52) 100%);
-        opacity: 0.82;
+          repeating-linear-gradient(0deg, transparent 0 74px, rgba(255,255,255,0.74) 74px 78px, transparent 78px 148px),
+          linear-gradient(90deg, transparent 0 calc(50% - 2px), rgba(255,255,255,0.9) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px) 100%),
+          radial-gradient(ellipse at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.08) 48%, rgba(0,0,0,0.48) 100%);
+        opacity: 0.9;
         pointer-events: none;
       }
 
@@ -287,12 +284,11 @@ ui <- fluidPage(
         position: absolute;
         inset: 0;
         background:
-          linear-gradient(0deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 100%),
-          linear-gradient(90deg, transparent 0 calc(50% - 3px), rgba(255,255,255,0.68) calc(50% - 3px) calc(50% + 3px), transparent calc(50% + 3px) 100%);
-        background-size: 100% 110px, auto;
-        transform: perspective(850px) rotateX(58deg) translateY(24%);
-        transform-origin: center bottom;
-        opacity: 0.6;
+          repeating-linear-gradient(0deg, transparent 0 29px, rgba(255,255,255,0.86) 29px 33px, transparent 33px 148px) 24% 0 / 74px 100% no-repeat,
+          repeating-linear-gradient(0deg, transparent 0 29px, rgba(255,255,255,0.86) 29px 33px, transparent 33px 148px) 50% 0 / 74px 100% no-repeat,
+          repeating-linear-gradient(0deg, transparent 0 29px, rgba(255,255,255,0.86) 29px 33px, transparent 33px 148px) 76% 0 / 74px 100% no-repeat,
+          radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.18), rgba(0,0,0,0) 45%);
+        opacity: 0.72;
         pointer-events: none;
       }
 
@@ -309,11 +305,11 @@ ui <- fluidPage(
       }
 
       .splash-nfl-logo {
-        width: 132px;
+        width: 126px;
         height: auto;
         margin: 0 auto 24px;
         display: block;
-        filter: drop-shadow(0 14px 28px rgba(0,0,0,0.45));
+        filter: drop-shadow(0 16px 28px rgba(0,0,0,0.5));
       }
 
       .splash-title {
