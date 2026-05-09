@@ -1,5 +1,4 @@
 library(shiny)
-library(DT)
 library(dplyr)
 library(purrr)
 library(readr)
@@ -170,18 +169,19 @@ family_tab_ui <- function(id, label) {
       sidebarPanel(
         width = 3,
         selectInput(paste0(id, "_season"), "Season", choices = sort(unique(inventory$season)), selected = max(inventory$season)),
-        selectInput(paste0(id, "_split"), "File", choices = NULL),
         selectInput(paste0(id, "_market"), "Market", choices = market_labels, selected = "all"),
-        selectInput(paste0(id, "_result_col"), "Game table result column", choices = NULL),
-        actionButton(paste0(id, "_load"), "Load selected file", class = "btn-primary"),
-        actionButton(paste0(id, "_reload"), "Clear cache", class = "btn-default"),
+        selectInput(paste0(id, "_split"), "Inspect file", choices = NULL),
+        selectInput(paste0(id, "_result_col"), "Inspect result column", choices = NULL),
         tags$hr(),
-        downloadButton(paste0(id, "_download_file"), "Download selected file")
+        downloadButton(paste0(id, "_download_summary"), "Download summary CSV")
       ),
         mainPanel(
-          tags$p(tags$small("Diagnostic version: clicking Load selected file only reads one compact prepared table and prints basic counts.")),
-          h4("Load status"),
-          verbatimTextOutput(paste0(id, "_status"), placeholder = TRUE)
+          tags$p(tags$small("Summaries include all files in this family for the selected season. The file dropdown is only for inspecting one compact preview.")),
+          h4("Backtest summary by file and result column"),
+          tableOutput(paste0(id, "_summary")),
+          tags$hr(),
+          h4("Selected file preview"),
+          tableOutput(paste0(id, "_games"))
         )
       )
     )
@@ -224,73 +224,80 @@ ui <- fluidPage(
         ),
         mainPanel(
           h4("Consensus summary"),
-          DTOutput("cons_summary"),
+          tableOutput("cons_summary"),
           tags$hr(),
           h4("Consensus game-level rows"),
-          DTOutput("cons_games")
+          tableOutput("cons_games")
         )
       )
     ),
     tabPanel(
       "Files",
       h4("Loaded app data files"),
-      DTOutput("file_table")
+      tableOutput("file_table")
     )
   )
 )
 
 server <- function(input, output, session) {
-  observeEvent(input$scorestrees_reload, { rm(list = ls(file_cache), envir = file_cache) }, ignoreInit = TRUE)
-  observeEvent(input$billytrees_reload, { rm(list = ls(file_cache), envir = file_cache) }, ignoreInit = TRUE)
-  observeEvent(input$scoreslatereg_reload, { rm(list = ls(file_cache), envir = file_cache) }, ignoreInit = TRUE)
-  observeEvent(input$billy_reload, { rm(list = ls(file_cache), envir = file_cache) }, ignoreInit = TRUE)
-
   bind_family <- function(id, family_key) {
     fam_files <- inventory %>% filter(family == family_key)
 
+    family_files_for_season <- reactive({
+      req(input[[paste0(id, "_season")]])
+      fam_files %>% filter(season == as.integer(input[[paste0(id, "_season")]]))
+    })
+
     observe({
-      season <- input[[paste0(id, "_season")]]
-      choices <- fam_files %>% filter(season == !!as.integer(season)) %>% mutate(label = paste(split, "-", file))
+      choices <- family_files_for_season() %>% mutate(label = paste(split, "-", file))
       updateSelectInput(session, paste0(id, "_split"), choices = stats::setNames(choices$path, choices$label), selected = choices$path[1])
     })
 
-    current_path <- eventReactive(input[[paste0(id, "_load")]], {
+    current_df <- reactive({
       path <- input[[paste0(id, "_split")]]
       req(path)
-      path
-    }, ignoreInit = TRUE)
-
-    observeEvent(input[[paste0(id, "_load")]], {
-      path <- input[[paste0(id, "_split")]]
-      req(path)
-      df <- read_model_file(path)
-      cover_cols <- grep("^Cover_", names(df), value = TRUE)
-      pred_cols <- prediction_cols_from_names(names(df))
-      updateSelectInput(session, paste0(id, "_result_col"), choices = cover_cols, selected = cover_cols[1] %||% character())
-    }, ignoreInit = TRUE)
-
-    output[[paste0(id, "_status")]] <- renderText({
-      req(input[[paste0(id, "_load")]] > 0)
-      path <- input[[paste0(id, "_split")]]
-      req(path)
-      df <- read_model_file(path)
-      cover_cols <- grep("^Cover_", names(df), value = TRUE)
-      pred_cols <- prediction_cols_from_names(names(df))
-      paste(
-        "Loaded compact prepared file successfully.",
-        paste("File:", basename(path)),
-        paste("Rows:", nrow(df)),
-        paste("Columns:", ncol(df)),
-        paste("Cover/result columns:", length(cover_cols)),
-        paste("Prediction columns:", length(pred_cols)),
-        paste("First cover columns:", paste(head(cover_cols, 10), collapse = ", ")),
-        sep = "\n"
-      )
+      read_model_file(path)
     })
 
-    output[[paste0(id, "_download_file")]] <- downloadHandler(
-      filename = function() basename(input[[paste0(id, "_split")]]),
-      content = function(file) file.copy(input[[paste0(id, "_split")]], file, overwrite = TRUE)
+    family_summary <- reactive({
+      market <- input[[paste0(id, "_market")]] %||% "all"
+      family_files_for_season() %>%
+        pmap_dfr(function(path, file, season, family, family_label, split) {
+          out <- detect_cover_summary(read_model_file(path))
+          if (!identical(market, "all")) out <- out %>% filter(market == !!market)
+          out %>% mutate(Season = season, File = file, Split = split, .before = 1)
+        }) %>%
+        mutate(WinPct = round(100 * win_pct, 1)) %>%
+        select(Season, File, Split, Market = market_label, Result = result_col, Projection = projection_col, Picks = picks, Wins = wins, Losses = losses, WinPct) %>%
+        arrange(desc(WinPct), desc(Picks), File, Result)
+    })
+
+    observe({
+      df <- current_df()
+      s <- detect_cover_summary(df)
+      market <- input[[paste0(id, "_market")]] %||% "all"
+      if (!identical(market, "all")) s <- s %>% filter(market == !!market)
+      choices <- stats::setNames(s$result_col, paste0(s$market_label, " - ", s$result_col))
+      updateSelectInput(session, paste0(id, "_result_col"), choices = choices, selected = choices[1])
+    })
+
+    output[[paste0(id, "_summary")]] <- renderTable({
+      family_summary() %>% dplyr::slice_head(n = 60)
+    })
+
+    output[[paste0(id, "_games")]] <- renderTable({
+      df <- current_df()
+      result_col <- input[[paste0(id, "_result_col")]]
+      req(result_col)
+      proj_col <- projection_candidates_for_cover(result_col)
+      proj_col <- proj_col[proj_col %in% names(df)][1] %||% NA_character_
+      cols <- unique(stats::na.omit(c(key_cols(df), proj_col, result_col)))
+      df %>% select(any_of(cols)) %>% dplyr::slice_head(n = 20)
+    })
+
+    output[[paste0(id, "_download_summary")]] <- downloadHandler(
+      filename = function() paste0(family_key, "_summary_", input[[paste0(id, "_season")]], "_", Sys.Date(), ".csv"),
+      content = function(file) write_csv(family_summary(), file)
     )
   }
 
@@ -299,11 +306,9 @@ server <- function(input, output, session) {
   bind_family("scoreslatereg", "ScoresLateReg")
   bind_family("billy", "Billy")
 
-  output$file_table <- renderDT({
+  output$file_table <- renderTable({
     inventory %>%
-      mutate(size_mb = round(file.info(path)$size / 1024^2, 2)) %>%
-      select(Season = season, Family = family_label, Split = split, File = file, `Size MB` = size_mb) %>%
-      datatable(rownames = FALSE, options = list(pageLength = 30, scrollX = TRUE))
+      select(Season = season, Family = family_label, Split = split, File = file)
   })
 
   get_line <- function(df, col) if (col %in% names(df)) suppressWarnings(as.numeric(df[[col]])) else rep(NA_real_, nrow(df))
@@ -417,10 +422,10 @@ server <- function(input, output, session) {
       arrange(season, week, game_id)
   }, ignoreInit = TRUE)
 
-  output$cons_summary <- renderDT({
+  output$cons_summary <- renderTable({
     req(input$cons_run > 0)
     df <- consensus_rows()
-    if (nrow(df) == 0) return(datatable(tibble(Message = "No consensus rows for the current selections."), rownames = FALSE))
+    if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
     tibble(
       Games = nrow(df),
       `Avg projections per game` = mean(df$projections),
@@ -429,16 +434,15 @@ server <- function(input, output, session) {
       Losses = sum(df$correct %in% FALSE, na.rm = TRUE),
       `Win %` = ifelse(sum(!is.na(df$correct)) > 0, sum(df$correct %in% TRUE, na.rm = TRUE) / sum(!is.na(df$correct)), NA_real_)
     ) %>%
-      mutate(`Avg agreement` = scales::percent(`Avg agreement`, accuracy = 0.1), `Win %` = scales::percent(`Win %`, accuracy = 0.1)) %>%
-      datatable(rownames = FALSE, options = list(dom = "t"))
+      mutate(`Avg agreement` = round(100 * `Avg agreement`, 1), `Win %` = round(100 * `Win %`, 1))
   })
 
-  output$cons_games <- renderDT({
+  output$cons_games <- renderTable({
     req(input$cons_run > 0)
     consensus_rows() %>%
       dplyr::slice_head(n = 1000) %>%
-      mutate(agree_pct = scales::percent(agree_pct, accuracy = 0.1)) %>%
-      datatable(rownames = FALSE, options = list(pageLength = 25, scrollX = TRUE, autoWidth = TRUE))
+      mutate(agree_pct = round(100 * agree_pct, 1)) %>%
+      dplyr::slice_head(n = 50)
   })
 
   output$cons_download <- downloadHandler(
