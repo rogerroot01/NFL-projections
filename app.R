@@ -249,6 +249,17 @@ ui <- fluidPage(
     tags$link(rel = "icon", type = "image/png", href = "ensemble-icon.png"),
     tags$link(rel = "apple-touch-icon", href = "ensemble-icon.png"),
     tags$style(HTML("
+      .top-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 18px;
+        margin-bottom: 4px;
+      }
+
+      .top-scroll-inner {
+        height: 1px;
+      }
+
       body.splash-active {
         overflow: hidden;
       }
@@ -365,6 +376,44 @@ ui <- fluidPage(
             splash.classList.add('splash-hidden');
             document.body.classList.remove('splash-active');
           });
+        }
+      });
+
+      function attachTopScrollbar(tableId) {
+        var table = document.getElementById(tableId);
+        if (!table) return;
+        var wrapper = table.closest('.dataTables_wrapper');
+        if (!wrapper || wrapper.querySelector('.top-scroll')) return;
+        var body = wrapper.querySelector('.dataTables_scrollBody');
+        if (!body) return;
+
+        var top = document.createElement('div');
+        top.className = 'top-scroll';
+        var inner = document.createElement('div');
+        inner.className = 'top-scroll-inner';
+        top.appendChild(inner);
+
+        var scroll = wrapper.querySelector('.dataTables_scroll');
+        wrapper.insertBefore(top, scroll);
+
+        var syncWidth = function() {
+          inner.style.width = body.scrollWidth + 'px';
+        };
+        syncWidth();
+        setTimeout(syncWidth, 250);
+        window.addEventListener('resize', syncWidth);
+
+        top.addEventListener('scroll', function() {
+          body.scrollLeft = top.scrollLeft;
+        });
+        body.addEventListener('scroll', function() {
+          top.scrollLeft = body.scrollLeft;
+        });
+      }
+
+      $(document).on('draw.dt init.dt', function(e, settings) {
+        if (settings && settings.sTableId) {
+          attachTopScrollbar(settings.sTableId);
         }
       });
     "))
@@ -583,16 +632,24 @@ server <- function(input, output, session) {
           season = as.integer(season),
           week = as.integer(week)
         )
-      datatable(
+      decimal_cols <- setdiff(
+        names(rows)[vapply(rows, is.numeric, logical(1))],
+        c("season", "week")
+      )
+      rows <- rows %>%
+        mutate(across(all_of(decimal_cols), ~ ifelse(is.na(.x), NA_character_, sprintf("%.1f", .x))))
+      dt <- datatable(
         rows,
         rownames = FALSE,
         filter = "top",
         options = list(
+          dom = '<"top"lfrip>t<"bottom"lfrip>',
           pageLength = 25,
           lengthMenu = c(10, 25, 50, 100),
           scrollX = TRUE
         )
       )
+      dt
     })
   }
 
@@ -824,16 +881,18 @@ server <- function(input, output, session) {
         agree_pct = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
         actual_side = ifelse(is.na(actual_side), NA_character_, as.character(as.integer(actual_side)))
       )
-    datatable(
+    dt <- datatable(
       rows,
       rownames = FALSE,
       filter = "top",
       options = list(
+        dom = '<"top"lfrip>t<"bottom"lfrip>',
         pageLength = 25,
         lengthMenu = c(10, 25, 50, 100),
         scrollX = TRUE
       )
     )
+    dt
   })
 
   output$cons_download <- downloadHandler(
