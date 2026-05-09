@@ -135,6 +135,7 @@ backtest_seasons <- graded_seasons()
 if (length(backtest_seasons) == 0) {
   backtest_seasons <- sort(unique(inventory$season))
 }
+backtest_season_choices <- c("All graded seasons" = "all", stats::setNames(as.character(backtest_seasons), as.character(backtest_seasons)))
 
 cover_market <- function(col) {
   case_when(
@@ -213,7 +214,7 @@ family_tab_ui <- function(id, label) {
     sidebarLayout(
       sidebarPanel(
         width = 3,
-        selectInput(paste0(id, "_season"), "Backtest season", choices = backtest_seasons, selected = max(backtest_seasons)),
+        selectInput(paste0(id, "_season"), "Backtest season", choices = backtest_season_choices, selected = "all"),
         selectInput(paste0(id, "_market"), "Market", choices = market_choices, selected = "all"),
         actionButton(paste0(id, "_build"), "Build family summary", class = "btn-primary"),
         tags$hr(),
@@ -295,6 +296,7 @@ server <- function(input, output, session) {
 
     family_files_for_season <- reactive({
       req(input[[paste0(id, "_season")]])
+      selected_season <- input[[paste0(id, "_season")]]
       inventory %>%
         mutate(
           family_norm = norm_key(family),
@@ -302,7 +304,7 @@ server <- function(input, output, session) {
           file_norm = norm_key(file)
         ) %>%
         filter(
-          season == as.integer(input[[paste0(id, "_season")]]),
+          if (identical(selected_season, "all")) season %in% backtest_seasons else season == as.integer(selected_season),
           family_norm == family_key_norm |
             family_label_norm == target_label_norm |
             str_detect(file_norm, fixed(family_key_norm))
@@ -443,7 +445,7 @@ server <- function(input, output, session) {
       if (market == "away_implied" && str_detect(split, "^away") && str_detect(col, "OppScore|ImpliedOppScored")) pred <- NA_real_
 
       line <- if (market == "spread") {
-        -base$spread_line
+        base$spread_line
       } else if (market == "total") {
         base$total_line
       } else if (market == "home_implied") {
@@ -500,9 +502,14 @@ server <- function(input, output, session) {
         market_line = first(na.omit(market_line)),
         avg_edge = avg_projection - market_line,
         agree_pct = max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE)),
-        consensus_pick = ifelse(mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE), "Over/Home", "Under/Away"),
+        consensus_pick = case_when(
+          input$cons_market == "spread" & mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Home",
+          input$cons_market == "spread" ~ "Away",
+          mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Over",
+          TRUE ~ "Under"
+        ),
         actual_side = first(na.omit(actual_side)),
-        correct = ifelse(!is.na(actual_side), ifelse(consensus_pick == "Over/Home", 1, -1) == actual_side, NA),
+        correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
         .groups = "drop"
       ) %>%
       filter(agree_pct >= input$cons_agree / 100) %>%
@@ -528,7 +535,15 @@ server <- function(input, output, session) {
     req(input$cons_run > 0)
     consensus_rows() %>%
       dplyr::slice_head(n = 1000) %>%
-      mutate(agree_pct = round(100 * agree_pct, 1)) %>%
+      mutate(
+        season = as.integer(season),
+        week = as.integer(week),
+        avg_projection = round(avg_projection, 1),
+        market_line = round(market_line, 1),
+        avg_edge = round(avg_edge, 1),
+        agree_pct = round(100 * agree_pct, 0),
+        actual_side = round(actual_side, 0)
+      ) %>%
       dplyr::slice_head(n = 50)
   })
 
