@@ -471,6 +471,16 @@ ui <- fluidPage(
           attachTopScrollbar(settings.sTableId);
         }
       });
+
+      Shiny.addCustomMessageHandler('toggleMinWinSlider', function(disabled) {
+        var wrapper = $('#cons_min_win').closest('.form-group');
+        var sliderObj = $('#cons_min_win').data('ionRangeSlider');
+        if (sliderObj) {
+          sliderObj.update({ disable: disabled });
+        }
+        wrapper.css('opacity', disabled ? 0.45 : 1);
+        wrapper.find('.irs').css('pointer-events', disabled ? 'none' : 'auto');
+      });
     "))
   ),
   div(
@@ -733,6 +743,10 @@ server <- function(input, output, session) {
 
   consensus_status <- reactiveVal("Ready.")
 
+  observe({
+    session$sendCustomMessage("toggleMinWinSlider", identical(input$cons_market, "straight_up"))
+  })
+
   output$file_table <- renderTable({
     inventory %>%
       select(Season = season, Family = family_label, Split = split, File = file)
@@ -955,13 +969,15 @@ server <- function(input, output, session) {
       filter(!is.na(model_win_pct), model_win_pct >= min_win_pct)
   }
 
-  consensus_rows <- eventReactive(input$cons_run, {
+  consensus_rows <- reactiveVal(tibble())
+
+  build_consensus_rows <- function() {
     consensus_status("Building consensus...")
     families <- input$cons_families %||% names(family_labels)
     market <- input$cons_market %||% "spread"
     line_source <- input$cons_line_source %||% "closing"
     injury_source <- input$cons_injury_source %||% "none"
-    min_win <- (input$cons_min_win %||% 40) / 100
+    min_win <- if (identical(market, "straight_up")) 0 else (input$cons_min_win %||% 40) / 100
     min_agree <- (input$cons_agree %||% 50) / 100
     withProgress(message = "Building consensus, please wait...", value = 0, {
       selected_seasons <- unique(c(as.integer(input$cons_seasons %||% integer()), as.integer(input$cons_future_seasons %||% integer())))
@@ -1024,10 +1040,10 @@ server <- function(input, output, session) {
       consensus_status(paste0("Complete. Built ", nrow(rows), " consensus rows from ", nrow(selected), " model files."))
       rows
     })
-  }, ignoreInit = TRUE)
+  }
 
   observeEvent(input$cons_run, {
-    consensus_rows()
+    consensus_rows(build_consensus_rows())
   }, ignoreInit = TRUE, priority = 100)
 
   output$cons_status <- renderText({
