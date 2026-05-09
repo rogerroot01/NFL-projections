@@ -479,7 +479,7 @@ ui <- fluidPage(
       class = "splash-card",
       tags$img(src = "nfl-logo.png", class = "splash-nfl-logo", alt = "NFL logo"),
       h1(class = "splash-title", "NFL Ensemble Model"),
-      div(class = "splash-subtitle", "Projection wrangler for model families, market edges, and consensus signals."),
+      div(class = "splash-subtitle", "Projection wrangler for model families and consensus signals."),
       actionButton("splash_enter", "Enter Model")
     )
   ),
