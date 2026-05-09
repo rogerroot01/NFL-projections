@@ -109,6 +109,31 @@ read_model_file <- function(path) {
   stop("Compact prepared data is missing for ", nm, ". Run prepare_data.R locally and deploy data/compact_models.rds plus data/model_inventory.rds.")
 }
 
+file_has_graded_results <- function(path) {
+  df <- read_model_file(path)
+  cover_cols <- grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE)
+  if (length(cover_cols) == 0) return(FALSE)
+  any(vapply(cover_cols, function(col) {
+    vals <- suppressWarnings(as.numeric(df[[col]]))
+    any(!is.na(vals))
+  }, logical(1)))
+}
+
+graded_seasons <- function() {
+  if (nrow(inventory) == 0) return(integer())
+  inventory %>%
+    mutate(has_results = vapply(path, file_has_graded_results, logical(1))) %>%
+    filter(has_results) %>%
+    pull(season) %>%
+    unique() %>%
+    sort()
+}
+
+backtest_seasons <- graded_seasons()
+if (length(backtest_seasons) == 0) {
+  backtest_seasons <- sort(unique(inventory$season))
+}
+
 cover_market <- function(col) {
   case_when(
     str_detect(col, "Team_ImpliedTotal") ~ "team_implied",
@@ -186,14 +211,14 @@ family_tab_ui <- function(id, label) {
     sidebarLayout(
       sidebarPanel(
         width = 3,
-        selectInput(paste0(id, "_season"), "Season", choices = sort(unique(inventory$season)), selected = max(inventory$season)),
+        selectInput(paste0(id, "_season"), "Backtest season", choices = backtest_seasons, selected = max(backtest_seasons)),
         selectInput(paste0(id, "_market"), "Market", choices = market_labels, selected = "all"),
         actionButton(paste0(id, "_build"), "Build family summary", class = "btn-primary"),
         tags$hr(),
         downloadButton(paste0(id, "_download_summary"), "Download summary CSV")
       ),
         mainPanel(
-          tags$p(tags$small("Click Build family summary to summarize all files in this family for the selected season. Preview selected file is optional.")),
+          tags$p(tags$small("Click Build family summary to summarize graded files in this family for the selected season. Future seasons with blank cover results are excluded from this backtest selector.")),
           h4("Build status"),
           verbatimTextOutput(paste0(id, "_status"), placeholder = TRUE),
           tags$hr(),
