@@ -52,27 +52,30 @@ file_inventory <- function() {
 inventory_rds <- file.path(app_data_dir, "model_inventory.rds")
 compact_models_rds <- file.path(app_data_dir, "compact_models.rds")
 
-inventory <- if (file.exists(inventory_rds)) {
+compact_data_available <- file.exists(inventory_rds) && file.exists(compact_models_rds)
+
+inventory <- if (compact_data_available) {
   readRDS(inventory_rds) %>%
     mutate(path = file.path(getwd(), path))
 } else {
-  file_inventory()
+  tibble(
+    path = character(),
+    file = character(),
+    season = integer(),
+    family = character(),
+    family_label = character(),
+    split = character()
+  )
 }
 
-compact_models <- if (file.exists(compact_models_rds)) readRDS(compact_models_rds) else NULL
+compact_models <- if (compact_data_available) readRDS(compact_models_rds) else list()
 file_cache <- new.env(parent = emptyenv())
 header_cache <- new.env(parent = emptyenv())
 
 file_header <- function(path) {
-  if (!is.null(compact_models)) {
-    nm <- basename(path)
-    if (nm %in% names(compact_models)) return(names(compact_models[[nm]]))
-  }
-  key <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  if (!exists(key, envir = header_cache, inherits = FALSE)) {
-    assign(key, names(suppressMessages(readr::read_csv(path, n_max = 0, show_col_types = FALSE, progress = FALSE))), envir = header_cache)
-  }
-  get(key, envir = header_cache, inherits = FALSE)
+  nm <- basename(path)
+  if (nm %in% names(compact_models)) return(names(compact_models[[nm]]))
+  stop("Compact prepared data is missing for ", nm, ". Run prepare_data.R locally and deploy data/compact_models.rds plus data/model_inventory.rds.")
 }
 
 prediction_cols_from_names <- function(cols) {
@@ -102,20 +105,9 @@ cols_needed_for_file <- function(path) {
 }
 
 read_model_file <- function(path) {
-  if (!is.null(compact_models)) {
-    nm <- basename(path)
-    if (nm %in% names(compact_models)) return(compact_models[[nm]])
-  }
-  key <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  if (!exists(key, envir = file_cache, inherits = FALSE)) {
-    cols <- cols_needed_for_file(path)
-    assign(
-      key,
-      suppressMessages(readr::read_csv(path, col_select = dplyr::all_of(cols), show_col_types = FALSE, progress = FALSE)),
-      envir = file_cache
-    )
-  }
-  get(key, envir = file_cache, inherits = FALSE)
+  nm <- basename(path)
+  if (nm %in% names(compact_models)) return(compact_models[[nm]])
+  stop("Compact prepared data is missing for ", nm, ". Run prepare_data.R locally and deploy data/compact_models.rds plus data/model_inventory.rds.")
 }
 
 cover_market <- function(col) {
@@ -204,6 +196,18 @@ family_tab_ui <- function(id, label) {
 ui <- fluidPage(
   tags$head(tags$title("Projection Model Wrangler")),
   titlePanel("Projection Model Wrangler"),
+  if (!compact_data_available) {
+    div(
+      class = "alert alert-danger",
+      strong("Prepared data missing. "),
+      "Run prepare_data.R locally, then deploy data/compact_models.rds and data/model_inventory.rds with the app."
+    )
+  } else {
+    div(
+      class = "alert alert-success",
+      paste0("Prepared data loaded: ", length(compact_models), " compact model files.")
+    )
+  },
   tags$p("Reads the finished projection CSVs in the app data folder and summarizes model output by family, season, file, and market."),
   tabsetPanel(
     id = "main_tabs",
