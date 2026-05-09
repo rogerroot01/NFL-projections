@@ -315,23 +315,32 @@ server <- function(input, output, session) {
       market <- input[[paste0(id, "_market")]] %||% "all"
       files <- family_files_for_season()
       if (nrow(files) == 0) return(tibble())
-      files %>%
-        pmap_dfr(function(path, file, season, family, family_label, split) {
-          out <- detect_cover_summary(read_model_file(path))
-          if (nrow(out) == 0) return(tibble())
-          if (!identical(market, "all")) out <- out %>% filter(market == !!market)
-          if (nrow(out) == 0) return(tibble())
-          out %>% mutate(Season = season, File = file, Split = split, .before = 1)
-        }) %>% {
-          if (nrow(.) == 0) {
-            tibble()
-          } else {
-            . %>%
-              mutate(WinPct = round(100 * win_pct, 1)) %>%
-              select(Season, File, Split, Market = market_label, Result = result_col, Projection = projection_col, Picks = picks, Wins = wins, Losses = losses, WinPct) %>%
-              arrange(desc(WinPct), desc(Picks), File, Result)
-          }
-        }
+
+      summary_rows <- pmap_dfr(files, function(path, file, season, family, family_label, split) {
+        out <- detect_cover_summary(read_model_file(path))
+        if (nrow(out) == 0) return(tibble())
+        if (!identical(market, "all")) out <- filter(out, market == !!market)
+        if (nrow(out) == 0) return(tibble())
+        mutate(out, Season = season, File = file, Split = split, .before = 1)
+      })
+
+      if (nrow(summary_rows) == 0) return(tibble())
+
+      summary_rows <- mutate(summary_rows, WinPct = round(100 * win_pct, 1))
+      summary_rows <- select(
+        summary_rows,
+        Season,
+        File,
+        Split,
+        Market = market_label,
+        Result = result_col,
+        Projection = projection_col,
+        Picks = picks,
+        Wins = wins,
+        Losses = losses,
+        WinPct
+      )
+      arrange(summary_rows, desc(WinPct), desc(Picks), File, Result)
     })
 
     output[[paste0(id, "_status")]] <- renderText({
