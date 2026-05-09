@@ -246,6 +246,8 @@ family_tab_ui <- function(id, label) {
 ui <- fluidPage(
   tags$head(
     tags$title("NFL Ensemble Model"),
+    tags$link(rel = "icon", type = "image/png", href = "ensemble-icon.png"),
+    tags$link(rel = "apple-touch-icon", href = "ensemble-icon.png"),
     tags$style(HTML("
       body.splash-active {
         overflow: hidden;
@@ -275,10 +277,10 @@ ui <- fluidPage(
         z-index: 0;
         background:
           repeating-linear-gradient(0deg,
-            transparent 0 78px,
-            rgba(255,255,255,0.76) 78px 82px,
-            transparent 82px 156px
-          ),
+            transparent 0 70px,
+            rgba(255,255,255,0.76) 70px 74px,
+            transparent 74px 150px
+          ) 0 -22px,
           radial-gradient(ellipse at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 48%, rgba(0,0,0,0.5) 100%);
         opacity: 0.88;
         pointer-events: none;
@@ -291,15 +293,15 @@ ui <- fluidPage(
         z-index: 0;
         background:
           repeating-linear-gradient(0deg,
-            transparent 0 34px,
-            rgba(255,255,255,0.84) 34px 38px,
-            transparent 38px 156px
-          ) 30% 0 / 92px 100% no-repeat,
+            transparent 0 30px,
+            rgba(255,255,255,0.84) 30px 34px,
+            transparent 34px 150px
+          ) 30% -22px / 92px 100% no-repeat,
           repeating-linear-gradient(0deg,
-            transparent 0 34px,
-            rgba(255,255,255,0.84) 34px 38px,
-            transparent 38px 156px
-          ) 70% 0 / 92px 100% no-repeat,
+            transparent 0 30px,
+            rgba(255,255,255,0.84) 30px 34px,
+            transparent 34px 150px
+          ) 70% -22px / 92px 100% no-repeat,
           linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0) 34%, rgba(0,0,0,0.28) 100%);
         opacity: 0.76;
         pointer-events: none;
