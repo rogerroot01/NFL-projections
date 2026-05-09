@@ -133,7 +133,7 @@ projection_candidates_for_cover <- function(cover_col) {
 }
 
 detect_cover_summary <- function(df) {
-  cover_cols <- grep("^Cover_", names(df), value = TRUE)
+  cover_cols <- grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE)
   if (length(cover_cols) == 0) return(tibble())
 
   purrr::map_dfr(cover_cols, function(col) {
@@ -152,6 +152,20 @@ detect_cover_summary <- function(df) {
     )
   }) %>%
     arrange(market_label, desc(win_pct), desc(picks), result_col)
+}
+
+file_debug_summary <- function(files) {
+  if (nrow(files) == 0) return(tibble(File = character(), Rows = integer(), Columns = integer(), CoverColumns = integer()))
+  purrr::pmap_dfr(files, function(path, file, season, family, family_label, split) {
+    df <- read_model_file(path)
+    tibble(
+      File = file,
+      Rows = nrow(df),
+      Columns = ncol(df),
+      CoverColumns = length(grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE)),
+      FirstCoverColumns = paste(head(grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE), 5), collapse = ", ")
+    )
+  })
 }
 
 prediction_cols <- function(df) {
@@ -267,28 +281,42 @@ server <- function(input, output, session) {
     family_summary <- reactive({
       req(input[[paste0(id, "_build")]] > 0)
       market <- input[[paste0(id, "_market")]] %||% "all"
-      family_files_for_season() %>%
+      files <- family_files_for_season()
+      if (nrow(files) == 0) return(tibble())
+      files %>%
         pmap_dfr(function(path, file, season, family, family_label, split) {
           out <- detect_cover_summary(read_model_file(path))
+          if (nrow(out) == 0) return(tibble())
           if (!identical(market, "all")) out <- out %>% filter(market == !!market)
+          if (nrow(out) == 0) return(tibble())
           out %>% mutate(Season = season, File = file, Split = split, .before = 1)
-        }) %>%
-        mutate(WinPct = round(100 * win_pct, 1)) %>%
-        select(Season, File, Split, Market = market_label, Result = result_col, Projection = projection_col, Picks = picks, Wins = wins, Losses = losses, WinPct) %>%
-        arrange(desc(WinPct), desc(Picks), File, Result)
+        }) %>% {
+          if (nrow(.) == 0) {
+            tibble()
+          } else {
+            . %>%
+              mutate(WinPct = round(100 * win_pct, 1)) %>%
+              select(Season, File, Split, Market = market_label, Result = result_col, Projection = projection_col, Picks = picks, Wins = wins, Losses = losses, WinPct) %>%
+              arrange(desc(WinPct), desc(Picks), File, Result)
+          }
+        }
     })
 
     output[[paste0(id, "_status")]] <- renderText({
       req(input[[paste0(id, "_build")]] > 0)
       s <- family_summary()
+      f <- family_files_for_season()
+      fd <- file_debug_summary(f)
       paste(
         paste("Family:", family_key),
         paste("Season:", input[[paste0(id, "_season")]]),
         paste("Market:", input[[paste0(id, "_market")]]),
-        paste("Files included:", nrow(family_files_for_season())),
+        paste("Files included:", nrow(f)),
         paste("Summary rows:", nrow(s)),
         paste("Available families:", paste(sort(unique(inventory$family)), collapse = ", ")),
         paste("Available seasons:", paste(sort(unique(inventory$season)), collapse = ", ")),
+        "File debug:",
+        paste(capture.output(print(fd, n = 20, width = 180)), collapse = "\n"),
         sep = "\n"
       )
     })
@@ -296,7 +324,15 @@ server <- function(input, output, session) {
     output[[paste0(id, "_summary")]] <- renderText({
       req(input[[paste0(id, "_build")]] > 0)
       s <- family_summary() %>% dplyr::slice_head(n = 80)
-      if (nrow(s) == 0) return("No summary rows for this selection.")
+      if (nrow(s) == 0) {
+        fd <- file_debug_summary(family_files_for_season())
+        return(paste(
+          "No summary rows for this selection.",
+          "File debug:",
+          paste(capture.output(print(fd, n = 20, width = 180)), collapse = "\n"),
+          sep = "\n"
+        ))
+      }
       paste(capture.output(print(s, n = 80, width = 180)), collapse = "\n")
     })
 
