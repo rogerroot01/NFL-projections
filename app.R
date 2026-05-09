@@ -776,7 +776,13 @@ server <- function(input, output, session) {
   }
 
   historical_model_scores <- function(market) {
-    score_market <- if (identical(market, "straight_up")) "spread" else market
+    score_market <- if (identical(market, "straight_up")) {
+      "spread"
+    } else if (market %in% c("home_implied", "away_implied")) {
+      c("team_implied", "opp_implied")
+    } else {
+      market
+    }
     selected <- inventory %>% filter(season %in% backtest_seasons)
     rows <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
       detect_cover_summary(read_model_file(path)) %>%
@@ -791,7 +797,7 @@ server <- function(input, output, session) {
         )
     })
     if (nrow(rows) == 0) return(tibble())
-    if (!identical(score_market, "all")) rows <- rows %>% filter(market == !!score_market)
+    if (!identical(score_market, "all")) rows <- rows %>% filter(market %in% score_market)
     rows %>%
       group_by(family, family_label, split, market, projection_col) %>%
       summarise(
@@ -810,8 +816,14 @@ server <- function(input, output, session) {
     if (length(cols) == 0) return(tibble())
 
     score_lookup <- detect_cover_summary(df)
-    score_market <- if (identical(market, "straight_up")) "spread" else market
-    if (!identical(score_market, "all")) score_lookup <- filter(score_lookup, market == !!score_market)
+    score_market <- if (identical(market, "straight_up")) {
+      "spread"
+    } else if (market %in% c("home_implied", "away_implied")) {
+      c("team_implied", "opp_implied")
+    } else {
+      market
+    }
+    if (!identical(score_market, "all")) score_lookup <- filter(score_lookup, market %in% score_market)
     score_lookup <- score_lookup %>%
       filter(!is.na(projection_col)) %>%
       select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
@@ -1083,6 +1095,9 @@ server <- function(input, output, session) {
 
   output$cons_games <- renderDT({
     req(input$cons_run > 0)
+    if (nrow(consensus_rows()) == 0) {
+      return(datatable(tibble(Message = "No consensus rows for the current selections."), rownames = FALSE))
+    }
     rows <- consensus_rows() %>%
       mutate(
         season = as.integer(season),
