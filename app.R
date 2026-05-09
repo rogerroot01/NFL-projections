@@ -179,15 +179,9 @@ family_tab_ui <- function(id, label) {
         downloadButton(paste0(id, "_download_file"), "Download selected file")
       ),
         mainPanel(
-          tags$p(tags$small("Choose a file and click Load selected file. This diagnostic version renders only small base tables first so we can avoid server disconnects.")),
-          h4("Backtest summary"),
-          tableOutput(paste0(id, "_summary")),
-          tags$hr(),
-          h4("Prediction columns"),
-          tableOutput(paste0(id, "_pred_cols")),
-          tags$hr(),
-          h4("Game-level rows"),
-          tableOutput(paste0(id, "_games"))
+          tags$p(tags$small("Diagnostic version: clicking Load selected file only reads one compact prepared table and prints basic counts.")),
+          h4("Load status"),
+          verbatimTextOutput(paste0(id, "_status"), placeholder = TRUE)
         )
       )
     )
@@ -266,45 +260,32 @@ server <- function(input, output, session) {
       path
     }, ignoreInit = TRUE)
 
-    current_df <- reactive({
-      read_model_file(current_path())
-    })
+    observeEvent(input[[paste0(id, "_load")]], {
+      path <- input[[paste0(id, "_split")]]
+      req(path)
+      df <- read_model_file(path)
+      cover_cols <- grep("^Cover_", names(df), value = TRUE)
+      pred_cols <- prediction_cols_from_names(names(df))
+      updateSelectInput(session, paste0(id, "_result_col"), choices = cover_cols, selected = cover_cols[1] %||% character())
+    }, ignoreInit = TRUE)
 
-    current_summary <- reactive({
-      out <- detect_cover_summary(current_df())
-      market <- input[[paste0(id, "_market")]] %||% "all"
-      if (!identical(market, "all")) out <- out %>% filter(market == !!market)
-      out
-    })
-
-    observe({
-      s <- current_summary()
-      choices <- stats::setNames(s$result_col, paste0(s$market_label, " - ", s$result_col))
-      updateSelectInput(session, paste0(id, "_result_col"), choices = choices, selected = choices[1])
-    })
-
-    output[[paste0(id, "_summary")]] <- renderTable({
+    output[[paste0(id, "_status")]] <- renderText({
       req(input[[paste0(id, "_load")]] > 0)
-      current_summary() %>%
-        mutate(win_pct = round(100 * win_pct, 1)) %>%
-        select(Market = market_label, Result = result_col, Projection = projection_col, Picks = picks, Wins = wins, Losses = losses, WinPct = win_pct)
-    })
-
-    output[[paste0(id, "_pred_cols")]] <- renderTable({
-      req(input[[paste0(id, "_load")]] > 0)
-      tibble(PredictionColumn = head(prediction_cols_from_names(file_header(current_path())), 25))
-    })
-
-    output[[paste0(id, "_games")]] <- renderTable({
-      req(input[[paste0(id, "_load")]] > 0)
-      df <- current_df()
-      result_col <- input[[paste0(id, "_result_col")]]
-      req(result_col)
-      proj_col <- projection_candidates_for_cover(result_col)
-      proj_col <- proj_col[proj_col %in% names(df)][1] %||% NA_character_
-      cols <- unique(stats::na.omit(c(key_cols(df), proj_col, result_col)))
-      display <- df %>% select(any_of(cols))
-      display %>% dplyr::slice_head(n = 20)
+      path <- input[[paste0(id, "_split")]]
+      req(path)
+      df <- read_model_file(path)
+      cover_cols <- grep("^Cover_", names(df), value = TRUE)
+      pred_cols <- prediction_cols_from_names(names(df))
+      paste(
+        "Loaded compact prepared file successfully.",
+        paste("File:", basename(path)),
+        paste("Rows:", nrow(df)),
+        paste("Columns:", ncol(df)),
+        paste("Cover/result columns:", length(cover_cols)),
+        paste("Prediction columns:", length(pred_cols)),
+        paste("First cover columns:", paste(head(cover_cols, 10), collapse = ", ")),
+        sep = "\n"
+      )
     })
 
     output[[paste0(id, "_download_file")]] <- downloadHandler(
