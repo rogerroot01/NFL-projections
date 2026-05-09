@@ -136,6 +136,12 @@ if (length(backtest_seasons) == 0) {
   backtest_seasons <- sort(unique(inventory$season))
 }
 backtest_season_choices <- c("All graded seasons" = "all", stats::setNames(as.character(backtest_seasons), as.character(backtest_seasons)))
+future_seasons <- setdiff(sort(unique(inventory$season)), backtest_seasons)
+future_season_choices <- if (length(future_seasons) == 0) {
+  c("No future seasons available" = "none")
+} else {
+  c("All future seasons" = "all", stats::setNames(as.character(future_seasons), as.character(future_seasons)))
+}
 
 cover_market <- function(col) {
   case_when(
@@ -215,6 +221,7 @@ family_tab_ui <- function(id, label) {
       sidebarPanel(
         width = 3,
         selectInput(paste0(id, "_season"), "Backtest season", choices = backtest_season_choices, selected = "all"),
+        selectInput(paste0(id, "_future_season"), "Future projection season", choices = future_season_choices, selected = if (length(future_seasons) == 0) "none" else "all"),
         selectInput(paste0(id, "_market"), "Market", choices = market_choices, selected = "all"),
         actionButton(paste0(id, "_build"), "Build family summary", class = "btn-primary"),
         tags$hr(),
@@ -226,7 +233,10 @@ family_tab_ui <- function(id, label) {
           verbatimTextOutput(paste0(id, "_status"), placeholder = TRUE),
           tags$hr(),
           h4("Backtest summary by file and result column"),
-          verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE)
+          verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE),
+          tags$hr(),
+          h4("Future projection preview"),
+          tableOutput(paste0(id, "_future_preview"))
         )
       )
     )
@@ -260,7 +270,8 @@ ui <- fluidPage(
         sidebarPanel(
           width = 3,
           checkboxGroupInput("cons_families", "Families", choices = stats::setNames(names(family_labels), family_labels), selected = names(family_labels)),
-          checkboxGroupInput("cons_seasons", "Seasons", choices = sort(unique(inventory$season)), selected = sort(unique(inventory$season))[sort(unique(inventory$season)) < 2026]),
+          checkboxGroupInput("cons_seasons", "Backtest seasons", choices = backtest_seasons, selected = backtest_seasons),
+          checkboxGroupInput("cons_future_seasons", "Future projection seasons", choices = future_seasons, selected = future_seasons),
           selectInput(
             "cons_market",
             "Market",
@@ -306,6 +317,27 @@ server <- function(input, output, session) {
         ) %>%
         filter(
           if (identical(selected_season, "all")) season %in% backtest_seasons else season == as.integer(selected_season),
+          family_norm == family_key_norm |
+            family_label_norm == target_label_norm |
+            str_detect(file_norm, fixed(family_key_norm))
+        ) %>%
+        select(path, file, season, family, family_label, split)
+    })
+
+    family_future_files <- reactive({
+      req(input[[paste0(id, "_future_season")]])
+      selected_season <- input[[paste0(id, "_future_season")]]
+      if (identical(selected_season, "none") || length(future_seasons) == 0) {
+        return(tibble(path = character(), file = character(), season = integer(), family = character(), family_label = character(), split = character()))
+      }
+      inventory %>%
+        mutate(
+          family_norm = norm_key(family),
+          family_label_norm = norm_key(family_label),
+          file_norm = norm_key(file)
+        ) %>%
+        filter(
+          if (identical(selected_season, "all")) season %in% future_seasons else season == as.integer(selected_season),
           family_norm == family_key_norm |
             family_label_norm == target_label_norm |
             str_detect(file_norm, fixed(family_key_norm))
@@ -389,6 +421,26 @@ server <- function(input, output, session) {
       filename = function() paste0(family_key, "_summary_", input[[paste0(id, "_season")]], "_", Sys.Date(), ".csv"),
       content = function(file) write_csv(family_summary(), file)
     )
+
+    output[[paste0(id, "_future_preview")]] <- renderTable({
+      req(input[[paste0(id, "_build")]] > 0)
+      files <- family_future_files()
+      if (nrow(files) == 0) return(tibble(Message = "No future projection files for this family/season selection."))
+      market <- input[[paste0(id, "_market")]] %||% "all"
+      rows <- pmap_dfr(files, function(path, file, season, family, family_label, split) {
+        df <- read_model_file(path)
+        cols <- if (identical(market, "all")) prediction_cols(df) else projection_columns_for_market(df, market)
+        cols <- cols[cols %in% names(df)]
+        if (length(cols) == 0) return(tibble())
+        keep <- unique(c("game_id", "season", "week", "home_team", "away_team", "spread_line", "total_line", head(cols, 8)))
+        keep <- keep[keep %in% names(df)]
+        df %>%
+          select(all_of(keep)) %>%
+          mutate(File = file, Split = split, .before = 1)
+      })
+      if (nrow(rows) == 0) return(tibble(Message = "No future projection columns for this selection."))
+      rows %>% dplyr::slice_head(n = 50)
+    })
   }
 
   bind_family("scorestrees", "ScoresTrees")
@@ -402,6 +454,11 @@ server <- function(input, output, session) {
   })
 
   get_line <- function(df, col) if (col %in% names(df)) suppressWarnings(as.numeric(df[[col]])) else rep(NA_real_, nrow(df))
+
+  first_non_na <- function(x) {
+    x <- x[!is.na(x)]
+    if (length(x) == 0) NA_real_ else x[[1]]
+  }
 
   projection_columns_for_market <- function(df, market) {
     cols <- prediction_cols(df)
@@ -417,6 +474,34 @@ server <- function(input, output, session) {
     }
   }
 
+  historical_model_scores <- function(market) {
+    selected <- inventory %>% filter(season %in% backtest_seasons)
+    rows <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
+      detect_cover_summary(read_model_file(path)) %>%
+        filter(!is.na(projection_col)) %>%
+        mutate(
+          family = family,
+          family_label = family_label,
+          split = split,
+          file = file,
+          season = season,
+          .before = 1
+        )
+    })
+    if (nrow(rows) == 0) return(tibble())
+    if (!identical(market, "all")) rows <- rows %>% filter(market == !!market)
+    rows %>%
+      group_by(family, family_label, split, market, projection_col) %>%
+      summarise(
+        model_result_col = first(result_col),
+        model_picks = sum(picks, na.rm = TRUE),
+        model_wins = sum(wins, na.rm = TRUE),
+        model_losses = sum(losses, na.rm = TRUE),
+        model_win_pct = ifelse(model_picks > 0, model_wins / model_picks, NA_real_),
+        .groups = "drop"
+      )
+  }
+
   long_predictions_for_file <- function(meta, market, min_win_pct = 0.40) {
     df <- read_model_file(meta$path)
     cols <- projection_columns_for_market(df, market)
@@ -427,6 +512,11 @@ server <- function(input, output, session) {
     score_lookup <- score_lookup %>%
       filter(!is.na(projection_col)) %>%
       select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
+    if (nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) {
+      score_lookup <- historical_model_scores(market) %>%
+        filter(family == meta$family, split == meta$split) %>%
+        select(projection_col, model_result_col, model_picks, model_win_pct)
+    }
 
     base <- df %>%
       transmute(
@@ -502,14 +592,16 @@ server <- function(input, output, session) {
     })
 
     out %>%
-      filter(!is.na(projection), !is.na(pick)) %>%
+      filter(!is.na(projection)) %>%
       filter(!is.na(model_win_pct), model_win_pct >= min_win_pct)
   }
 
   consensus_rows <- eventReactive(input$cons_run, {
-    req(input$cons_families, input$cons_seasons, input$cons_market, input$cons_min_win)
+    req(input$cons_families, input$cons_market, input$cons_min_win)
+    selected_seasons <- unique(c(as.integer(input$cons_seasons %||% integer()), as.integer(input$cons_future_seasons %||% integer())))
+    if (length(selected_seasons) == 0 || all(is.na(selected_seasons))) return(tibble())
     selected <- inventory %>%
-      filter(family %in% input$cons_families, season %in% as.integer(input$cons_seasons))
+      filter(family %in% input$cons_families, season %in% selected_seasons)
 
     long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
       long_predictions_for_file(
@@ -527,20 +619,21 @@ server <- function(input, output, session) {
         projections = n(),
         models_used = n_distinct(paste(file, projection_col, sep = "::")),
         avg_projection = mean(projection, na.rm = TRUE),
-        market_line = first(na.omit(market_line)),
-        avg_edge = avg_projection - market_line,
-        agree_pct = max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE)),
+        market_line = first_non_na(market_line),
+        avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
+        agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
         consensus_pick = case_when(
+          all(is.na(pick)) ~ NA_character_,
           input$cons_market == "spread" & mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Home",
           input$cons_market == "spread" ~ "Away",
           mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Over",
           TRUE ~ "Under"
         ),
-        actual_side = first(na.omit(actual_side)),
+        actual_side = first_non_na(actual_side),
         correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
         .groups = "drop"
       ) %>%
-      filter(agree_pct >= input$cons_agree / 100) %>%
+      filter(is.na(agree_pct) | agree_pct >= input$cons_agree / 100) %>%
       arrange(season, week, game_id)
   }, ignoreInit = TRUE)
 
@@ -555,9 +648,15 @@ server <- function(input, output, session) {
       `Avg agreement` = mean(df$agree_pct),
       Wins = sum(df$correct %in% TRUE, na.rm = TRUE),
       Losses = sum(df$correct %in% FALSE, na.rm = TRUE),
+      Pushes = sum(is.na(df$correct)),
       `Win %` = ifelse(sum(!is.na(df$correct)) > 0, sum(df$correct %in% TRUE, na.rm = TRUE) / sum(!is.na(df$correct)), NA_real_)
     ) %>%
-      mutate(`Avg agreement` = round(100 * `Avg agreement`, 1), `Win %` = round(100 * `Win %`, 1))
+      mutate(
+        `Avg projections per game` = sprintf("%.0f", `Avg projections per game`),
+        `Avg models per game` = sprintf("%.0f", `Avg models per game`),
+        `Avg agreement` = ifelse(is.na(`Avg agreement`), NA_character_, paste0(sprintf("%.1f", 100 * `Avg agreement`), "%")),
+        `Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%"))
+      )
   })
 
   output$cons_games <- renderTable({
@@ -568,9 +667,9 @@ server <- function(input, output, session) {
         season = as.integer(season),
         week = as.integer(week),
         avg_projection = sprintf("%.1f", avg_projection),
-        market_line = sprintf("%.1f", market_line),
-        avg_edge = sprintf("%.1f", avg_edge),
-        agree_pct = paste0(sprintf("%.0f", 100 * agree_pct), "%"),
+        market_line = ifelse(is.na(market_line), NA_character_, sprintf("%.1f", market_line)),
+        avg_edge = ifelse(is.na(avg_edge), NA_character_, sprintf("%.1f", avg_edge)),
+        agree_pct = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
         actual_side = ifelse(is.na(actual_side), NA_character_, as.character(as.integer(actual_side)))
       ) %>%
       dplyr::slice_head(n = 50)
