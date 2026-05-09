@@ -9,6 +9,22 @@ library(DT)
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 app_data_dir <- file.path(getwd(), "data")
+early_lines_path <- file.path(app_data_dir, "early_lines.csv")
+
+early_lines <- if (file.exists(early_lines_path)) {
+  read_csv(early_lines_path, show_col_types = FALSE) %>%
+    transmute(
+      game_id = as.character(.data[["game_id"]]),
+      early_spread_line = suppressWarnings(as.numeric(.data[["Mid-week Spread"]])),
+      early_total_line = suppressWarnings(as.numeric(.data[["Mid-week Total"]]))
+    )
+} else {
+  tibble(
+    game_id = character(),
+    early_spread_line = numeric(),
+    early_total_line = numeric()
+  )
+}
 
 family_labels <- c(
   ScoresTrees = "Scores Trees",
@@ -82,7 +98,7 @@ file_header <- function(path) {
 
 prediction_cols_from_names <- function(cols) {
   cols[str_detect(cols, regex("ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy", TRUE)) &
-         !str_detect(cols, "^Cover_|_target|_cover$")]
+         !str_detect(cols, regex("^Cover_|_target|_cover$|_pm1$", TRUE))]
 }
 
 key_cols_from_names <- function(cols) {
@@ -460,6 +476,12 @@ ui <- fluidPage(
             choices = c("Spread" = "spread", "Total" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
             selected = "spread"
           ),
+          selectInput(
+            "cons_line_source",
+            "Backtest line source",
+            choices = c("Closing lines" = "closing", "Early lines" = "early"),
+            selected = "closing"
+          ),
           sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
           actionButton("cons_run", "Build consensus", class = "btn-primary"),
@@ -711,7 +733,7 @@ server <- function(input, output, session) {
       )
   }
 
-  long_predictions_for_file <- function(meta, market, min_win_pct = 0.40) {
+  long_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing") {
     df <- read_model_file(meta$path)
     cols <- projection_columns_for_market(df, market)
     if (length(cols) == 0) return(tibble())
@@ -739,6 +761,15 @@ server <- function(input, output, session) {
         spread_line = get_line(df, "spread_line"),
         total_line = get_line(df, "total_line")
       )
+    if (identical(line_source, "early") && nrow(early_lines) > 0) {
+      base <- base %>%
+        left_join(early_lines, by = "game_id") %>%
+        mutate(
+          spread_line = coalesce(early_spread_line, spread_line),
+          total_line = coalesce(early_total_line, total_line)
+        ) %>%
+        select(-early_spread_line, -early_total_line)
+    }
 
     out <- map_dfr(cols, function(col) {
       model_score <- score_lookup %>% filter(projection_col == col) %>% dplyr::slice_head(n = 1)
@@ -806,44 +837,49 @@ server <- function(input, output, session) {
   }
 
   consensus_rows <- eventReactive(input$cons_run, {
-    req(input$cons_families, input$cons_market, input$cons_min_win)
-    selected_seasons <- unique(c(as.integer(input$cons_seasons %||% integer()), as.integer(input$cons_future_seasons %||% integer())))
-    if (length(selected_seasons) == 0 || all(is.na(selected_seasons))) return(tibble())
-    selected <- inventory %>%
-      filter(family %in% input$cons_families, season %in% selected_seasons)
+    req(input$cons_families, input$cons_market, input$cons_line_source, input$cons_min_win)
+    withProgress(message = "Building consensus, please wait...", value = 0, {
+      selected_seasons <- unique(c(as.integer(input$cons_seasons %||% integer()), as.integer(input$cons_future_seasons %||% integer())))
+      if (length(selected_seasons) == 0 || all(is.na(selected_seasons))) return(tibble())
+      selected <- inventory %>%
+        filter(family %in% input$cons_families, season %in% selected_seasons)
 
-    long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
-      long_predictions_for_file(
-        tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
-        input$cons_market,
-        input$cons_min_win / 100
-      )
+      incProgress(0.2, detail = "Collecting model projections")
+      long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
+        long_predictions_for_file(
+          tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
+          input$cons_market,
+          input$cons_min_win / 100,
+          input$cons_line_source
+        )
+      })
+
+      if (nrow(long) == 0) return(tibble())
+
+      incProgress(0.7, detail = "Averaging model signals")
+      long %>%
+        group_by(game_id, season, week, home_team, away_team) %>%
+        summarise(
+          projections = n(),
+          models_used = n_distinct(paste(file, projection_col, sep = "::")),
+          avg_projection = mean(projection, na.rm = TRUE),
+          market_line = first_non_na(market_line),
+          avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
+          agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
+          consensus_pick = case_when(
+            all(is.na(pick)) ~ NA_character_,
+            input$cons_market == "spread" & mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Home",
+            input$cons_market == "spread" ~ "Away",
+            mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Over",
+            TRUE ~ "Under"
+          ),
+          actual_side = first_non_na(actual_side),
+          correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
+          .groups = "drop"
+        ) %>%
+        filter(is.na(agree_pct) | agree_pct >= input$cons_agree / 100) %>%
+        arrange(season, week, game_id)
     })
-
-    if (nrow(long) == 0) return(tibble())
-
-    long %>%
-      group_by(game_id, season, week, home_team, away_team) %>%
-      summarise(
-        projections = n(),
-        models_used = n_distinct(paste(file, projection_col, sep = "::")),
-        avg_projection = mean(projection, na.rm = TRUE),
-        market_line = first_non_na(market_line),
-        avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
-        agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
-        consensus_pick = case_when(
-          all(is.na(pick)) ~ NA_character_,
-          input$cons_market == "spread" & mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Home",
-          input$cons_market == "spread" ~ "Away",
-          mean(pick == 1, na.rm = TRUE) >= mean(pick == -1, na.rm = TRUE) ~ "Over",
-          TRUE ~ "Under"
-        ),
-        actual_side = first_non_na(actual_side),
-        correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
-        .groups = "drop"
-      ) %>%
-      filter(is.na(agree_pct) | agree_pct >= input$cons_agree / 100) %>%
-      arrange(season, week, game_id)
   }, ignoreInit = TRUE)
 
   output$cons_summary <- renderTable({
