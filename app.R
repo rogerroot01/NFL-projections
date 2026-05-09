@@ -353,19 +353,24 @@ server <- function(input, output, session) {
       )
     })
 
-    output[[paste0(id, "_summary")]] <- renderText({
-      req(input[[paste0(id, "_build")]] > 0)
-      s <- family_summary() %>% dplyr::slice_head(n = 80)
-      if (nrow(s) == 0) {
-        fd <- file_debug_summary(family_files_for_season())
-        return(paste(
-          "No summary rows for this selection.",
-          "File debug:",
-          paste(capture.output(print(fd, n = 20, width = 180)), collapse = "\n"),
-          sep = "\n"
-        ))
-      }
-      paste(capture.output(print(s, n = 80, width = 180)), collapse = "\n")
+    output[[paste0(id, "_summary")]] <- renderPrint({
+      tryCatch({
+        req(input[[paste0(id, "_build")]] > 0)
+        s <- family_summary() %>% dplyr::slice_head(n = 80)
+        if (nrow(s) == 0) {
+          fd <- file_debug_summary(family_files_for_season())
+          cat("No summary rows for this selection.\n")
+          cat("File debug:\n")
+          print(as.data.frame(fd), row.names = FALSE)
+          return(invisible(NULL))
+        }
+        print(as.data.frame(s), row.names = FALSE)
+      }, error = function(err) {
+        cat("Summary render error:\n")
+        cat(conditionMessage(err), "\n")
+        cat("\nFile debug:\n")
+        print(as.data.frame(file_debug_summary(family_files_for_season())), row.names = FALSE)
+      })
     })
 
     output[[paste0(id, "_download_summary")]] <- downloadHandler(
