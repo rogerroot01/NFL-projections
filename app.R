@@ -302,19 +302,30 @@ ui <- fluidPage(
         background: rgba(3, 13, 20, 0.66);
         box-shadow: 0 28px 80px rgba(0,0,0,0.42);
         backdrop-filter: blur(8px);
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      .splash-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: rgba(3, 13, 20, 0.88);
       }
 
       .splash-nfl-logo {
-        width: 126px;
+        width: 168px;
+        max-width: 38vw;
         height: auto;
-        margin: 0 auto 24px;
+        margin: 0 auto 20px;
         display: block;
         filter: drop-shadow(0 16px 28px rgba(0,0,0,0.5));
       }
 
       .splash-title {
         margin: 0;
-        font-size: clamp(40px, 7vw, 72px);
+        font-size: clamp(34px, 5.6vw, 58px);
         line-height: 0.95;
         font-weight: 800;
         letter-spacing: 0;
