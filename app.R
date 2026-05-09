@@ -261,21 +261,26 @@ ui <- fluidPage(
         padding: 32px;
         color: #f7fbff;
         background:
-          radial-gradient(circle at 18% 8%, rgba(255,255,255,0.28) 0, rgba(255,255,255,0.08) 17%, rgba(255,255,255,0) 31%),
-          radial-gradient(circle at 82% 8%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.07) 16%, rgba(255,255,255,0) 31%),
-          repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 3px, rgba(0,0,0,0.03) 3px 7px),
-          linear-gradient(180deg, #168047 0%, #0e6c3a 44%, #07522c 100%);
+          radial-gradient(circle at 18% 9%, rgba(255,255,255,0.28) 0, rgba(255,255,255,0.08) 17%, rgba(255,255,255,0) 31%),
+          radial-gradient(circle at 82% 9%, rgba(255,255,255,0.24) 0, rgba(255,255,255,0.07) 16%, rgba(255,255,255,0) 31%),
+          radial-gradient(ellipse at 50% 122%, rgba(0,0,0,0.48), rgba(0,0,0,0) 46%),
+          repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 3px, rgba(0,0,0,0.04) 3px 8px),
+          linear-gradient(180deg, #167c45 0%, #0c6537 48%, #064223 100%);
       }
 
       #splash_screen::before {
         content: '';
         position: absolute;
         inset: 0;
+        z-index: 0;
         background:
-          repeating-linear-gradient(0deg, transparent 0 74px, rgba(255,255,255,0.74) 74px 78px, transparent 78px 148px),
-          linear-gradient(90deg, transparent 0 calc(50% - 2px), rgba(255,255,255,0.9) calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px) 100%),
-          radial-gradient(ellipse at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.08) 48%, rgba(0,0,0,0.48) 100%);
-        opacity: 0.9;
+          repeating-linear-gradient(0deg,
+            transparent 0 78px,
+            rgba(255,255,255,0.76) 78px 82px,
+            transparent 82px 156px
+          ),
+          radial-gradient(ellipse at 50% 52%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.1) 48%, rgba(0,0,0,0.5) 100%);
+        opacity: 0.88;
         pointer-events: none;
       }
 
@@ -283,17 +288,26 @@ ui <- fluidPage(
         content: '';
         position: absolute;
         inset: 0;
+        z-index: 0;
         background:
-          repeating-linear-gradient(0deg, transparent 0 29px, rgba(255,255,255,0.86) 29px 33px, transparent 33px 148px) 24% 0 / 74px 100% no-repeat,
-          repeating-linear-gradient(0deg, transparent 0 29px, rgba(255,255,255,0.86) 29px 33px, transparent 33px 148px) 50% 0 / 74px 100% no-repeat,
-          repeating-linear-gradient(0deg, transparent 0 29px, rgba(255,255,255,0.86) 29px 33px, transparent 33px 148px) 76% 0 / 74px 100% no-repeat,
-          radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.18), rgba(0,0,0,0) 45%);
-        opacity: 0.72;
+          repeating-linear-gradient(0deg,
+            transparent 0 34px,
+            rgba(255,255,255,0.84) 34px 38px,
+            transparent 38px 156px
+          ) 30% 0 / 92px 100% no-repeat,
+          repeating-linear-gradient(0deg,
+            transparent 0 34px,
+            rgba(255,255,255,0.84) 34px 38px,
+            transparent 38px 156px
+          ) 70% 0 / 92px 100% no-repeat,
+          linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0) 34%, rgba(0,0,0,0.28) 100%);
+        opacity: 0.76;
         pointer-events: none;
       }
 
       .splash-card {
         position: relative;
+        z-index: 2;
         width: min(760px, 94vw);
         padding: 44px 40px 38px;
         text-align: center;
@@ -315,10 +329,10 @@ ui <- fluidPage(
       }
 
       .splash-nfl-logo {
-        width: 168px;
-        max-width: 38vw;
+        width: 192px;
+        max-width: 42vw;
         height: auto;
-        margin: 0 auto 20px;
+        margin: 0 auto 18px;
         display: block;
         filter: drop-shadow(0 16px 28px rgba(0,0,0,0.5));
       }
