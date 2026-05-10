@@ -967,6 +967,7 @@ server <- function(input, output, session) {
         projection_col = col,
         projection = pred,
         market_line = line,
+        actual = actual,
         pick = pick,
         actual_side = actual_side,
         correct = ifelse(!is.na(pick) & !is.na(actual_side), pick == actual_side, NA),
@@ -1056,7 +1057,14 @@ server <- function(input, output, session) {
   }
 
   observeEvent(input$cons_run, {
-    consensus_rows(build_consensus_rows())
+    rows <- tryCatch(
+      build_consensus_rows(),
+      error = function(e) {
+        consensus_status(paste("Consensus build error:", conditionMessage(e)))
+        tibble()
+      }
+    )
+    consensus_rows(rows)
   }, ignoreInit = TRUE, priority = 100)
 
   output$cons_status <- renderText({
