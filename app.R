@@ -317,6 +317,40 @@ ui <- fluidPage(
         height: 1px;
       }
 
+      .app-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin: 8px 0 10px;
+      }
+
+      .app-header h2 {
+        margin: 0;
+        font-size: 26px;
+        line-height: 1.2;
+      }
+
+      .prepared-badge {
+        margin: 0;
+        padding: 6px 10px;
+        font-size: 13px;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      .section-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .section-title-row h4 {
+        margin: 0;
+      }
+
       body.splash-active {
         overflow: hidden;
       }
@@ -493,20 +527,22 @@ ui <- fluidPage(
       actionButton("splash_enter", "Enter Model")
     )
   ),
-  titlePanel("Projection Model Wrangler"),
-  if (!compact_data_available) {
-    div(
-      class = "alert alert-danger",
-      strong("Prepared data missing. "),
-      "Run prepare_data.R locally, then deploy data/compact_models.rds and data/model_inventory.rds with the app."
-    )
-  } else {
-    div(
-      class = "alert alert-success",
-      paste0("Prepared data loaded: ", length(compact_models), " compact model files.")
-    )
-  },
-  tags$p("Reads the finished projection CSVs in the app data folder and summarizes model output by family, season, file, and market."),
+  div(
+    class = "app-header",
+    h2("Projection Model Wrangler"),
+    if (!compact_data_available) {
+      div(
+        class = "alert alert-danger prepared-badge",
+        strong("Prepared data missing. "),
+        "Run prepare_data.R and deploy the compact RDS files."
+      )
+    } else {
+      div(
+        class = "alert alert-success prepared-badge",
+        paste0("Prepared data loaded: ", length(compact_models), " compact model files.")
+      )
+    }
+  ),
   tabsetPanel(
     id = "main_tabs",
     family_tab_ui("scorestrees", "Scores Trees"),
@@ -552,7 +588,11 @@ ui <- fluidPage(
           h4("Consensus summary"),
           tableOutput("cons_summary"),
           tags$hr(),
-          h4("Consensus game-level rows"),
+          div(
+            class = "section-title-row",
+            h4("Consensus game-level rows"),
+            downloadButton("cons_games_download", "Download game-level CSV")
+          ),
           DTOutput("cons_games")
         )
       )
@@ -1134,6 +1174,14 @@ server <- function(input, output, session) {
 
   output$cons_download <- downloadHandler(
     filename = function() paste0("projection_consensus_", Sys.Date(), ".csv"),
+    content = function(file) {
+      req(input$cons_run > 0)
+      write_csv(consensus_rows(), file)
+    }
+  )
+
+  output$cons_games_download <- downloadHandler(
+    filename = function() paste0("projection_consensus_game_rows_", Sys.Date(), ".csv"),
     content = function(file) {
       req(input$cons_run > 0)
       write_csv(consensus_rows(), file)
