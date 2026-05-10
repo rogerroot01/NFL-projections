@@ -21,7 +21,7 @@ game_id,season,week,home_team,away_team,home_injury_adj,away_injury_adj,home_off
 2025_02_NYG_DAL,2025,2,DAL,NYG,,0,,,,
 2025_02_CHI_DET,2025,2,DET,CHI,,0,,,,
 2025_02_NE_MIA,2025,2,MIA,NE,,0,,,,
-2025_02_SF_NO,2025,2,NO,SF,,-4,,,,-4
+2025_02_SF_NO,2025,2,NO,SF,,-4,,,-4,
 2025_02_BUF_NYJ,2025,2,NYJ,BUF,,0,,,,
 2025_02_SEA_PIT,2025,2,PIT,SEA,,0,,,,
 2025_02_LA_TEN,2025,2,TEN,LAR,,0,,,,
