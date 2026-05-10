@@ -918,8 +918,8 @@ server <- function(input, output, session) {
           home_def_injury_adj = coalesce(home_def_injury_adj, future_home_def_injury_adj, 0),
           away_off_injury_adj = coalesce(away_off_injury_adj, future_away_off_injury_adj, 0),
           away_def_injury_adj = coalesce(away_def_injury_adj, future_away_def_injury_adj, 0),
-          home_score_injury_adj = home_off_injury_adj + away_def_injury_adj,
-          away_score_injury_adj = away_off_injury_adj + home_def_injury_adj,
+          home_score_injury_adj = home_off_injury_adj - away_def_injury_adj,
+          away_score_injury_adj = away_off_injury_adj - home_def_injury_adj,
           split_spread_injury_adj = home_score_injury_adj - away_score_injury_adj,
           spread_injury_adj = coalesce(injury_adj, split_spread_injury_adj, 0),
           total_injury_adj = home_score_injury_adj + away_score_injury_adj
