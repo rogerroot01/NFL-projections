@@ -73,6 +73,15 @@ family_labels <- c(
   Billy = "Billy"
 )
 
+next_gen_family_labels <- c(
+  NextGen1 = "Next-Gen Family 1",
+  NextGen2 = "Next-Gen Family 2",
+  NextGen3 = "Next-Gen Family 3",
+  NextGen4 = "Next-Gen Family 4",
+  NextGen5 = "Next-Gen Family 5",
+  NextGen6 = "Next-Gen Family 6"
+)
+
 market_labels <- c(
   all = "All markets",
   spread = "Spread / score diff",
@@ -546,12 +555,23 @@ ui <- fluidPage(
   ),
   tabsetPanel(
     id = "main_tabs",
-    family_tab_ui("scorestrees", "Scores Trees"),
-    family_tab_ui("billytrees", "Billy Trees"),
-    family_tab_ui("scoreslatereg", "Scores Late Regression"),
-    family_tab_ui("billy", "Billy"),
     tabPanel(
-      "Consensus",
+      "Legacy Models",
+      tabsetPanel(
+        id = "legacy_model_tabs",
+        family_tab_ui("scorestrees", "Scores Trees"),
+        family_tab_ui("billytrees", "Billy Trees"),
+        family_tab_ui("scoreslatereg", "Scores Late Regression"),
+        family_tab_ui("billy", "Billy")
+      )
+    ),
+    tabPanel(
+      "Next-Gen Models",
+      h4("Next-Gen Models"),
+      tags$p("Placeholder for the next batch of model families.")
+    ),
+    tabPanel(
+      "Legacy Consensus",
       sidebarLayout(
         sidebarPanel(
           width = 3,
@@ -583,20 +603,125 @@ ui <- fluidPage(
           downloadButton("cons_download", "Download consensus rows")
         ),
         mainPanel(
-          h4("Consensus status"),
+          h4("Legacy consensus status"),
           verbatimTextOutput("cons_status", placeholder = TRUE),
           tags$hr(),
-          h4("Consensus summary"),
+          h4("Legacy consensus summary"),
           tableOutput("cons_summary"),
+          tags$hr(),
+          h4("Legacy consensus results splits"),
+          tableOutput("cons_splits"),
           tags$hr(),
           div(
             class = "section-title-row",
-            h4("Consensus game-level rows"),
+            h4("Legacy consensus game-level rows"),
             downloadButton("cons_games_download", "Download game-level CSV")
           ),
           DTOutput("cons_games")
         )
       )
+    ),
+    tabPanel(
+      "Next-Gen Consensus",
+      sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          checkboxGroupInput(
+            "ng_cons_frameworks",
+            "Frameworks",
+            choices = c("Early framework" = "early", "Late framework" = "late"),
+            selected = c("early", "late")
+          ),
+          checkboxGroupInput(
+            "ng_cons_families",
+            "Families",
+            choices = stats::setNames(names(next_gen_family_labels), next_gen_family_labels),
+            selected = names(next_gen_family_labels)
+          ),
+          checkboxGroupInput("ng_cons_seasons", "Backtest seasons", choices = c(2024, 2025), selected = c(2024, 2025)),
+          checkboxGroupInput("ng_cons_future_seasons", "Future projection seasons", choices = 2026, selected = 2026),
+          selectInput(
+            "ng_cons_market",
+            "Market",
+            choices = c("Spread" = "spread", "Straight up" = "straight_up", "Total" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
+            selected = "spread"
+          ),
+          selectInput(
+            "ng_cons_line_source",
+            "Backtest line source",
+            choices = c("Closing lines" = "closing", "Early lines" = "early"),
+            selected = "closing"
+          ),
+          selectInput(
+            "ng_cons_injury_source",
+            "Projection injury adjustment",
+            choices = c("No injury adjustment" = "none", "Apply injury adjustments" = "apply"),
+            selected = "none"
+          ),
+          sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
+          sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
+          actionButton("ng_cons_run", "Build next-gen consensus", class = "btn-primary"),
+          tags$hr(),
+          downloadButton("ng_cons_download", "Download next-gen consensus rows")
+        ),
+        mainPanel(
+          h4("Next-gen consensus status"),
+          tags$p("Placeholder until next-gen prepared data is available."),
+          tags$hr(),
+          h4("Next-gen consensus summary"),
+          tableOutput("ng_cons_summary"),
+          tags$hr(),
+          h4("Next-gen consensus results splits"),
+          tableOutput("ng_cons_splits"),
+          tags$hr(),
+          div(
+            class = "section-title-row",
+            h4("Next-gen consensus game-level rows"),
+            downloadButton("ng_cons_games_download", "Download game-level CSV")
+          ),
+          DTOutput("ng_cons_games")
+        )
+      )
+    ),
+    tabPanel(
+      "Consensus",
+      sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          checkboxGroupInput(
+            "overall_cons_sources",
+            "Consensus sources",
+            choices = c("Legacy consensus" = "legacy", "Next-gen consensus" = "next_gen"),
+            selected = c("legacy", "next_gen")
+          ),
+          selectInput(
+            "overall_cons_market",
+            "Market",
+            choices = c("Spread" = "spread", "Straight up" = "straight_up", "Total" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
+            selected = "spread"
+          ),
+          sliderInput("overall_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
+          actionButton("overall_cons_run", "Build combined consensus", class = "btn-primary")
+        ),
+        mainPanel(
+          h4("Combined consensus status"),
+          tags$p("Placeholder for combining the current legacy consensus rows with the next-gen consensus rows."),
+          tags$hr(),
+          h4("Combined consensus summary"),
+          tableOutput("overall_cons_summary"),
+          tags$hr(),
+          h4("Combined consensus results splits"),
+          tableOutput("overall_cons_splits"),
+          tags$hr(),
+          h4("Combined consensus game-level rows"),
+          DTOutput("overall_cons_games")
+        )
+      )
+    ),
+    tabPanel(
+      "Plot",
+      h4("Plot"),
+      tags$p("Placeholder for consensus and model comparison plots.")
     ),
     tabPanel(
       "Files",
@@ -791,6 +916,40 @@ server <- function(input, output, session) {
   output$file_table <- renderTable({
     inventory %>%
       select(Season = season, Family = family_label, Split = split, File = file)
+  })
+
+  output$ng_cons_summary <- renderTable({
+    tibble(Message = "Next-gen consensus will be enabled after the next-gen prepared RDS data is added.")
+  })
+
+  output$ng_cons_splits <- renderTable({
+    tibble(Message = "No next-gen consensus rows have been built yet.")
+  })
+
+  output$ng_cons_games <- renderDT({
+    datatable(tibble(Message = "No next-gen consensus rows have been built yet."), rownames = FALSE)
+  })
+
+  output$ng_cons_download <- downloadHandler(
+    filename = function() paste0("next_gen_consensus_", Sys.Date(), ".csv"),
+    content = function(file) write_csv(tibble(Message = "No next-gen consensus rows have been built yet."), file)
+  )
+
+  output$ng_cons_games_download <- downloadHandler(
+    filename = function() paste0("next_gen_consensus_game_rows_", Sys.Date(), ".csv"),
+    content = function(file) write_csv(tibble(Message = "No next-gen consensus rows have been built yet."), file)
+  )
+
+  output$overall_cons_summary <- renderTable({
+    tibble(Message = "Combined consensus will use the built legacy and next-gen consensus rows once both engines are available.")
+  })
+
+  output$overall_cons_splits <- renderTable({
+    tibble(Message = "No combined consensus rows have been built yet.")
+  })
+
+  output$overall_cons_games <- renderDT({
+    datatable(tibble(Message = "No combined consensus rows have been built yet."), rownames = FALSE)
   })
 
   get_line <- function(df, col) if (col %in% names(df)) suppressWarnings(as.numeric(df[[col]])) else rep(NA_real_, nrow(df))
@@ -1070,6 +1229,8 @@ server <- function(input, output, session) {
           models_used = n_distinct(paste(file, projection_col, sep = "::")),
           avg_projection = mean(projection, na.rm = TRUE),
           market_line = first_non_na(market_line),
+          spread_line = first_non_na(spread_line),
+          total_line = first_non_na(total_line),
           avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
           agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
           consensus_pick = case_when(
@@ -1141,6 +1302,90 @@ server <- function(input, output, session) {
         `Avg agreement` = ifelse(is.na(`Avg agreement`), NA_character_, paste0(sprintf("%.1f", 100 * `Avg agreement`), "%")),
         `Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%"))
       )
+  })
+
+  output$cons_splits <- renderTable({
+    req(input$cons_run > 0)
+    df <- consensus_rows()
+    if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
+
+    market <- input$cons_market %||% "spread"
+    summarize_split <- function(data, category, split_label) {
+      graded <- sum(!is.na(data$correct))
+      tibble(
+        Category = category,
+        Split = split_label,
+        Games = nrow(data),
+        Wins = sum(data$correct %in% TRUE, na.rm = TRUE),
+        Losses = sum(data$correct %in% FALSE, na.rm = TRUE),
+        Pushes = sum(is.na(data$correct)),
+        `Win %` = ifelse(graded > 0, sum(data$correct %in% TRUE, na.rm = TRUE) / graded, NA_real_)
+      )
+    }
+
+    classify_favorite_side <- function(spread_line) {
+      case_when(
+        spread_line > 0 ~ "Home",
+        spread_line < 0 ~ "Away",
+        spread_line == 0 ~ "Pick'em",
+        TRUE ~ NA_character_
+      )
+    }
+
+    rows <- df %>%
+      mutate(
+        favorite_side = classify_favorite_side(spread_line),
+        selected_team_side = case_when(
+          market %in% c("spread", "straight_up") ~ consensus_pick,
+          market == "home_implied" ~ "Home",
+          market == "away_implied" ~ "Away",
+          TRUE ~ NA_character_
+        ),
+        favorite_role = case_when(
+          is.na(selected_team_side) | is.na(favorite_side) ~ NA_character_,
+          favorite_side == "Pick'em" ~ "Pick'em",
+          selected_team_side == favorite_side ~ "Favorite",
+          selected_team_side %in% c("Home", "Away") ~ "Underdog",
+          TRUE ~ NA_character_
+        ),
+        total_favorite_context = case_when(
+          favorite_side == "Home" ~ "Home favorite games",
+          favorite_side == "Away" ~ "Away favorite games",
+          favorite_side == "Pick'em" ~ "Pick'em games",
+          TRUE ~ NA_character_
+        )
+      )
+
+    overall <- summarize_split(rows, "Overall", "All consensus rows")
+
+    pick_splits <- rows %>%
+      filter(!is.na(consensus_pick)) %>%
+      group_split(consensus_pick) %>%
+      map_dfr(~ summarize_split(.x, "Consensus pick", first(.x$consensus_pick)))
+
+    home_away_splits <- if (market %in% c("spread", "straight_up", "home_implied", "away_implied")) {
+      rows %>%
+        filter(!is.na(selected_team_side)) %>%
+        group_split(selected_team_side) %>%
+        map_dfr(~ summarize_split(.x, "Home/Away", first(.x$selected_team_side)))
+    } else {
+      rows %>%
+        filter(!is.na(total_favorite_context)) %>%
+        group_split(total_favorite_context) %>%
+        map_dfr(~ summarize_split(.x, "Favorite context", first(.x$total_favorite_context)))
+    }
+
+    favorite_splits <- if (market == "total") {
+      tibble()
+    } else {
+      rows %>%
+        filter(!is.na(favorite_role)) %>%
+        group_split(favorite_role) %>%
+        map_dfr(~ summarize_split(.x, "Favorite/Underdog", first(.x$favorite_role)))
+    }
+
+    bind_rows(overall, pick_splits, home_away_splits, favorite_splits) %>%
+      mutate(`Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%")))
   })
 
   output$cons_games <- renderDT({
