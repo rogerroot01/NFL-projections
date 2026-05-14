@@ -1863,7 +1863,7 @@ server <- function(input, output, session) {
       rows <- long %>%
         group_by(game_id, season, week, home_team, away_team) %>%
         summarise(
-          market = market,
+          market = .env$market,
           projections = n(),
           models_used = n_distinct(paste(file, projection_col, sep = "::")),
           avg_projection = mean(projection, na.rm = TRUE),
@@ -1955,7 +1955,7 @@ server <- function(input, output, session) {
       rows <- long %>%
         group_by(game_id, season, week, home_team, away_team) %>%
         summarise(
-          market = market,
+          market = .env$market,
           projections = n(),
           models_used = n_distinct(paste(file, projection_col, sep = "::")),
           frameworks_used = paste(sort(unique(framework)), collapse = ", "),
@@ -2022,7 +2022,7 @@ server <- function(input, output, session) {
       mutate(source_pick = case_when(consensus_pick %in% c("Home", "Over") ~ 1, consensus_pick %in% c("Away", "Under") ~ -1, TRUE ~ NA_real_)) %>%
       group_by(game_id, season, week, home_team, away_team) %>%
       summarise(
-        market = market,
+        market = .env$market,
         projections = sum(projections, na.rm = TRUE),
         models_used = sum(models_used, na.rm = TRUE),
         sources_used = paste(sort(unique(source)), collapse = ", "),
@@ -2030,26 +2030,36 @@ server <- function(input, output, session) {
         market_line = first_non_na(market_line),
         spread_line = first_non_na(spread_line),
         total_line = first_non_na(total_line),
-        avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
+        positive_source_picks = sum(source_pick == 1, na.rm = TRUE),
+        negative_source_picks = sum(source_pick == -1, na.rm = TRUE),
+        source_pick_count = sum(!is.na(source_pick)),
         agree_pct = ifelse(all(is.na(source_pick)), NA_real_, max(mean(source_pick == 1, na.rm = TRUE), mean(source_pick == -1, na.rm = TRUE))),
+        positive_avg_projection = mean(avg_projection[source_pick == 1], na.rm = TRUE),
+        negative_avg_projection = mean(avg_projection[source_pick == -1], na.rm = TRUE),
+        actual_side = first_non_na(actual_side),
+        actual_result = first_non_na(actual_result),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        positive_avg_projection = ifelse(is.nan(positive_avg_projection), NA_real_, positive_avg_projection),
+        negative_avg_projection = ifelse(is.nan(negative_avg_projection), NA_real_, negative_avg_projection),
+        avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
         consensus_pick = case_when(
-          all(is.na(source_pick)) ~ NA_character_,
-          market %in% c("spread", "straight_up") & sum(source_pick == 1, na.rm = TRUE) > sum(source_pick == -1, na.rm = TRUE) ~ "Home",
-          market %in% c("spread", "straight_up") & sum(source_pick == -1, na.rm = TRUE) > sum(source_pick == 1, na.rm = TRUE) ~ "Away",
+          source_pick_count == 0 ~ NA_character_,
+          market %in% c("spread", "straight_up") & positive_source_picks > negative_source_picks ~ "Home",
+          market %in% c("spread", "straight_up") & negative_source_picks > positive_source_picks ~ "Away",
           market %in% c("spread", "straight_up") & avg_projection > market_line ~ "Home",
           market %in% c("spread", "straight_up") & avg_projection < market_line ~ "Away",
           market %in% c("spread", "straight_up") ~ NA_character_,
-          sum(source_pick == 1, na.rm = TRUE) > sum(source_pick == -1, na.rm = TRUE) ~ "Over",
-          sum(source_pick == -1, na.rm = TRUE) > sum(source_pick == 1, na.rm = TRUE) ~ "Under",
+          positive_source_picks > negative_source_picks ~ "Over",
+          negative_source_picks > positive_source_picks ~ "Under",
           avg_projection > market_line ~ "Over",
           avg_projection < market_line ~ "Under",
           TRUE ~ NA_character_
         ),
-        actual_side = first_non_na(actual_side),
-        actual_result = first_non_na(actual_result),
-        correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
-        .groups = "drop"
+        correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA)
       ) %>%
+      select(-positive_source_picks, -negative_source_picks, -source_pick_count, -positive_avg_projection, -negative_avg_projection) %>%
       filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
       arrange(season, week, game_id)
 
@@ -2176,20 +2186,20 @@ server <- function(input, output, session) {
     rows <- dashboard_source_rows()
     seasons <- if (nrow(rows) == 0) character() else sort(unique(as.integer(rows$season)))
     current <- isolate(input$dashboard_season)
-    selected <- if (length(seasons) == 0) character() else if (current %in% as.character(seasons)) current else as.character(max(seasons, na.rm = TRUE))
+    selected <- if (length(seasons) == 0) character() else if (length(current) > 0 && current %in% as.character(seasons)) current else as.character(max(seasons, na.rm = TRUE))
     updateSelectInput(session, "dashboard_season", choices = stats::setNames(as.character(seasons), as.character(seasons)), selected = selected)
   })
 
   observe({
     rows <- dashboard_source_rows()
     selected_season <- suppressWarnings(as.integer(input$dashboard_season))
-    weeks <- if (nrow(rows) == 0 || is.na(selected_season)) {
+    weeks <- if (nrow(rows) == 0 || length(selected_season) == 0 || is.na(selected_season)) {
       character()
     } else {
       sort(unique(as.integer(rows$week[rows$season == selected_season])))
     }
     current <- isolate(input$dashboard_week)
-    selected <- if (length(weeks) == 0) character() else if (current %in% as.character(weeks)) current else as.character(min(weeks, na.rm = TRUE))
+    selected <- if (length(weeks) == 0) character() else if (length(current) > 0 && current %in% as.character(weeks)) current else as.character(min(weeks, na.rm = TRUE))
     week_choices <- if (length(weeks) == 0) character() else stats::setNames(as.character(weeks), paste("Week", weeks))
     updateSelectInput(session, "dashboard_week", choices = week_choices, selected = selected)
   })
@@ -2199,7 +2209,7 @@ server <- function(input, output, session) {
     selected_season <- suppressWarnings(as.integer(input$dashboard_season))
     selected_week <- suppressWarnings(as.integer(input$dashboard_week))
     markets <- input$dashboard_markets %||% character()
-    if (nrow(rows) == 0 || is.na(selected_season) || is.na(selected_week)) return(tibble())
+    if (nrow(rows) == 0 || length(selected_season) == 0 || length(selected_week) == 0 || is.na(selected_season) || is.na(selected_week)) return(tibble())
     rows %>%
       filter(season == selected_season, week == selected_week, market %in% markets)
   })
