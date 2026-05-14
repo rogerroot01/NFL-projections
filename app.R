@@ -628,28 +628,6 @@ ui <- fluidPage(
   tabsetPanel(
     id = "main_tabs",
     tabPanel(
-      "Legacy Models",
-      tabsetPanel(
-        id = "legacy_model_tabs",
-        family_tab_ui("scorestrees", "Scores Trees"),
-        family_tab_ui("billytrees", "Billy Trees"),
-        family_tab_ui("scoreslatereg", "Scores Late Regression"),
-        family_tab_ui("billy", "Billy")
-      )
-    ),
-    tabPanel(
-      "Next-Gen Models",
-      tabsetPanel(
-        id = "nextgen_model_tabs",
-        nextgen_family_tab_ui("ng_elasticnet", "Elastic Net Lasso"),
-        nextgen_family_tab_ui("ng_weightedlinear", "Weighted Linear Regression"),
-        nextgen_family_tab_ui("ng_decisiontree", "Decision Tree"),
-        nextgen_family_tab_ui("ng_randomforest", "Random Forest"),
-        nextgen_family_tab_ui("ng_gbm", "GBM Boosted Trees"),
-        nextgen_family_tab_ui("ng_xgboost", "XGBoost Regression")
-      )
-    ),
-    tabPanel(
       "Legacy Consensus",
       sidebarLayout(
         sidebarPanel(
