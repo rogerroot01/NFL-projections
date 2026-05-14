@@ -74,12 +74,12 @@ family_labels <- c(
 )
 
 next_gen_family_labels <- c(
-  NextGen1 = "Next-Gen Family 1",
-  NextGen2 = "Next-Gen Family 2",
-  NextGen3 = "Next-Gen Family 3",
-  NextGen4 = "Next-Gen Family 4",
-  NextGen5 = "Next-Gen Family 5",
-  NextGen6 = "Next-Gen Family 6"
+  elastic_net_lasso = "Elastic Net Lasso",
+  weighted_linear_regression = "Weighted Linear Regression",
+  decision_tree_rpart = "Decision Tree",
+  random_forest_ranger = "Random Forest",
+  gbm_boosted_trees = "GBM Boosted Trees",
+  xgboost_regression = "XGBoost Regression"
 )
 
 market_labels <- c(
@@ -119,8 +119,11 @@ file_inventory <- function() {
 
 inventory_rds <- file.path(app_data_dir, "model_inventory.rds")
 compact_models_rds <- file.path(app_data_dir, "compact_models.rds")
+nextgen_inventory_rds <- file.path(app_data_dir, "nextgen_model_inventory.rds")
+nextgen_compact_models_rds <- file.path(app_data_dir, "nextgen_compact_models.rds")
 
 compact_data_available <- file.exists(inventory_rds) && file.exists(compact_models_rds)
+nextgen_data_available <- file.exists(nextgen_inventory_rds) && file.exists(nextgen_compact_models_rds)
 
 inventory <- if (compact_data_available) {
   readRDS(inventory_rds) %>%
@@ -137,6 +140,21 @@ inventory <- if (compact_data_available) {
 }
 
 compact_models <- if (compact_data_available) readRDS(compact_models_rds) else list()
+nextgen_inventory <- if (nextgen_data_available) {
+  readRDS(nextgen_inventory_rds) %>%
+    mutate(path = file.path(getwd(), path))
+} else {
+  tibble(
+    path = character(),
+    file = character(),
+    season = integer(),
+    framework = character(),
+    sample = character(),
+    family = character(),
+    family_label = character()
+  )
+}
+nextgen_compact_models <- if (nextgen_data_available) readRDS(nextgen_compact_models_rds) else list()
 file_cache <- new.env(parent = emptyenv())
 header_cache <- new.env(parent = emptyenv())
 
@@ -549,7 +567,11 @@ ui <- fluidPage(
     } else {
       div(
         class = "alert alert-success prepared-badge",
-        paste0("Prepared data loaded: ", length(compact_models), " compact model files.")
+        paste0(
+          "Prepared data loaded: ",
+          length(compact_models), " legacy compact model files",
+          if (nextgen_data_available) paste0(" and ", length(nextgen_compact_models), " next-gen compact model files.") else "."
+        )
       )
     }
   ),
@@ -666,7 +688,7 @@ ui <- fluidPage(
         ),
         mainPanel(
           h4("Next-gen consensus status"),
-          tags$p("Placeholder until next-gen prepared data is available."),
+          verbatimTextOutput("ng_cons_status", placeholder = TRUE),
           tags$hr(),
           h4("Next-gen consensus summary"),
           tableOutput("ng_cons_summary"),
@@ -705,7 +727,7 @@ ui <- fluidPage(
         ),
         mainPanel(
           h4("Combined consensus status"),
-          tags$p("Placeholder for combining the current legacy consensus rows with the next-gen consensus rows."),
+          verbatimTextOutput("overall_cons_status", placeholder = TRUE),
           tags$hr(),
           h4("Combined consensus summary"),
           tableOutput("overall_cons_summary"),
@@ -908,48 +930,21 @@ server <- function(input, output, session) {
   bind_family("billy", "Billy")
 
   consensus_status <- reactiveVal("Ready.")
+  nextgen_consensus_status <- reactiveVal(if (nextgen_data_available) "Ready." else "Next-gen prepared data is missing.")
+  overall_consensus_status <- reactiveVal("Build legacy and/or next-gen consensus first.")
+  nextgen_consensus_rows <- reactiveVal(tibble())
+  overall_consensus_rows <- reactiveVal(tibble())
 
   observe({
     session$sendCustomMessage("toggleMinWinSlider", identical(input$cons_market, "straight_up"))
   })
 
   output$file_table <- renderTable({
-    inventory %>%
-      select(Season = season, Family = family_label, Split = split, File = file)
-  })
-
-  output$ng_cons_summary <- renderTable({
-    tibble(Message = "Next-gen consensus will be enabled after the next-gen prepared RDS data is added.")
-  })
-
-  output$ng_cons_splits <- renderTable({
-    tibble(Message = "No next-gen consensus rows have been built yet.")
-  })
-
-  output$ng_cons_games <- renderDT({
-    datatable(tibble(Message = "No next-gen consensus rows have been built yet."), rownames = FALSE)
-  })
-
-  output$ng_cons_download <- downloadHandler(
-    filename = function() paste0("next_gen_consensus_", Sys.Date(), ".csv"),
-    content = function(file) write_csv(tibble(Message = "No next-gen consensus rows have been built yet."), file)
-  )
-
-  output$ng_cons_games_download <- downloadHandler(
-    filename = function() paste0("next_gen_consensus_game_rows_", Sys.Date(), ".csv"),
-    content = function(file) write_csv(tibble(Message = "No next-gen consensus rows have been built yet."), file)
-  )
-
-  output$overall_cons_summary <- renderTable({
-    tibble(Message = "Combined consensus will use the built legacy and next-gen consensus rows once both engines are available.")
-  })
-
-  output$overall_cons_splits <- renderTable({
-    tibble(Message = "No combined consensus rows have been built yet.")
-  })
-
-  output$overall_cons_games <- renderDT({
-    datatable(tibble(Message = "No combined consensus rows have been built yet."), rownames = FALSE)
+    legacy_files <- inventory %>%
+      transmute(Source = "Legacy", Framework = NA_character_, Season = season, Family = family_label, Split = split, File = file)
+    nextgen_files <- nextgen_inventory %>%
+      transmute(Source = "Next-gen", Framework = framework, Season = season, Family = family_label, Split = sample, File = file)
+    bind_rows(legacy_files, nextgen_files)
   })
 
   get_line <- function(df, col) if (col %in% names(df)) suppressWarnings(as.numeric(df[[col]])) else rep(NA_real_, nrow(df))
@@ -957,6 +952,115 @@ server <- function(input, output, session) {
   first_non_na <- function(x) {
     x <- x[!is.na(x)]
     if (length(x) == 0) NA_real_ else x[[1]]
+  }
+
+  summarize_consensus_table <- function(df) {
+    if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
+    summarize_consensus <- function(data, label) {
+      tibble(
+        Season = label,
+        Games = nrow(data),
+        `Avg projections per game` = mean(data$projections),
+        `Avg models per game` = mean(data$models_used),
+        `Avg agreement` = mean(data$agree_pct),
+        Wins = sum(data$correct %in% TRUE, na.rm = TRUE),
+        Losses = sum(data$correct %in% FALSE, na.rm = TRUE),
+        Pushes = sum(is.na(data$correct)),
+        `Win %` = ifelse(sum(!is.na(data$correct)) > 0, sum(data$correct %in% TRUE, na.rm = TRUE) / sum(!is.na(data$correct)), NA_real_)
+      )
+    }
+    bind_rows(
+      summarize_consensus(df, "Total"),
+      df %>%
+        group_split(season) %>%
+        map_dfr(~ summarize_consensus(.x, as.character(first(.x$season))))
+    ) %>%
+      mutate(
+        `Avg projections per game` = sprintf("%.0f", `Avg projections per game`),
+        `Avg models per game` = sprintf("%.0f", `Avg models per game`),
+        `Avg agreement` = ifelse(is.na(`Avg agreement`), NA_character_, paste0(sprintf("%.1f", 100 * `Avg agreement`), "%")),
+        `Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%"))
+      )
+  }
+
+  consensus_splits_table <- function(df, market) {
+    if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
+
+    summarize_split <- function(data, category, split_label) {
+      graded <- sum(!is.na(data$correct))
+      tibble(
+        Category = category,
+        Split = split_label,
+        Games = nrow(data),
+        Wins = sum(data$correct %in% TRUE, na.rm = TRUE),
+        Losses = sum(data$correct %in% FALSE, na.rm = TRUE),
+        Pushes = sum(is.na(data$correct)),
+        `Win %` = ifelse(graded > 0, sum(data$correct %in% TRUE, na.rm = TRUE) / graded, NA_real_)
+      )
+    }
+
+    classify_favorite_side <- function(spread_line) {
+      case_when(
+        spread_line > 0 ~ "Home",
+        spread_line < 0 ~ "Away",
+        spread_line == 0 ~ "Pick'em",
+        TRUE ~ NA_character_
+      )
+    }
+
+    rows <- df %>%
+      mutate(
+        favorite_side = classify_favorite_side(spread_line),
+        selected_team_side = case_when(
+          market %in% c("spread", "straight_up") ~ consensus_pick,
+          market == "home_implied" ~ "Home",
+          market == "away_implied" ~ "Away",
+          TRUE ~ NA_character_
+        ),
+        favorite_role = case_when(
+          is.na(selected_team_side) | is.na(favorite_side) ~ NA_character_,
+          favorite_side == "Pick'em" ~ "Pick'em",
+          selected_team_side == favorite_side ~ "Favorite",
+          selected_team_side %in% c("Home", "Away") ~ "Underdog",
+          TRUE ~ NA_character_
+        ),
+        total_favorite_context = case_when(
+          favorite_side == "Home" ~ "Home favorite games",
+          favorite_side == "Away" ~ "Away favorite games",
+          favorite_side == "Pick'em" ~ "Pick'em games",
+          TRUE ~ NA_character_
+        )
+      )
+
+    overall <- summarize_split(rows, "Overall", "All consensus rows")
+    pick_splits <- rows %>%
+      filter(!is.na(consensus_pick)) %>%
+      group_split(consensus_pick) %>%
+      map_dfr(~ summarize_split(.x, "Consensus pick", first(.x$consensus_pick)))
+
+    home_away_splits <- if (market %in% c("spread", "straight_up", "home_implied", "away_implied")) {
+      rows %>%
+        filter(!is.na(selected_team_side)) %>%
+        group_split(selected_team_side) %>%
+        map_dfr(~ summarize_split(.x, "Home/Away", first(.x$selected_team_side)))
+    } else {
+      rows %>%
+        filter(!is.na(total_favorite_context)) %>%
+        group_split(total_favorite_context) %>%
+        map_dfr(~ summarize_split(.x, "Favorite context", first(.x$total_favorite_context)))
+    }
+
+    favorite_splits <- if (market == "total") {
+      tibble()
+    } else {
+      rows %>%
+        filter(!is.na(favorite_role)) %>%
+        group_split(favorite_role) %>%
+        map_dfr(~ summarize_split(.x, "Favorite/Underdog", first(.x$favorite_role)))
+    }
+
+    bind_rows(overall, pick_splits, home_away_splits, favorite_splits) %>%
+      mutate(`Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%")))
   }
 
   projection_columns_for_market <- function(df, market) {
@@ -973,6 +1077,249 @@ server <- function(input, output, session) {
     } else {
       character()
     }
+  }
+
+  read_nextgen_model_file <- function(path) {
+    nm <- basename(path)
+    if (nm %in% names(nextgen_compact_models)) return(nextgen_compact_models[[nm]])
+    stop("Next-gen compact prepared data is missing for ", nm, ". Run prepare_data_nextgen.R and deploy data/nextgen_compact_models.rds plus data/nextgen_model_inventory.rds.")
+  }
+
+  nextgen_prediction_cols <- function(df) {
+    names(df)[
+      str_detect(
+        names(df),
+        regex("^Score_|^HomeScore_|^AwayScore_|^OppScore_|^ScoreTotal_|^TotalScore_|^ScoreDiff_|^HomeMargin_", TRUE)
+      ) &
+        !str_detect(names(df), regex("^Cover_|_target|_cover$|_pm1$", TRUE))
+    ]
+  }
+
+  nextgen_projection_columns_for_market <- function(df, market) {
+    cols <- nextgen_prediction_cols(df)
+    if (market == "spread" || market == "straight_up") {
+      cols[str_detect(cols, regex("^ScoreDiff_|^HomeMargin_", TRUE))]
+    } else if (market == "total") {
+      cols[str_detect(cols, regex("^ScoreTotal_|^TotalScore_", TRUE))]
+    } else if (market == "home_implied") {
+      cols[str_detect(cols, regex("^Score_|^HomeScore_", TRUE))]
+    } else if (market == "away_implied") {
+      cols[str_detect(cols, regex("^OppScore_|^AwayScore_", TRUE))]
+    } else {
+      character()
+    }
+  }
+
+  nextgen_cover_market <- function(col) {
+    case_when(
+      str_detect(col, "ScoreDiff|HomeMargin") ~ "spread",
+      str_detect(col, "Total") ~ "total",
+      str_detect(col, "^Cover_Score_") ~ "home_implied",
+      str_detect(col, "^Cover_OppScore_") ~ "away_implied",
+      TRUE ~ "all"
+    )
+  }
+
+  nextgen_projection_candidates_for_cover <- function(cover_col) {
+    base <- str_remove(cover_col, "^Cover_")
+    c(
+      base,
+      str_replace(base, "^Total_", "ScoreTotal_"),
+      str_replace(base, "^Total_", "TotalScore_")
+    ) %>% unique()
+  }
+
+  detect_nextgen_cover_summary <- function(df) {
+    cover_cols <- grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE)
+    if (length(cover_cols) == 0) return(tibble())
+    purrr::map_dfr(cover_cols, function(col) {
+      vals <- suppressWarnings(as.numeric(df[[col]]))
+      proj <- nextgen_projection_candidates_for_cover(col)
+      proj <- proj[proj %in% names(df)][1] %||% NA_character_
+      tibble(
+        market = nextgen_cover_market(col),
+        result_col = col,
+        projection_col = proj,
+        picks = sum(!is.na(vals)),
+        wins = sum(vals == 1, na.rm = TRUE),
+        losses = sum(vals == 0, na.rm = TRUE),
+        win_pct = ifelse(picks > 0, wins / picks, NA_real_)
+      )
+    })
+  }
+
+  historical_nextgen_model_scores <- function(market) {
+    selected <- nextgen_inventory %>% filter(season %in% c(2024, 2025))
+    rows <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label) {
+      detect_nextgen_cover_summary(read_nextgen_model_file(path)) %>%
+        filter(!is.na(projection_col)) %>%
+        mutate(
+          framework = framework,
+          family = family,
+          family_label = family_label,
+          file = file,
+          season = season,
+          .before = 1
+        )
+    })
+    if (nrow(rows) == 0) return(tibble())
+    score_market <- if (identical(market, "straight_up")) "spread" else market
+    rows %>%
+      filter(market == score_market) %>%
+      group_by(framework, family, family_label, market, projection_col) %>%
+      summarise(
+        model_result_col = first(result_col),
+        model_picks = sum(picks, na.rm = TRUE),
+        model_wins = sum(wins, na.rm = TRUE),
+        model_losses = sum(losses, na.rm = TRUE),
+        model_win_pct = ifelse(model_picks > 0, model_wins / model_picks, NA_real_),
+        .groups = "drop"
+      )
+  }
+
+  nextgen_line_for_market <- function(base, market) {
+    if (market == "spread") {
+      ifelse(!is.na(base$spread_line), base$spread_line, NA_real_)
+    } else if (market == "straight_up") {
+      rep(0, nrow(base))
+    } else if (market == "total") {
+      ifelse(!is.na(base$total_line), base$total_line, NA_real_)
+    } else if (market == "home_implied") {
+      coalesce(base$home_implied, ifelse(!is.na(base$total_line) & !is.na(base$spread_line), (base$total_line + base$spread_line) / 2, base$line))
+    } else {
+      coalesce(base$away_implied, ifelse(!is.na(base$total_line) & !is.na(base$spread_line), (base$total_line - base$spread_line) / 2, base$line))
+    }
+  }
+
+  long_nextgen_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none") {
+    df <- read_nextgen_model_file(meta$path)
+    cols <- nextgen_projection_columns_for_market(df, market)
+    if (length(cols) == 0) return(tibble())
+
+    score_market <- if (identical(market, "straight_up")) "spread" else market
+    score_lookup <- detect_nextgen_cover_summary(df) %>%
+      filter(market == score_market, !is.na(projection_col)) %>%
+      select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
+    if ((nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) &&
+        market == "home_implied" &&
+        all(c("actual_market_result", "predicted_market_result") %in% names(df))) {
+      actual_market_result <- suppressWarnings(as.numeric(df[["actual_market_result"]]))
+      predicted_market_result <- suppressWarnings(as.numeric(df[["predicted_market_result"]]))
+      actual_push <- if ("actual_push" %in% names(df)) as.logical(df[["actual_push"]]) else rep(FALSE, nrow(df))
+      scored <- !is.na(actual_market_result) & !is.na(predicted_market_result) & !actual_push
+      if (any(scored)) {
+        score_lookup <- tibble(
+          projection_col = cols,
+          model_result_col = "predicted_market_result",
+          model_picks = sum(scored),
+          model_win_pct = mean(predicted_market_result[scored] == actual_market_result[scored])
+        )
+      }
+    }
+    if (nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) {
+      score_lookup <- historical_nextgen_model_scores(market) %>%
+        filter(framework == meta$framework, family == meta$family) %>%
+        select(projection_col, model_result_col, model_picks, model_win_pct)
+    }
+
+    base <- df %>%
+      transmute(
+        game_id = .data[["game_id"]],
+        season = .data[["season"]],
+        week = .data[["week"]],
+        home_team = .data[["home_team"]],
+        away_team = .data[["away_team"]],
+        home_score = get_line(df, "home_score"),
+        away_score = get_line(df, "away_score"),
+        spread_line = get_line(df, "spread_line"),
+        total_line = get_line(df, "total_line"),
+        home_implied = get_line(df, "home_implied"),
+        away_implied = get_line(df, "away_implied"),
+        line = get_line(df, "line"),
+        actual_market_result = get_line(df, "actual_market_result"),
+        actual_push = if ("actual_push" %in% names(df)) as.logical(df[["actual_push"]]) else rep(FALSE, nrow(df))
+      )
+    if (identical(line_source, "early") && nrow(early_lines) > 0) {
+      base <- base %>%
+        left_join(early_lines, by = "game_id") %>%
+        mutate(
+          spread_line = coalesce(early_spread_line, spread_line),
+          total_line = coalesce(early_total_line, total_line)
+        ) %>%
+        select(-early_spread_line, -early_total_line)
+    }
+    base <- base %>%
+      mutate(
+        spread_injury_adj = 0,
+        total_injury_adj = 0,
+        home_score_injury_adj = 0,
+        away_score_injury_adj = 0
+      )
+
+    out <- map_dfr(cols, function(col) {
+      model_score <- score_lookup %>% filter(projection_col == col) %>% dplyr::slice_head(n = 1)
+      if (nrow(model_score) == 0) {
+        model_result_col <- NA_character_
+        model_picks <- NA_integer_
+        model_win_pct <- NA_real_
+      } else {
+        model_result_col <- model_score$model_result_col
+        model_picks <- model_score$model_picks
+        model_win_pct <- model_score$model_win_pct
+      }
+
+      pred <- suppressWarnings(as.numeric(df[[col]]))
+      if (market %in% c("spread", "straight_up")) {
+        pred <- pred + base$spread_injury_adj
+      } else if (market == "total") {
+        pred <- pred + base$total_injury_adj
+      } else if (market == "home_implied") {
+        pred <- pred + base$home_score_injury_adj
+      } else if (market == "away_implied") {
+        pred <- pred + base$away_score_injury_adj
+      }
+
+      line <- nextgen_line_for_market(base, market)
+      actual <- if (market %in% c("spread", "straight_up")) {
+        base$home_score - base$away_score
+      } else if (market == "total") {
+        base$home_score + base$away_score
+      } else if (market == "home_implied") {
+        base$home_score
+      } else {
+        base$away_score
+      }
+
+      pick <- dplyr::case_when(pred > line ~ 1, pred < line ~ -1, TRUE ~ NA_real_)
+      actual_side <- dplyr::case_when(
+        !is.na(actual) & actual > line ~ 1,
+        !is.na(actual) & actual < line ~ -1,
+        is.na(actual) & !is.na(base$actual_market_result) & !base$actual_push & base$actual_market_result == 1 ~ 1,
+        is.na(actual) & !is.na(base$actual_market_result) & !base$actual_push & base$actual_market_result == 0 ~ -1,
+        TRUE ~ NA_real_
+      )
+
+      bind_cols(base %>% select(game_id, season, week, home_team, away_team, home_score, away_score, spread_line, total_line), tibble(
+        framework = meta$framework,
+        family = meta$family_label,
+        file = meta$file,
+        split = meta$sample,
+        projection_col = col,
+        projection = pred,
+        market_line = line,
+        actual = actual,
+        pick = pick,
+        actual_side = actual_side,
+        correct = ifelse(!is.na(pick) & !is.na(actual_side), pick == actual_side, NA),
+        model_result_col = model_result_col,
+        model_picks = model_picks,
+        model_win_pct = model_win_pct
+      ))
+    })
+
+    out %>%
+      filter(!is.na(projection), !is.na(market_line)) %>%
+      filter(!is.na(model_win_pct), model_win_pct >= min_win_pct)
   }
 
   historical_model_scores <- function(market) {
@@ -1225,6 +1572,7 @@ server <- function(input, output, session) {
       rows <- long %>%
         group_by(game_id, season, week, home_team, away_team) %>%
         summarise(
+          market = market,
           projections = n(),
           models_used = n_distinct(paste(file, projection_col, sep = "::")),
           avg_projection = mean(projection, na.rm = TRUE),
@@ -1269,8 +1617,254 @@ server <- function(input, output, session) {
     consensus_rows(rows)
   }, ignoreInit = TRUE, priority = 100)
 
+  build_nextgen_consensus_rows <- function() {
+    nextgen_consensus_status("Building next-gen consensus...")
+    if (!nextgen_data_available) {
+      nextgen_consensus_status("Next-gen prepared data is missing. Run prepare_data_nextgen.R and deploy the nextgen RDS files.")
+      return(tibble())
+    }
+    frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
+    families <- input$ng_cons_families %||% names(next_gen_family_labels)
+    market <- input$ng_cons_market %||% "spread"
+    line_source <- input$ng_cons_line_source %||% "closing"
+    injury_source <- input$ng_cons_injury_source %||% "none"
+    min_win <- if (identical(market, "straight_up")) 0 else (input$ng_cons_min_win %||% 40) / 100
+    min_agree <- (input$ng_cons_agree %||% 50) / 100
+
+    withProgress(message = "Building next-gen consensus, please wait...", value = 0, {
+      selected_seasons <- unique(c(as.integer(input$ng_cons_seasons %||% integer()), as.integer(input$ng_cons_future_seasons %||% integer())))
+      if (length(selected_seasons) == 0 || all(is.na(selected_seasons))) {
+        nextgen_consensus_status("No seasons selected.")
+        return(tibble())
+      }
+      selected <- nextgen_inventory %>%
+        filter(framework %in% frameworks, family %in% families, season %in% selected_seasons)
+      if (nrow(selected) == 0) {
+        nextgen_consensus_status("No next-gen model files matched the selected frameworks, families, and seasons.")
+        return(tibble())
+      }
+
+      incProgress(0.2, detail = "Collecting next-gen model projections")
+      long <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label) {
+        long_nextgen_predictions_for_file(
+          tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
+          market,
+          min_win,
+          line_source,
+          injury_source
+        )
+      })
+
+      if (nrow(long) == 0) {
+        nextgen_consensus_status("No next-gen projections passed the current selections.")
+        return(tibble())
+      }
+
+      incProgress(0.7, detail = "Averaging next-gen model signals")
+      rows <- long %>%
+        group_by(game_id, season, week, home_team, away_team) %>%
+        summarise(
+          market = market,
+          projections = n(),
+          models_used = n_distinct(paste(file, projection_col, sep = "::")),
+          frameworks_used = paste(sort(unique(framework)), collapse = ", "),
+          avg_projection = mean(projection, na.rm = TRUE),
+          market_line = first_non_na(market_line),
+          spread_line = first_non_na(spread_line),
+          total_line = first_non_na(total_line),
+          avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
+          agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
+          consensus_pick = case_when(
+            all(is.na(pick)) ~ NA_character_,
+            market %in% c("spread", "straight_up") & sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Home",
+            market %in% c("spread", "straight_up") & sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Away",
+            market %in% c("spread", "straight_up") & avg_projection > market_line ~ "Home",
+            market %in% c("spread", "straight_up") & avg_projection < market_line ~ "Away",
+            market %in% c("spread", "straight_up") ~ NA_character_,
+            sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Over",
+            sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Under",
+            avg_projection > market_line ~ "Over",
+            avg_projection < market_line ~ "Under",
+            TRUE ~ NA_character_
+          ),
+          actual_side = first_non_na(actual_side),
+          actual_result = first_non_na(actual),
+          correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
+          .groups = "drop"
+        ) %>%
+        filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
+        arrange(season, week, game_id)
+      nextgen_consensus_status(paste0("Complete. Built ", nrow(rows), " next-gen consensus rows from ", nrow(selected), " model files."))
+      rows
+    })
+  }
+
+  observeEvent(input$ng_cons_run, {
+    rows <- tryCatch(
+      build_nextgen_consensus_rows(),
+      error = function(e) {
+        nextgen_consensus_status(paste("Next-gen consensus build error:", conditionMessage(e)))
+        tibble()
+      }
+    )
+    nextgen_consensus_rows(rows)
+  }, ignoreInit = TRUE, priority = 100)
+
+  build_overall_consensus_rows <- function() {
+    overall_consensus_status("Building combined consensus...")
+    sources <- input$overall_cons_sources %||% c("legacy", "next_gen")
+    market <- input$overall_cons_market %||% "spread"
+    min_agree <- (input$overall_cons_agree %||% 50) / 100
+
+    source_rows <- bind_rows(
+      if ("legacy" %in% sources && nrow(consensus_rows()) > 0) consensus_rows() %>% mutate(source = "Legacy") else tibble(),
+      if ("next_gen" %in% sources && nrow(nextgen_consensus_rows()) > 0) nextgen_consensus_rows() %>% mutate(source = "Next-gen") else tibble()
+    ) %>%
+      filter(is.na(.data$market) | .data$market == market)
+
+    if (nrow(source_rows) == 0) {
+      overall_consensus_status("No built source consensus rows are available for the selected market.")
+      return(tibble())
+    }
+
+    rows <- source_rows %>%
+      mutate(source_pick = case_when(consensus_pick %in% c("Home", "Over") ~ 1, consensus_pick %in% c("Away", "Under") ~ -1, TRUE ~ NA_real_)) %>%
+      group_by(game_id, season, week, home_team, away_team) %>%
+      summarise(
+        market = market,
+        projections = sum(projections, na.rm = TRUE),
+        models_used = sum(models_used, na.rm = TRUE),
+        sources_used = paste(sort(unique(source)), collapse = ", "),
+        avg_projection = mean(avg_projection, na.rm = TRUE),
+        market_line = first_non_na(market_line),
+        spread_line = first_non_na(spread_line),
+        total_line = first_non_na(total_line),
+        avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
+        agree_pct = ifelse(all(is.na(source_pick)), NA_real_, max(mean(source_pick == 1, na.rm = TRUE), mean(source_pick == -1, na.rm = TRUE))),
+        consensus_pick = case_when(
+          all(is.na(source_pick)) ~ NA_character_,
+          market %in% c("spread", "straight_up") & sum(source_pick == 1, na.rm = TRUE) > sum(source_pick == -1, na.rm = TRUE) ~ "Home",
+          market %in% c("spread", "straight_up") & sum(source_pick == -1, na.rm = TRUE) > sum(source_pick == 1, na.rm = TRUE) ~ "Away",
+          market %in% c("spread", "straight_up") & avg_projection > market_line ~ "Home",
+          market %in% c("spread", "straight_up") & avg_projection < market_line ~ "Away",
+          market %in% c("spread", "straight_up") ~ NA_character_,
+          sum(source_pick == 1, na.rm = TRUE) > sum(source_pick == -1, na.rm = TRUE) ~ "Over",
+          sum(source_pick == -1, na.rm = TRUE) > sum(source_pick == 1, na.rm = TRUE) ~ "Under",
+          avg_projection > market_line ~ "Over",
+          avg_projection < market_line ~ "Under",
+          TRUE ~ NA_character_
+        ),
+        actual_side = first_non_na(actual_side),
+        actual_result = first_non_na(actual_result),
+        correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA),
+        .groups = "drop"
+      ) %>%
+      filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
+      arrange(season, week, game_id)
+
+    overall_consensus_status(paste0("Complete. Built ", nrow(rows), " combined consensus rows from ", paste(unique(source_rows$source), collapse = " + "), "."))
+    rows
+  }
+
+  observeEvent(input$overall_cons_run, {
+    rows <- tryCatch(
+      build_overall_consensus_rows(),
+      error = function(e) {
+        overall_consensus_status(paste("Combined consensus build error:", conditionMessage(e)))
+        tibble()
+      }
+    )
+    overall_consensus_rows(rows)
+  }, ignoreInit = TRUE, priority = 100)
+
   output$cons_status <- renderText({
     consensus_status()
+  })
+
+  output$ng_cons_status <- renderText({
+    nextgen_consensus_status()
+  })
+
+  output$overall_cons_status <- renderText({
+    overall_consensus_status()
+  })
+
+  output$ng_cons_summary <- renderTable({
+    req(input$ng_cons_run > 0)
+    summarize_consensus_table(nextgen_consensus_rows())
+  })
+
+  output$ng_cons_splits <- renderTable({
+    req(input$ng_cons_run > 0)
+    consensus_splits_table(nextgen_consensus_rows(), input$ng_cons_market %||% "spread")
+  })
+
+  output$ng_cons_games <- renderDT({
+    req(input$ng_cons_run > 0)
+    if (nrow(nextgen_consensus_rows()) == 0) {
+      return(datatable(tibble(Message = "No next-gen consensus rows for the current selections."), rownames = FALSE))
+    }
+    rows <- nextgen_consensus_rows() %>%
+      mutate(
+        season = as.integer(season),
+        week = as.integer(week),
+        avg_projection = sprintf("%.1f", avg_projection),
+        market_line = ifelse(is.na(market_line), NA_character_, sprintf("%.1f", market_line)),
+        avg_edge = ifelse(is.na(avg_edge), NA_character_, sprintf("%.1f", avg_edge)),
+        actual_result = ifelse(is.na(actual_result), NA_character_, sprintf("%.1f", actual_result)),
+        agree_pct = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
+        actual_side = ifelse(is.na(actual_side), NA_character_, as.character(as.integer(actual_side)))
+      )
+    datatable(
+      rows,
+      rownames = FALSE,
+      filter = "top",
+      options = list(
+        dom = '<"top"lfrip>t<"bottom"lfrip>',
+        pageLength = 25,
+        lengthMenu = c(10, 25, 50, 100),
+        scrollX = TRUE
+      )
+    )
+  })
+
+  output$overall_cons_summary <- renderTable({
+    req(input$overall_cons_run > 0)
+    summarize_consensus_table(overall_consensus_rows())
+  })
+
+  output$overall_cons_splits <- renderTable({
+    req(input$overall_cons_run > 0)
+    consensus_splits_table(overall_consensus_rows(), input$overall_cons_market %||% "spread")
+  })
+
+  output$overall_cons_games <- renderDT({
+    req(input$overall_cons_run > 0)
+    if (nrow(overall_consensus_rows()) == 0) {
+      return(datatable(tibble(Message = "No combined consensus rows for the current selections."), rownames = FALSE))
+    }
+    rows <- overall_consensus_rows() %>%
+      mutate(
+        season = as.integer(season),
+        week = as.integer(week),
+        avg_projection = sprintf("%.1f", avg_projection),
+        market_line = ifelse(is.na(market_line), NA_character_, sprintf("%.1f", market_line)),
+        avg_edge = ifelse(is.na(avg_edge), NA_character_, sprintf("%.1f", avg_edge)),
+        actual_result = ifelse(is.na(actual_result), NA_character_, sprintf("%.1f", actual_result)),
+        agree_pct = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
+        actual_side = ifelse(is.na(actual_side), NA_character_, as.character(as.integer(actual_side)))
+      )
+    datatable(
+      rows,
+      rownames = FALSE,
+      filter = "top",
+      options = list(
+        dom = '<"top"lfrip>t<"bottom"lfrip>',
+        pageLength = 25,
+        lengthMenu = c(10, 25, 50, 100),
+        scrollX = TRUE
+      )
+    )
   })
 
   output$cons_summary <- renderTable({
@@ -1431,6 +2025,22 @@ server <- function(input, output, session) {
     content = function(file) {
       req(input$cons_run > 0)
       write_csv(consensus_rows(), file)
+    }
+  )
+
+  output$ng_cons_download <- downloadHandler(
+    filename = function() paste0("next_gen_consensus_", Sys.Date(), ".csv"),
+    content = function(file) {
+      req(input$ng_cons_run > 0)
+      write_csv(nextgen_consensus_rows(), file)
+    }
+  )
+
+  output$ng_cons_games_download <- downloadHandler(
+    filename = function() paste0("next_gen_consensus_game_rows_", Sys.Date(), ".csv"),
+    content = function(file) {
+      req(input$ng_cons_run > 0)
+      write_csv(nextgen_consensus_rows(), file)
     }
   )
 }
