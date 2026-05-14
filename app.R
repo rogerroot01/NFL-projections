@@ -798,9 +798,45 @@ ui <- fluidPage(
       )
     ),
     tabPanel(
-      "Plot",
-      h4("Plot"),
-      tags$p("Placeholder for consensus and model comparison plots.")
+      "Dashboard",
+      sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          selectInput(
+            "dashboard_source",
+            "Consensus source",
+            choices = c("Legacy consensus" = "legacy", "Next-gen consensus" = "next_gen", "Combined consensus" = "combined"),
+            selected = "combined"
+          ),
+          selectInput("dashboard_season", "Season", choices = character()),
+          selectInput("dashboard_week", "Week", choices = character()),
+          checkboxGroupInput(
+            "dashboard_markets",
+            "Markets",
+            choices = c("Against the spread" = "spread", "Straight up" = "straight_up", "Over / under" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
+            selected = c("spread", "straight_up", "total", "home_implied", "away_implied")
+          )
+        ),
+        mainPanel(
+          h4("Weekly dashboard"),
+          tableOutput("dashboard_summary"),
+          tags$hr(),
+          h4("Against the spread"),
+          DTOutput("dashboard_spread"),
+          tags$hr(),
+          h4("Straight up"),
+          DTOutput("dashboard_straight_up"),
+          tags$hr(),
+          h4("Over / under"),
+          DTOutput("dashboard_total"),
+          tags$hr(),
+          h4("Home implied"),
+          DTOutput("dashboard_home_implied"),
+          tags$hr(),
+          h4("Away implied"),
+          DTOutput("dashboard_away_implied")
+        )
+      )
     ),
     tabPanel(
       "Files",
@@ -2121,6 +2157,138 @@ server <- function(input, output, session) {
       )
     )
   })
+
+  dashboard_source_rows <- reactive({
+    source <- input$dashboard_source %||% "combined"
+    rows <- switch(
+      source,
+      legacy = consensus_rows(),
+      next_gen = nextgen_consensus_rows(),
+      combined = overall_consensus_rows(),
+      tibble()
+    )
+    if (nrow(rows) == 0) return(tibble())
+    if (!"market" %in% names(rows)) rows <- mutate(rows, market = NA_character_)
+    rows
+  })
+
+  observe({
+    rows <- dashboard_source_rows()
+    seasons <- if (nrow(rows) == 0) character() else sort(unique(as.integer(rows$season)))
+    current <- isolate(input$dashboard_season)
+    selected <- if (length(seasons) == 0) character() else if (current %in% as.character(seasons)) current else as.character(max(seasons, na.rm = TRUE))
+    updateSelectInput(session, "dashboard_season", choices = stats::setNames(as.character(seasons), as.character(seasons)), selected = selected)
+  })
+
+  observe({
+    rows <- dashboard_source_rows()
+    selected_season <- suppressWarnings(as.integer(input$dashboard_season))
+    weeks <- if (nrow(rows) == 0 || is.na(selected_season)) {
+      character()
+    } else {
+      sort(unique(as.integer(rows$week[rows$season == selected_season])))
+    }
+    current <- isolate(input$dashboard_week)
+    selected <- if (length(weeks) == 0) character() else if (current %in% as.character(weeks)) current else as.character(min(weeks, na.rm = TRUE))
+    week_choices <- if (length(weeks) == 0) character() else stats::setNames(as.character(weeks), paste("Week", weeks))
+    updateSelectInput(session, "dashboard_week", choices = week_choices, selected = selected)
+  })
+
+  dashboard_filtered_rows <- reactive({
+    rows <- dashboard_source_rows()
+    selected_season <- suppressWarnings(as.integer(input$dashboard_season))
+    selected_week <- suppressWarnings(as.integer(input$dashboard_week))
+    markets <- input$dashboard_markets %||% character()
+    if (nrow(rows) == 0 || is.na(selected_season) || is.na(selected_week)) return(tibble())
+    rows %>%
+      filter(season == selected_season, week == selected_week, market %in% markets)
+  })
+
+  dashboard_table_for_market <- function(market_key) {
+    rows <- dashboard_filtered_rows()
+    source_rows <- dashboard_source_rows()
+    if (nrow(rows) == 0 || !market_key %in% (input$dashboard_markets %||% character())) {
+      return(tibble(Message = "No built consensus rows for this source, season, week, and market."))
+    }
+    market_rows <- rows %>% filter(market == market_key)
+    if (nrow(market_rows) == 0) {
+      return(tibble(Message = "No built consensus rows for this market. Build that market in its consensus tab first."))
+    }
+    history <- source_rows %>%
+      filter(market == market_key, !is.na(correct), !is.na(consensus_pick)) %>%
+      group_by(consensus_pick) %>%
+      summarise(
+        hist_n = n(),
+        hist_win_pct = mean(correct %in% TRUE),
+        .groups = "drop"
+      )
+    market_rows %>%
+      left_join(history, by = "consensus_pick") %>%
+      transmute(
+        Season = as.integer(season),
+        Week = as.integer(week),
+        Game = paste(away_team, "@", home_team),
+        Pick = consensus_pick,
+        Projection = sprintf("%.1f", avg_projection),
+        Line = ifelse(is.na(market_line), NA_character_, sprintf("%.1f", market_line)),
+        Edge = ifelse(is.na(avg_edge), NA_character_, sprintf("%.1f", avg_edge)),
+        Agreement = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
+        Models = models_used,
+        `Historical Win %` = ifelse(is.na(hist_win_pct), NA_character_, paste0(sprintf("%.1f", 100 * hist_win_pct), "%")),
+        `Historical N` = ifelse(is.na(hist_n), NA_integer_, hist_n),
+        Result = case_when(
+          correct %in% TRUE ~ "Win",
+          correct %in% FALSE ~ "Loss",
+          is.na(correct) ~ "Future/Push",
+          TRUE ~ NA_character_
+        ),
+        `Actual Result` = ifelse(is.na(actual_result), NA_character_, sprintf("%.1f", actual_result))
+      ) %>%
+      arrange(desc(abs(suppressWarnings(as.numeric(Edge)))), Game)
+  }
+
+  render_dashboard_market <- function(market_key) {
+    renderDT({
+      datatable(
+        dashboard_table_for_market(market_key),
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          dom = '<"top"lfrip>t<"bottom"lfrip>',
+          pageLength = 25,
+          lengthMenu = c(10, 25, 50, 100),
+          scrollX = TRUE
+        )
+      )
+    })
+  }
+
+  output$dashboard_summary <- renderTable({
+    rows <- dashboard_filtered_rows()
+    if (nrow(rows) == 0) {
+      return(tibble(Message = "Build a consensus first, then choose a season and week."))
+    }
+    rows %>%
+      group_by(Market = market) %>%
+      summarise(
+        Plays = n(),
+        Wins = sum(correct %in% TRUE, na.rm = TRUE),
+        Losses = sum(correct %in% FALSE, na.rm = TRUE),
+        `Future/Push` = sum(is.na(correct)),
+        `Win %` = ifelse(sum(!is.na(correct)) > 0, sum(correct %in% TRUE, na.rm = TRUE) / sum(!is.na(correct)), NA_real_),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        Market = recode(Market, spread = "Against the spread", straight_up = "Straight up", total = "Over / under", home_implied = "Home implied", away_implied = "Away implied"),
+        `Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%"))
+      )
+  })
+
+  output$dashboard_spread <- render_dashboard_market("spread")
+  output$dashboard_straight_up <- render_dashboard_market("straight_up")
+  output$dashboard_total <- render_dashboard_market("total")
+  output$dashboard_home_implied <- render_dashboard_market("home_implied")
+  output$dashboard_away_implied <- render_dashboard_market("away_implied")
 
   output$cons_summary <- renderTable({
     req(input$cons_run > 0)
