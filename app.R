@@ -155,6 +155,17 @@ nextgen_inventory <- if (nextgen_data_available) {
   )
 }
 nextgen_compact_models <- if (nextgen_data_available) readRDS(nextgen_compact_models_rds) else list()
+nextgen_backtest_seasons <- sort(unique(nextgen_inventory$season[nextgen_inventory$sample == "test"]))
+nextgen_future_seasons <- sort(unique(nextgen_inventory$season[nextgen_inventory$sample == "val"]))
+nextgen_backtest_season_choices <- c(
+  `All backtest seasons` = "all",
+  stats::setNames(as.character(nextgen_backtest_seasons), as.character(nextgen_backtest_seasons))
+)
+nextgen_future_season_choices <- if (length(nextgen_future_seasons) == 0) {
+  c(`No future seasons available` = "none")
+} else {
+  c(`All future seasons` = "all", stats::setNames(as.character(nextgen_future_seasons), as.character(nextgen_future_seasons)))
+}
 file_cache <- new.env(parent = emptyenv())
 header_cache <- new.env(parent = emptyenv())
 
@@ -325,6 +336,45 @@ family_tab_ui <- function(id, label) {
         )
       )
     )
+}
+
+nextgen_family_tab_ui <- function(id, label) {
+  tabPanel(
+    label,
+    sidebarLayout(
+      sidebarPanel(
+        width = 3,
+        checkboxGroupInput(
+          paste0(id, "_frameworks"),
+          "Frameworks",
+          choices = c("Early framework" = "early", "Late framework" = "late"),
+          selected = c("early", "late")
+        ),
+        selectInput(paste0(id, "_season"), "Backtest season", choices = nextgen_backtest_season_choices, selected = "all"),
+        selectInput(
+          paste0(id, "_future_season"),
+          "Future projection season",
+          choices = nextgen_future_season_choices,
+          selected = if (length(nextgen_future_seasons) == 0) "none" else "all"
+        ),
+        selectInput(paste0(id, "_market"), "Market", choices = market_choices, selected = "all"),
+        actionButton(paste0(id, "_build"), "Build family summary", class = "btn-primary"),
+        tags$hr(),
+        downloadButton(paste0(id, "_download_summary"), "Download summary CSV")
+      ),
+      mainPanel(
+        tags$p(tags$small("Click Build family summary to summarize graded next-gen files in this family for the selected framework and season.")),
+        h4("Future projection preview"),
+        DTOutput(paste0(id, "_future_preview")),
+        tags$hr(),
+        h4("Build status"),
+        verbatimTextOutput(paste0(id, "_status"), placeholder = TRUE),
+        tags$hr(),
+        h4("Backtest summary by file and result column"),
+        verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE)
+      )
+    )
+  )
 }
 
 ui <- fluidPage(
@@ -589,8 +639,15 @@ ui <- fluidPage(
     ),
     tabPanel(
       "Next-Gen Models",
-      h4("Next-Gen Models"),
-      tags$p("Placeholder for the next batch of model families.")
+      tabsetPanel(
+        id = "nextgen_model_tabs",
+        nextgen_family_tab_ui("ng_elasticnet", "Elastic Net Lasso"),
+        nextgen_family_tab_ui("ng_weightedlinear", "Weighted Linear Regression"),
+        nextgen_family_tab_ui("ng_decisiontree", "Decision Tree"),
+        nextgen_family_tab_ui("ng_randomforest", "Random Forest"),
+        nextgen_family_tab_ui("ng_gbm", "GBM Boosted Trees"),
+        nextgen_family_tab_ui("ng_xgboost", "XGBoost Regression")
+      )
     ),
     tabPanel(
       "Legacy Consensus",
@@ -1248,13 +1305,56 @@ server <- function(input, output, session) {
         ) %>%
         select(-early_spread_line, -early_total_line)
     }
-    base <- base %>%
-      mutate(
-        spread_injury_adj = 0,
-        total_injury_adj = 0,
-        home_score_injury_adj = 0,
-        away_score_injury_adj = 0
-      )
+    if (identical(injury_source, "apply")) {
+      future_home_injuries <- future_team_injuries_2026 %>%
+        rename(
+          home_team = team,
+          future_home_off_injury_adj = off_injury_adj,
+          future_home_def_injury_adj = def_injury_adj
+        )
+      future_away_injuries <- future_team_injuries_2026 %>%
+        rename(
+          away_team = team,
+          future_away_off_injury_adj = off_injury_adj,
+          future_away_def_injury_adj = def_injury_adj
+        )
+
+      base <- base %>%
+        left_join(game_injuries, by = "game_id") %>%
+        left_join(team_injuries_2025, by = "game_id") %>%
+        left_join(future_home_injuries, by = c("season", "week", "home_team")) %>%
+        left_join(future_away_injuries, by = c("season", "week", "away_team")) %>%
+        mutate(
+          home_off_injury_adj = coalesce(home_off_injury_adj, future_home_off_injury_adj, 0),
+          home_def_injury_adj = coalesce(home_def_injury_adj, future_home_def_injury_adj, 0),
+          away_off_injury_adj = coalesce(away_off_injury_adj, future_away_off_injury_adj, 0),
+          away_def_injury_adj = coalesce(away_def_injury_adj, future_away_def_injury_adj, 0),
+          home_score_injury_adj = home_off_injury_adj + away_def_injury_adj,
+          away_score_injury_adj = away_off_injury_adj + home_def_injury_adj,
+          split_spread_injury_adj = home_score_injury_adj - away_score_injury_adj,
+          spread_injury_adj = coalesce(injury_adj, split_spread_injury_adj, 0),
+          total_injury_adj = home_score_injury_adj + away_score_injury_adj
+        ) %>%
+        select(
+          -injury_adj,
+          -home_off_injury_adj,
+          -home_def_injury_adj,
+          -away_off_injury_adj,
+          -away_def_injury_adj,
+          -future_home_off_injury_adj,
+          -future_home_def_injury_adj,
+          -future_away_off_injury_adj,
+          -future_away_def_injury_adj
+        )
+    } else {
+      base <- base %>%
+        mutate(
+          spread_injury_adj = 0,
+          total_injury_adj = 0,
+          home_score_injury_adj = 0,
+          away_score_injury_adj = 0
+        )
+    }
 
     out <- map_dfr(cols, function(col) {
       model_score <- score_lookup %>% filter(projection_col == col) %>% dplyr::slice_head(n = 1)
@@ -1321,6 +1421,161 @@ server <- function(input, output, session) {
       filter(!is.na(projection), !is.na(market_line)) %>%
       filter(!is.na(model_win_pct), model_win_pct >= min_win_pct)
   }
+
+  bind_nextgen_family <- function(id, family_key) {
+    nextgen_files_for_season <- reactive({
+      req(input[[paste0(id, "_season")]])
+      selected_season <- input[[paste0(id, "_season")]]
+      frameworks <- input[[paste0(id, "_frameworks")]] %||% unique(nextgen_inventory$framework)
+      nextgen_inventory %>%
+        filter(
+          framework %in% frameworks,
+          family == family_key,
+          sample == "test",
+          if (identical(selected_season, "all")) season %in% nextgen_backtest_seasons else season == as.integer(selected_season)
+        ) %>%
+        select(path, file, season, framework, sample, family, family_label)
+    })
+
+    nextgen_future_files <- reactive({
+      req(input[[paste0(id, "_future_season")]])
+      selected_season <- input[[paste0(id, "_future_season")]]
+      frameworks <- input[[paste0(id, "_frameworks")]] %||% unique(nextgen_inventory$framework)
+      if (identical(selected_season, "none") || length(nextgen_future_seasons) == 0) {
+        return(tibble(path = character(), file = character(), season = integer(), framework = character(), sample = character(), family = character(), family_label = character()))
+      }
+      nextgen_inventory %>%
+        filter(
+          framework %in% frameworks,
+          family == family_key,
+          sample == "val",
+          if (identical(selected_season, "all")) season %in% nextgen_future_seasons else season == as.integer(selected_season)
+        ) %>%
+        select(path, file, season, framework, sample, family, family_label)
+    })
+
+    nextgen_family_summary <- reactive({
+      req(input[[paste0(id, "_build")]] > 0)
+      market <- input[[paste0(id, "_market")]] %||% "all"
+      files <- nextgen_files_for_season()
+      if (nrow(files) == 0) return(tibble())
+
+      summary_rows <- pmap_dfr(files, function(path, file, season, framework, sample, family, family_label) {
+        out <- detect_nextgen_cover_summary(read_nextgen_model_file(path))
+        if (nrow(out) == 0) return(tibble())
+        if (!identical(market, "all")) {
+          score_market <- if (identical(market, "straight_up")) "spread" else market
+          out <- filter(out, market == !!score_market)
+        }
+        if (nrow(out) == 0) return(tibble())
+        mutate(out, Season = season, Framework = framework, File = file, Sample = sample, .before = 1)
+      })
+
+      if (nrow(summary_rows) == 0) return(tibble())
+
+      summary_rows <- mutate(
+        summary_rows,
+        Market = market_labels[market] %||% market,
+        WinPct = round(100 * win_pct, 1)
+      )
+      summary_rows <- select(
+        summary_rows,
+        Season,
+        Framework,
+        File,
+        Sample,
+        Market,
+        Result = result_col,
+        Projection = projection_col,
+        Picks = picks,
+        Wins = wins,
+        Losses = losses,
+        WinPct
+      )
+      arrange(summary_rows, Framework, desc(WinPct), desc(Picks), File, Result)
+    })
+
+    output[[paste0(id, "_status")]] <- renderText({
+      req(input[[paste0(id, "_build")]] > 0)
+      s <- nextgen_family_summary()
+      f <- nextgen_files_for_season()
+      paste(
+        paste("Family:", next_gen_family_labels[[family_key]] %||% family_key),
+        paste("Frameworks:", paste(input[[paste0(id, "_frameworks")]] %||% character(), collapse = ", ")),
+        paste("Season:", input[[paste0(id, "_season")]]),
+        paste("Market:", input[[paste0(id, "_market")]]),
+        paste("Files included:", nrow(f)),
+        paste("Summary rows:", nrow(s)),
+        paste("Available next-gen frameworks:", paste(sort(unique(nextgen_inventory$framework)), collapse = ", ")),
+        paste("Available next-gen seasons:", paste(sort(unique(nextgen_inventory$season)), collapse = ", ")),
+        sep = "\n"
+      )
+    })
+
+    output[[paste0(id, "_summary")]] <- renderPrint({
+      if (is.null(input[[paste0(id, "_build")]]) || input[[paste0(id, "_build")]] <= 0) {
+        return(invisible(NULL))
+      }
+      s <- nextgen_family_summary() %>% dplyr::slice_head(n = 80)
+      if (nrow(s) == 0) {
+        cat("No next-gen summary rows for this selection.\n")
+        return(invisible(NULL))
+      }
+      print(as.data.frame(s), row.names = FALSE)
+    })
+
+    output[[paste0(id, "_download_summary")]] <- downloadHandler(
+      filename = function() paste0(family_key, "_nextgen_summary_", input[[paste0(id, "_season")]], "_", Sys.Date(), ".csv"),
+      content = function(file) write_csv(nextgen_family_summary(), file)
+    )
+
+    output[[paste0(id, "_future_preview")]] <- renderDT({
+      req(input[[paste0(id, "_build")]] > 0)
+      files <- nextgen_future_files()
+      if (nrow(files) == 0) {
+        return(datatable(tibble(Message = "No future next-gen projection files for this family/framework/season selection."), rownames = FALSE))
+      }
+      market <- input[[paste0(id, "_market")]] %||% "all"
+      rows <- pmap_dfr(files, function(path, file, season, framework, sample, family, family_label) {
+        df <- read_nextgen_model_file(path)
+        cols <- if (identical(market, "all")) nextgen_prediction_cols(df) else nextgen_projection_columns_for_market(df, market)
+        cols <- cols[cols %in% names(df)]
+        cols <- cols[vapply(df[cols], function(x) any(!is.na(x)), logical(1))]
+        if (length(cols) == 0) return(tibble())
+        keep <- unique(c("game_id", "season", "week", "home_team", "away_team", "spread_line", "total_line", "home_implied", "away_implied", "line", cols))
+        keep <- keep[keep %in% names(df)]
+        df %>%
+          select(all_of(keep)) %>%
+          mutate(File = file, Framework = framework, .before = 1)
+      })
+      if (nrow(rows) == 0) {
+        return(datatable(tibble(Message = "No future next-gen projection columns for this selection."), rownames = FALSE))
+      }
+      rows <- rows %>%
+        mutate(season = as.integer(season), week = as.integer(week))
+      decimal_cols <- setdiff(names(rows)[vapply(rows, is.numeric, logical(1))], c("season", "week"))
+      rows <- rows %>%
+        mutate(across(all_of(decimal_cols), ~ ifelse(is.na(.x), NA_character_, sprintf("%.1f", .x))))
+      datatable(
+        rows,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          dom = '<"top"lfrip>t<"bottom"lfrip>',
+          pageLength = 25,
+          lengthMenu = c(10, 25, 50, 100),
+          scrollX = TRUE
+        )
+      )
+    })
+  }
+
+  bind_nextgen_family("ng_elasticnet", "elastic_net_lasso")
+  bind_nextgen_family("ng_weightedlinear", "weighted_linear_regression")
+  bind_nextgen_family("ng_decisiontree", "decision_tree_rpart")
+  bind_nextgen_family("ng_randomforest", "random_forest_ranger")
+  bind_nextgen_family("ng_gbm", "gbm_boosted_trees")
+  bind_nextgen_family("ng_xgboost", "xgboost_regression")
 
   historical_model_scores <- function(market) {
     score_market <- if (identical(market, "straight_up")) {
