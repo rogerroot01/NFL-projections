@@ -654,7 +654,14 @@ ui <- fluidPage(
       sidebarLayout(
         sidebarPanel(
           width = 3,
-          checkboxGroupInput("cons_families", "Families", choices = stats::setNames(names(family_labels), family_labels), selected = names(family_labels)),
+          actionButton("cons_run_top", "Build consensus", class = "btn-primary"),
+          tags$hr(),
+          checkboxGroupInput(
+            "cons_families",
+            "Families",
+            choices = stats::setNames(names(family_labels), family_labels),
+            selected = c("ScoresTrees", "ScoresLateReg", "Billy")
+          ),
           checkboxGroupInput("cons_seasons", "Backtest seasons", choices = backtest_seasons, selected = backtest_seasons),
           checkboxGroupInput("cons_future_seasons", "Future projection seasons", choices = future_seasons, selected = future_seasons),
           selectInput(
@@ -705,6 +712,8 @@ ui <- fluidPage(
       sidebarLayout(
         sidebarPanel(
           width = 3,
+          actionButton("ng_cons_run_top", "Build next-gen consensus", class = "btn-primary"),
+          tags$hr(),
           checkboxGroupInput(
             "ng_cons_frameworks",
             "Frameworks",
@@ -1908,6 +1917,17 @@ server <- function(input, output, session) {
     consensus_rows(rows)
   }, ignoreInit = TRUE, priority = 100)
 
+  observeEvent(input$cons_run_top, {
+    rows <- tryCatch(
+      build_consensus_rows(),
+      error = function(e) {
+        consensus_status(paste("Consensus build error:", conditionMessage(e)))
+        tibble()
+      }
+    )
+    consensus_rows(rows)
+  }, ignoreInit = TRUE, priority = 100)
+
   build_nextgen_consensus_rows <- function() {
     nextgen_consensus_status("Building next-gen consensus...")
     if (!nextgen_data_available) {
@@ -1991,6 +2011,17 @@ server <- function(input, output, session) {
   }
 
   observeEvent(input$ng_cons_run, {
+    rows <- tryCatch(
+      build_nextgen_consensus_rows(),
+      error = function(e) {
+        nextgen_consensus_status(paste("Next-gen consensus build error:", conditionMessage(e)))
+        tibble()
+      }
+    )
+    nextgen_consensus_rows(rows)
+  }, ignoreInit = TRUE, priority = 100)
+
+  observeEvent(input$ng_cons_run_top, {
     rows <- tryCatch(
       build_nextgen_consensus_rows(),
       error = function(e) {
@@ -2090,18 +2121,26 @@ server <- function(input, output, session) {
     overall_consensus_status()
   })
 
+  legacy_consensus_built <- reactive({
+    (input$cons_run %||% 0) + (input$cons_run_top %||% 0) > 0
+  })
+
+  nextgen_consensus_built <- reactive({
+    (input$ng_cons_run %||% 0) + (input$ng_cons_run_top %||% 0) > 0
+  })
+
   output$ng_cons_summary <- renderTable({
-    req(input$ng_cons_run > 0)
+    req(nextgen_consensus_built())
     summarize_consensus_table(nextgen_consensus_rows())
   })
 
   output$ng_cons_splits <- renderTable({
-    req(input$ng_cons_run > 0)
+    req(nextgen_consensus_built())
     consensus_splits_table(nextgen_consensus_rows(), input$ng_cons_market %||% "spread")
   })
 
   output$ng_cons_games <- renderDT({
-    req(input$ng_cons_run > 0)
+    req(nextgen_consensus_built())
     if (nrow(nextgen_consensus_rows()) == 0) {
       return(datatable(tibble(Message = "No next-gen consensus rows for the current selections."), rownames = FALSE))
     }
@@ -2301,7 +2340,7 @@ server <- function(input, output, session) {
   output$dashboard_away_implied <- render_dashboard_market("away_implied")
 
   output$cons_summary <- renderTable({
-    req(input$cons_run > 0)
+    req(legacy_consensus_built())
     df <- consensus_rows()
     if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
     summarize_consensus <- function(data, label) {
@@ -2332,7 +2371,7 @@ server <- function(input, output, session) {
   })
 
   output$cons_splits <- renderTable({
-    req(input$cons_run > 0)
+    req(legacy_consensus_built())
     df <- consensus_rows()
     if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
 
@@ -2416,7 +2455,7 @@ server <- function(input, output, session) {
   })
 
   output$cons_games <- renderDT({
-    req(input$cons_run > 0)
+    req(legacy_consensus_built())
     if (nrow(consensus_rows()) == 0) {
       return(datatable(tibble(Message = "No consensus rows for the current selections."), rownames = FALSE))
     }
@@ -2448,7 +2487,7 @@ server <- function(input, output, session) {
   output$cons_download <- downloadHandler(
     filename = function() paste0("projection_consensus_", Sys.Date(), ".csv"),
     content = function(file) {
-      req(input$cons_run > 0)
+      req(legacy_consensus_built())
       write_csv(consensus_rows(), file)
     }
   )
@@ -2456,7 +2495,7 @@ server <- function(input, output, session) {
   output$cons_games_download <- downloadHandler(
     filename = function() paste0("projection_consensus_game_rows_", Sys.Date(), ".csv"),
     content = function(file) {
-      req(input$cons_run > 0)
+      req(legacy_consensus_built())
       write_csv(consensus_rows(), file)
     }
   )
@@ -2464,7 +2503,7 @@ server <- function(input, output, session) {
   output$ng_cons_download <- downloadHandler(
     filename = function() paste0("next_gen_consensus_", Sys.Date(), ".csv"),
     content = function(file) {
-      req(input$ng_cons_run > 0)
+      req(nextgen_consensus_built())
       write_csv(nextgen_consensus_rows(), file)
     }
   )
@@ -2472,7 +2511,7 @@ server <- function(input, output, session) {
   output$ng_cons_games_download <- downloadHandler(
     filename = function() paste0("next_gen_consensus_game_rows_", Sys.Date(), ".csv"),
     content = function(file) {
-      req(input$ng_cons_run > 0)
+      req(nextgen_consensus_built())
       write_csv(nextgen_consensus_rows(), file)
     }
   )
