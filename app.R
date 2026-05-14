@@ -726,6 +726,12 @@ ui <- fluidPage(
             choices = stats::setNames(names(next_gen_family_labels), next_gen_family_labels),
             selected = names(next_gen_family_labels)
           ),
+          checkboxGroupInput(
+            "ng_cons_projection_sources",
+            "Spread/total projection sources",
+            choices = c("Direct model projections" = "direct", "Implied from team scores" = "implied_team_scores"),
+            selected = c("direct", "implied_team_scores")
+          ),
           checkboxGroupInput("ng_cons_seasons", "Backtest seasons", choices = c(2024, 2025), selected = c(2024, 2025)),
           checkboxGroupInput("ng_cons_future_seasons", "Future projection seasons", choices = 2026, selected = 2026),
           selectInput(
@@ -1197,9 +1203,29 @@ server <- function(input, output, session) {
     ]
   }
 
-  nextgen_projection_columns_for_market <- function(df, market) {
+  nextgen_projection_source <- function(cols) {
+    ifelse(
+      str_detect(cols, regex("ImpliedFromTeamScores", TRUE)),
+      "Implied from team scores",
+      "Direct model projection"
+    )
+  }
+
+  nextgen_filter_projection_sources <- function(cols, market, projection_sources) {
+    projection_sources <- projection_sources %||% c("direct", "implied_team_scores")
+    if (!market %in% c("spread", "straight_up", "total")) return(cols)
+    if (length(projection_sources) == 0) return(character())
+
+    is_implied <- str_detect(cols, regex("ImpliedFromTeamScores", TRUE))
+    keep <- rep(FALSE, length(cols))
+    if ("direct" %in% projection_sources) keep <- keep | !is_implied
+    if ("implied_team_scores" %in% projection_sources) keep <- keep | is_implied
+    cols[keep]
+  }
+
+  nextgen_projection_columns_for_market <- function(df, market, projection_sources = c("direct", "implied_team_scores")) {
     cols <- nextgen_prediction_cols(df)
-    if (market == "spread" || market == "straight_up") {
+    market_cols <- if (market == "spread" || market == "straight_up") {
       cols[str_detect(cols, regex("^ScoreDiff_|^HomeMargin_", TRUE))]
     } else if (market == "total") {
       cols[str_detect(cols, regex("^ScoreTotal_|^TotalScore_", TRUE))]
@@ -1210,6 +1236,7 @@ server <- function(input, output, session) {
     } else {
       character()
     }
+    nextgen_filter_projection_sources(market_cols, market, projection_sources)
   }
 
   nextgen_cover_market <- function(col) {
@@ -1242,6 +1269,7 @@ server <- function(input, output, session) {
         market = nextgen_cover_market(col),
         result_col = col,
         projection_col = proj,
+        projection_source = nextgen_projection_source(proj),
         picks = sum(!is.na(vals)),
         wins = sum(vals == 1, na.rm = TRUE),
         losses = sum(vals == 0, na.rm = TRUE),
@@ -1293,9 +1321,9 @@ server <- function(input, output, session) {
     }
   }
 
-  long_nextgen_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none") {
+  long_nextgen_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none", projection_sources = c("direct", "implied_team_scores")) {
     df <- read_nextgen_model_file(meta$path)
-    cols <- nextgen_projection_columns_for_market(df, market)
+    cols <- nextgen_projection_columns_for_market(df, market, projection_sources)
     if (length(cols) == 0) return(tibble())
 
     score_market <- if (identical(market, "straight_up")) "spread" else market
@@ -1450,6 +1478,7 @@ server <- function(input, output, session) {
         file = meta$file,
         split = meta$sample,
         projection_col = col,
+        projection_source = nextgen_projection_source(col),
         projection = pred,
         market_line = line,
         actual = actual,
@@ -1936,6 +1965,7 @@ server <- function(input, output, session) {
     }
     frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
     families <- input$ng_cons_families %||% names(next_gen_family_labels)
+    projection_sources <- input$ng_cons_projection_sources %||% c("direct", "implied_team_scores")
     market <- input$ng_cons_market %||% "spread"
     line_source <- input$ng_cons_line_source %||% "closing"
     injury_source <- input$ng_cons_injury_source %||% "none"
@@ -1962,7 +1992,8 @@ server <- function(input, output, session) {
           market,
           min_win,
           line_source,
-          injury_source
+          injury_source,
+          projection_sources
         )
       })
 
@@ -1979,6 +2010,9 @@ server <- function(input, output, session) {
           projections = n(),
           models_used = n_distinct(paste(file, projection_col, sep = "::")),
           frameworks_used = paste(sort(unique(framework)), collapse = ", "),
+          projection_sources_used = paste(sort(unique(projection_source)), collapse = ", "),
+          direct_models_used = n_distinct(paste(file[projection_source == "Direct model projection"], projection_col[projection_source == "Direct model projection"], sep = "::")),
+          implied_models_used = n_distinct(paste(file[projection_source == "Implied from team scores"], projection_col[projection_source == "Implied from team scores"], sep = "::")),
           avg_projection = mean(projection, na.rm = TRUE),
           market_line = first_non_na(market_line),
           spread_line = first_non_na(spread_line),
@@ -2005,7 +2039,10 @@ server <- function(input, output, session) {
         ) %>%
         filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
         arrange(season, week, game_id)
-      nextgen_consensus_status(paste0("Complete. Built ", nrow(rows), " next-gen consensus rows from ", nrow(selected), " model files."))
+      nextgen_consensus_status(paste0(
+        "Complete. Built ", nrow(rows), " next-gen consensus rows from ", nrow(selected),
+        " model files using ", paste(projection_sources, collapse = " + "), " projection sources."
+      ))
       rows
     })
   }
