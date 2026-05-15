@@ -2399,7 +2399,7 @@ server <- function(input, output, session) {
     if (nrow(rows) == 0) {
       return(tibble(Message = "Build a consensus first, then choose a season and week."))
     }
-    rows %>%
+    summary_rows <- rows %>%
       group_by(Market = market) %>%
       summarise(
         Plays = n(),
@@ -2413,6 +2413,23 @@ server <- function(input, output, session) {
         Market = recode(Market, spread = "Against the spread", straight_up = "Straight up", total = "Over / under", home_implied = "Home implied", away_implied = "Away implied"),
         `Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%"))
       )
+
+    graded_total <- sum(!is.na(rows$correct))
+    bind_rows(
+      summary_rows,
+      tibble(
+        Market = "Total",
+        Plays = nrow(rows),
+        Wins = sum(rows$correct %in% TRUE, na.rm = TRUE),
+        Losses = sum(rows$correct %in% FALSE, na.rm = TRUE),
+        `Future/Push` = sum(is.na(rows$correct)),
+        `Win %` = ifelse(
+          graded_total > 0,
+          paste0(sprintf("%.1f", 100 * sum(rows$correct %in% TRUE, na.rm = TRUE) / graded_total), "%"),
+          NA_character_
+        )
+      )
+    )
   })
 
   output$dashboard_spread <- render_dashboard_market("spread")
