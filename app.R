@@ -429,6 +429,22 @@ ui <- fluidPage(
         margin: 0;
       }
 
+      body {
+        background: #050912;
+      }
+
+      body:not(.splash-dismissed) {
+        overflow: hidden;
+      }
+
+      body:not(.splash-dismissed) .container-fluid > :not(#splash_screen) {
+        visibility: hidden;
+      }
+
+      body.splash-dismissed .container-fluid > :not(#splash_screen) {
+        visibility: visible;
+      }
+
       body.splash-active {
         overflow: hidden;
       }
@@ -542,6 +558,7 @@ ui <- fluidPage(
           enter.addEventListener('click', function() {
             splash.classList.add('splash-hidden');
             document.body.classList.remove('splash-active');
+            document.body.classList.add('splash-dismissed');
           });
         }
       });
