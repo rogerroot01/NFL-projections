@@ -429,10 +429,6 @@ ui <- fluidPage(
         margin: 0;
       }
 
-      body {
-        background: #050912;
-      }
-
       body.splash-active {
         overflow: hidden;
       }
