@@ -2047,6 +2047,21 @@ server <- function(input, output, session) {
     nextgen_consensus_rows(rows)
   }, ignoreInit = TRUE, priority = 100)
 
+  market_line_is_consistent <- function(rows) {
+    if (nrow(rows) == 0) return(rep(TRUE, 0))
+    close_enough <- function(a, b) is.na(a) | is.na(b) | abs(a - b) < 0.001
+    expected_home_implied <- ifelse(!is.na(rows$total_line) & !is.na(rows$spread_line), (rows$total_line + rows$spread_line) / 2, NA_real_)
+    expected_away_implied <- ifelse(!is.na(rows$total_line) & !is.na(rows$spread_line), (rows$total_line - rows$spread_line) / 2, NA_real_)
+    case_when(
+      rows$market == "spread" ~ close_enough(rows$market_line, rows$spread_line),
+      rows$market == "straight_up" ~ is.na(rows$market_line) | abs(rows$market_line) < 0.001,
+      rows$market == "total" ~ close_enough(rows$market_line, rows$total_line),
+      rows$market == "home_implied" ~ close_enough(rows$market_line, expected_home_implied),
+      rows$market == "away_implied" ~ close_enough(rows$market_line, expected_away_implied),
+      TRUE ~ TRUE
+    )
+  }
+
   build_overall_consensus_rows <- function() {
     overall_consensus_status("Building combined consensus...")
     sources <- input$overall_cons_sources %||% c("legacy", "next_gen")
@@ -2057,18 +2072,38 @@ server <- function(input, output, session) {
       if ("legacy" %in% sources && nrow(consensus_rows()) > 0) consensus_rows() %>% mutate(source = "Legacy") else tibble(),
       if ("next_gen" %in% sources && nrow(nextgen_consensus_rows()) > 0) nextgen_consensus_rows() %>% mutate(source = "Next-gen") else tibble()
     ) %>%
-      filter(is.na(.data$market) | .data$market == market)
+      filter(!is.na(.data$market), .data$market == .env$market) %>%
+      filter(market_line_is_consistent(.))
 
     if (nrow(source_rows) == 0) {
-      overall_consensus_status("No built source consensus rows are available for the selected market.")
+      built_markets <- bind_rows(
+        if ("legacy" %in% sources && nrow(consensus_rows()) > 0) consensus_rows() %>% mutate(source = "Legacy") else tibble(),
+        if ("next_gen" %in% sources && nrow(nextgen_consensus_rows()) > 0) nextgen_consensus_rows() %>% mutate(source = "Next-gen") else tibble()
+      ) %>%
+        filter(!is.na(.data$market)) %>%
+        distinct(source, market) %>%
+        arrange(source, market)
+      market_msg <- if (nrow(built_markets) == 0) {
+        "No source consensus rows have been built yet."
+      } else {
+        paste(
+          paste(built_markets$source, built_markets$market, sep = ": "),
+          collapse = "; "
+        )
+      }
+      overall_consensus_status(paste0(
+        "No built source consensus rows are available for selected market '",
+        market,
+        "'. Built source markets: ",
+        market_msg
+      ))
       return(tibble())
     }
 
     rows <- source_rows %>%
       mutate(source_pick = case_when(consensus_pick %in% c("Home", "Over") ~ 1, consensus_pick %in% c("Away", "Under") ~ -1, TRUE ~ NA_real_)) %>%
-      group_by(game_id, season, week, home_team, away_team) %>%
+      group_by(game_id, season, week, home_team, away_team, market) %>%
       summarise(
-        market = .env$market,
         projections = sum(projections, na.rm = TRUE),
         models_used = sum(models_used, na.rm = TRUE),
         sources_used = paste(sort(unique(source)), collapse = ", "),
@@ -2144,6 +2179,15 @@ server <- function(input, output, session) {
     (input$ng_cons_run %||% 0) + (input$ng_cons_run_top %||% 0) > 0
   })
 
+  overall_consensus_display_rows <- reactive({
+    rows <- overall_consensus_rows()
+    market <- input$overall_cons_market %||% "spread"
+    if (nrow(rows) == 0 || !"market" %in% names(rows)) return(tibble())
+    rows %>%
+      filter(!is.na(.data$market), .data$market == .env$market) %>%
+      filter(market_line_is_consistent(.))
+  })
+
   output$ng_cons_summary <- renderTable({
     req(nextgen_consensus_built())
     summarize_consensus_table(nextgen_consensus_rows())
@@ -2185,20 +2229,24 @@ server <- function(input, output, session) {
 
   output$overall_cons_summary <- renderTable({
     req(input$overall_cons_run > 0)
-    summarize_consensus_table(overall_consensus_rows())
+    rows <- overall_consensus_display_rows()
+    if (nrow(rows) == 0) return(tibble(Message = "No combined consensus rows for the currently selected market. Click Build combined consensus."))
+    summarize_consensus_table(rows)
   })
 
   output$overall_cons_splits <- renderTable({
     req(input$overall_cons_run > 0)
-    consensus_splits_table(overall_consensus_rows(), input$overall_cons_market %||% "spread")
+    rows <- overall_consensus_display_rows()
+    if (nrow(rows) == 0) return(tibble(Message = "No combined consensus rows for the currently selected market. Click Build combined consensus."))
+    consensus_splits_table(rows, input$overall_cons_market %||% "spread")
   })
 
   output$overall_cons_games <- renderDT({
     req(input$overall_cons_run > 0)
-    if (nrow(overall_consensus_rows()) == 0) {
-      return(datatable(tibble(Message = "No combined consensus rows for the current selections."), rownames = FALSE))
+    if (nrow(overall_consensus_display_rows()) == 0) {
+      return(datatable(tibble(Message = "No combined consensus rows for the currently selected market. Click Build combined consensus."), rownames = FALSE))
     }
-    rows <- overall_consensus_rows() %>%
+    rows <- overall_consensus_display_rows() %>%
       mutate(
         season = as.integer(season),
         week = as.integer(week),
@@ -2228,7 +2276,7 @@ server <- function(input, output, session) {
       source,
       legacy = consensus_rows(),
       next_gen = nextgen_consensus_rows(),
-      combined = overall_consensus_rows(),
+      combined = overall_consensus_display_rows(),
       tibble()
     )
     if (nrow(rows) == 0) return(tibble())
