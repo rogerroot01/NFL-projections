@@ -223,10 +223,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2025_Billy_home_score.csv,2025,Billy,home_score,ScoreDiff_avg,999,269,0,FALSE
 2025_Billy_home_score.csv,2025,Billy,home_score,Score_final,1118,269,0,FALSE
 2025_Billy_home_score.csv,2025,Billy,home_score,Billy,1119,269,0,FALSE
-2026_Billy_away.csv,2026,Billy,away,home_implied,962,0,272,TRUE
-2026_Billy_away.csv,2026,Billy,away,away_implied,963,0,272,TRUE
-2026_Billy_away.csv,2026,Billy,away,posteam_implied,964,0,272,TRUE
-2026_Billy_away.csv,2026,Billy,away,defteam_implied,965,0,272,TRUE
+2026_Billy_away.csv,2026,Billy,away,home_implied,962,272,0,FALSE
+2026_Billy_away.csv,2026,Billy,away,away_implied,963,272,0,FALSE
+2026_Billy_away.csv,2026,Billy,away,posteam_implied,964,272,0,FALSE
+2026_Billy_away.csv,2026,Billy,away,defteam_implied,965,272,0,FALSE
 2026_Billy_away.csv,2026,Billy,away,ScoreTotal_stepwise,978,272,0,FALSE
 2026_Billy_away.csv,2026,Billy,away,ScoreTotal2_stepwise,979,272,0,FALSE
 2026_Billy_away.csv,2026,Billy,away,ScoreTotal_forward,980,272,0,FALSE
@@ -251,10 +251,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2026_Billy_away.csv,2026,Billy,away,ScoreDiff_avg,999,272,0,FALSE
 2026_Billy_away.csv,2026,Billy,away,ScoreDiff_final,1118,272,0,FALSE
 2026_Billy_away.csv,2026,Billy,away,Billy,1119,272,0,FALSE
-2026_Billy_away_score.csv,2026,Billy,away_score,home_implied,962,0,272,TRUE
-2026_Billy_away_score.csv,2026,Billy,away_score,away_implied,963,0,272,TRUE
-2026_Billy_away_score.csv,2026,Billy,away_score,posteam_implied,964,0,272,TRUE
-2026_Billy_away_score.csv,2026,Billy,away_score,defteam_implied,965,0,272,TRUE
+2026_Billy_away_score.csv,2026,Billy,away_score,home_implied,962,272,0,FALSE
+2026_Billy_away_score.csv,2026,Billy,away_score,away_implied,963,272,0,FALSE
+2026_Billy_away_score.csv,2026,Billy,away_score,posteam_implied,964,272,0,FALSE
+2026_Billy_away_score.csv,2026,Billy,away_score,defteam_implied,965,272,0,FALSE
 2026_Billy_away_score.csv,2026,Billy,away_score,ScoreTotal_stepwise,978,272,0,FALSE
 2026_Billy_away_score.csv,2026,Billy,away_score,ScoreTotal2_stepwise,979,272,0,FALSE
 2026_Billy_away_score.csv,2026,Billy,away_score,ScoreTotal_forward,980,272,0,FALSE
@@ -279,10 +279,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2026_Billy_away_score.csv,2026,Billy,away_score,ScoreDiff_avg,999,272,0,FALSE
 2026_Billy_away_score.csv,2026,Billy,away_score,Score_final,1118,272,0,FALSE
 2026_Billy_away_score.csv,2026,Billy,away_score,Billy,1119,272,0,FALSE
-2026_Billy_home.csv,2026,Billy,home,home_implied,962,0,272,TRUE
-2026_Billy_home.csv,2026,Billy,home,away_implied,963,0,272,TRUE
-2026_Billy_home.csv,2026,Billy,home,posteam_implied,964,0,272,TRUE
-2026_Billy_home.csv,2026,Billy,home,defteam_implied,965,0,272,TRUE
+2026_Billy_home.csv,2026,Billy,home,home_implied,962,272,0,FALSE
+2026_Billy_home.csv,2026,Billy,home,away_implied,963,272,0,FALSE
+2026_Billy_home.csv,2026,Billy,home,posteam_implied,964,272,0,FALSE
+2026_Billy_home.csv,2026,Billy,home,defteam_implied,965,272,0,FALSE
 2026_Billy_home.csv,2026,Billy,home,ScoreTotal_stepwise,978,272,0,FALSE
 2026_Billy_home.csv,2026,Billy,home,ScoreTotal2_stepwise,979,272,0,FALSE
 2026_Billy_home.csv,2026,Billy,home,ScoreTotal_forward,980,272,0,FALSE
@@ -307,10 +307,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2026_Billy_home.csv,2026,Billy,home,ScoreDiff_avg,999,272,0,FALSE
 2026_Billy_home.csv,2026,Billy,home,ScoreDiff_final,1118,272,0,FALSE
 2026_Billy_home.csv,2026,Billy,home,Billy,1119,272,0,FALSE
-2026_Billy_home_score.csv,2026,Billy,home_score,home_implied,962,0,272,TRUE
-2026_Billy_home_score.csv,2026,Billy,home_score,away_implied,963,0,272,TRUE
-2026_Billy_home_score.csv,2026,Billy,home_score,posteam_implied,964,0,272,TRUE
-2026_Billy_home_score.csv,2026,Billy,home_score,defteam_implied,965,0,272,TRUE
+2026_Billy_home_score.csv,2026,Billy,home_score,home_implied,962,272,0,FALSE
+2026_Billy_home_score.csv,2026,Billy,home_score,away_implied,963,272,0,FALSE
+2026_Billy_home_score.csv,2026,Billy,home_score,posteam_implied,964,272,0,FALSE
+2026_Billy_home_score.csv,2026,Billy,home_score,defteam_implied,965,272,0,FALSE
 2026_Billy_home_score.csv,2026,Billy,home_score,ScoreTotal_stepwise,978,272,0,FALSE
 2026_Billy_home_score.csv,2026,Billy,home_score,ScoreTotal2_stepwise,979,272,0,FALSE
 2026_Billy_home_score.csv,2026,Billy,home_score,ScoreTotal_forward,980,272,0,FALSE
@@ -444,10 +444,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2026_BillyTrees_away.csv,2026,Billy Trees,away,OppScore_avg,1083,0,272,TRUE
 2026_BillyTrees_away.csv,2026,Billy Trees,away,ScoreTotal_avg,1084,0,272,TRUE
 2026_BillyTrees_away.csv,2026,Billy Trees,away,ScoreDiff_avg,1085,0,272,TRUE
-2026_BillyTrees_away.csv,2026,Billy Trees,away,home_implied,1086,0,272,TRUE
-2026_BillyTrees_away.csv,2026,Billy Trees,away,away_implied,1087,0,272,TRUE
-2026_BillyTrees_away.csv,2026,Billy Trees,away,posteam_implied,1088,0,272,TRUE
-2026_BillyTrees_away.csv,2026,Billy Trees,away,defteam_implied,1089,0,272,TRUE
+2026_BillyTrees_away.csv,2026,Billy Trees,away,home_implied,1086,272,0,FALSE
+2026_BillyTrees_away.csv,2026,Billy Trees,away,away_implied,1087,272,0,FALSE
+2026_BillyTrees_away.csv,2026,Billy Trees,away,posteam_implied,1088,272,0,FALSE
+2026_BillyTrees_away.csv,2026,Billy Trees,away,defteam_implied,1089,272,0,FALSE
 2026_BillyTrees_away.csv,2026,Billy Trees,away,ScoreDiff_xgb,1103,272,0,FALSE
 2026_BillyTrees_away.csv,2026,Billy Trees,away,TotalScore_xgb,1104,272,0,FALSE
 2026_BillyTrees_away.csv,2026,Billy Trees,away,Score_xgb,1106,272,0,FALSE
@@ -470,10 +470,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2026_BillyTrees_home.csv,2026,Billy Trees,home,OppScore_avg,1083,0,272,TRUE
 2026_BillyTrees_home.csv,2026,Billy Trees,home,ScoreTotal_avg,1084,0,272,TRUE
 2026_BillyTrees_home.csv,2026,Billy Trees,home,ScoreDiff_avg,1085,0,272,TRUE
-2026_BillyTrees_home.csv,2026,Billy Trees,home,home_implied,1086,0,272,TRUE
-2026_BillyTrees_home.csv,2026,Billy Trees,home,away_implied,1087,0,272,TRUE
-2026_BillyTrees_home.csv,2026,Billy Trees,home,posteam_implied,1088,0,272,TRUE
-2026_BillyTrees_home.csv,2026,Billy Trees,home,defteam_implied,1089,0,272,TRUE
+2026_BillyTrees_home.csv,2026,Billy Trees,home,home_implied,1086,272,0,FALSE
+2026_BillyTrees_home.csv,2026,Billy Trees,home,away_implied,1087,272,0,FALSE
+2026_BillyTrees_home.csv,2026,Billy Trees,home,posteam_implied,1088,272,0,FALSE
+2026_BillyTrees_home.csv,2026,Billy Trees,home,defteam_implied,1089,272,0,FALSE
 2026_BillyTrees_home.csv,2026,Billy Trees,home,ScoreDiff_xgb,1103,272,0,FALSE
 2026_BillyTrees_home.csv,2026,Billy Trees,home,TotalScore_xgb,1104,272,0,FALSE
 2026_BillyTrees_home.csv,2026,Billy Trees,home,Score_xgb,1106,272,0,FALSE
@@ -595,10 +595,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2025_ScoresLateReg_home.csv,2025,Scores Late Regression,home,OppScore_avg,1012,269,0,FALSE
 2025_ScoresLateReg_home.csv,2025,Scores Late Regression,home,ScoreTotal_avg,1013,269,0,FALSE
 2025_ScoresLateReg_home.csv,2025,Scores Late Regression,home,ScoreDiff_avg,1014,269,0,FALSE
-2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,home_implied,962,0,272,TRUE
-2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,away_implied,963,0,272,TRUE
-2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,posteam_implied,964,0,272,TRUE
-2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,defteam_implied,965,0,272,TRUE
+2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,home_implied,962,272,0,FALSE
+2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,away_implied,963,272,0,FALSE
+2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,posteam_implied,964,272,0,FALSE
+2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,defteam_implied,965,272,0,FALSE
 2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,ScoreTotal_stepwise,978,272,0,FALSE
 2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,ScoreTotal2_stepwise,980,272,0,FALSE
 2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,ScoreTotal_forward,982,272,0,FALSE
@@ -621,10 +621,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,OppScore_avg,1012,272,0,FALSE
 2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,ScoreTotal_avg,1013,272,0,FALSE
 2026_ScoresLateReg_away.csv,2026,Scores Late Regression,away,ScoreDiff_avg,1014,272,0,FALSE
-2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,home_implied,962,0,272,TRUE
-2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,away_implied,963,0,272,TRUE
-2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,posteam_implied,964,0,272,TRUE
-2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,defteam_implied,965,0,272,TRUE
+2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,home_implied,962,272,0,FALSE
+2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,away_implied,963,272,0,FALSE
+2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,posteam_implied,964,272,0,FALSE
+2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,defteam_implied,965,272,0,FALSE
 2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,ScoreTotal_stepwise,978,272,0,FALSE
 2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,ScoreTotal2_stepwise,980,272,0,FALSE
 2026_ScoresLateReg_home.csv,2026,Scores Late Regression,home,ScoreTotal_forward,982,272,0,FALSE
@@ -727,10 +727,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2025_ScoresTrees_home.csv,2025,Scores Trees,home,OppScore_avg,999,269,0,FALSE
 2025_ScoresTrees_home.csv,2025,Scores Trees,home,ScoreTotal_avg,1000,269,0,FALSE
 2025_ScoresTrees_home.csv,2025,Scores Trees,home,ScoreDiff_avg,1001,269,0,FALSE
-2026_ScoresTrees_away.csv,2026,Scores Trees,away,home_implied,959,0,272,TRUE
-2026_ScoresTrees_away.csv,2026,Scores Trees,away,away_implied,960,0,272,TRUE
-2026_ScoresTrees_away.csv,2026,Scores Trees,away,posteam_implied,961,0,272,TRUE
-2026_ScoresTrees_away.csv,2026,Scores Trees,away,defteam_implied,962,0,272,TRUE
+2026_ScoresTrees_away.csv,2026,Scores Trees,away,home_implied,959,272,0,FALSE
+2026_ScoresTrees_away.csv,2026,Scores Trees,away,away_implied,960,272,0,FALSE
+2026_ScoresTrees_away.csv,2026,Scores Trees,away,posteam_implied,961,272,0,FALSE
+2026_ScoresTrees_away.csv,2026,Scores Trees,away,defteam_implied,962,272,0,FALSE
 2026_ScoresTrees_away.csv,2026,Scores Trees,away,ScoreDiff_xgb,975,272,0,FALSE
 2026_ScoresTrees_away.csv,2026,Scores Trees,away,TotalScore_xgb,976,272,0,FALSE
 2026_ScoresTrees_away.csv,2026,Scores Trees,away,Score_xgb,978,272,0,FALSE
@@ -747,10 +747,10 @@ File,Season,Family,Split,PredictionColumn,ColumnPosition,NonMissingRows,MissingR
 2026_ScoresTrees_away.csv,2026,Scores Trees,away,OppScore_avg,999,272,0,FALSE
 2026_ScoresTrees_away.csv,2026,Scores Trees,away,ScoreTotal_avg,1000,272,0,FALSE
 2026_ScoresTrees_away.csv,2026,Scores Trees,away,ScoreDiff_avg,1001,272,0,FALSE
-2026_ScoresTrees_home.csv,2026,Scores Trees,home,home_implied,959,0,272,TRUE
-2026_ScoresTrees_home.csv,2026,Scores Trees,home,away_implied,960,0,272,TRUE
-2026_ScoresTrees_home.csv,2026,Scores Trees,home,posteam_implied,961,0,272,TRUE
-2026_ScoresTrees_home.csv,2026,Scores Trees,home,defteam_implied,962,0,272,TRUE
+2026_ScoresTrees_home.csv,2026,Scores Trees,home,home_implied,959,272,0,FALSE
+2026_ScoresTrees_home.csv,2026,Scores Trees,home,away_implied,960,272,0,FALSE
+2026_ScoresTrees_home.csv,2026,Scores Trees,home,posteam_implied,961,272,0,FALSE
+2026_ScoresTrees_home.csv,2026,Scores Trees,home,defteam_implied,962,272,0,FALSE
 2026_ScoresTrees_home.csv,2026,Scores Trees,home,ScoreDiff_xgb,975,272,0,FALSE
 2026_ScoresTrees_home.csv,2026,Scores Trees,home,TotalScore_xgb,976,272,0,FALSE
 2026_ScoresTrees_home.csv,2026,Scores Trees,home,Score_xgb,978,272,0,FALSE
