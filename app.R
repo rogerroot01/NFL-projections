@@ -1306,9 +1306,16 @@ server <- function(input, output, session) {
     if (length(cols) == 0) return(tibble())
 
     score_market <- if (identical(market, "straight_up")) "spread" else market
-    score_lookup <- detect_nextgen_cover_summary(df) %>%
-      filter(market == score_market, !is.na(projection_col)) %>%
-      select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
+    use_historical_score_lookup <- !identical(meta$sample, "test") || suppressWarnings(as.integer(meta$season)) >= 2026L
+    if (isTRUE(use_historical_score_lookup)) {
+      score_lookup <- historical_nextgen_model_scores(market) %>%
+        filter(framework == meta$framework, family == meta$family) %>%
+        select(projection_col, model_result_col, model_picks, model_win_pct)
+    } else {
+      score_lookup <- detect_nextgen_cover_summary(df) %>%
+        filter(market == score_market, !is.na(projection_col)) %>%
+        select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
+    }
     if ((nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) &&
         market == "home_implied" &&
         all(c("actual_market_result", "predicted_market_result") %in% names(df))) {
