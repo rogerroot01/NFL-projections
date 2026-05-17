@@ -767,6 +767,11 @@ ui <- fluidPage(
             choices = c("Legacy consensus" = "legacy", "Next-gen consensus" = "next_gen"),
             selected = c("legacy", "next_gen")
           ),
+          checkboxInput(
+            "overall_cons_require_all_sources",
+            "Require every selected source to qualify",
+            value = TRUE
+          ),
           selectInput(
             "overall_cons_market",
             "Market",
@@ -2079,6 +2084,11 @@ server <- function(input, output, session) {
     sources <- input$overall_cons_sources %||% c("legacy", "next_gen")
     markets <- dashboard_market_keys
     min_agree <- (input$overall_cons_agree %||% 50) / 100
+    require_all_sources <- isTRUE(input$overall_cons_require_all_sources %||% TRUE)
+    required_source_labels <- c(
+      if ("legacy" %in% sources) "Legacy",
+      if ("next_gen" %in% sources) "Next-gen"
+    )
 
     source_rows <- bind_rows(
       if ("legacy" %in% sources && nrow(consensus_rows()) > 0) consensus_rows() %>% mutate(source = "Legacy") else tibble(),
@@ -2117,6 +2127,7 @@ server <- function(input, output, session) {
         projections = sum(projections, na.rm = TRUE),
         models_used = sum(models_used, na.rm = TRUE),
         sources_used = paste(sort(unique(source)), collapse = ", "),
+        sources_used_count = dplyr::n_distinct(source),
         avg_projection = mean(avg_projection, na.rm = TRUE),
         market_line = first_non_na(market_line),
         spread_line = first_non_na(spread_line),
@@ -2151,10 +2162,16 @@ server <- function(input, output, session) {
         correct = ifelse(!is.na(actual_side), ifelse(consensus_pick %in% c("Home", "Over"), 1, -1) == actual_side, NA)
       ) %>%
       select(-positive_source_picks, -negative_source_picks, -source_pick_count, -positive_avg_projection, -negative_avg_projection) %>%
+      filter(!require_all_sources | sources_used_count == length(required_source_labels)) %>%
       filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
       arrange(market, season, week, game_id)
 
-    overall_consensus_status(paste0("Complete. Built ", nrow(rows), " combined consensus rows across ", length(markets), " markets from ", paste(unique(source_rows$source), collapse = " + "), ". Use the Market dropdown to view one market at a time, or the Dashboard to view them together."))
+    overall_consensus_status(paste0(
+      "Complete. Built ", nrow(rows), " combined consensus rows across ", length(markets),
+      " markets from ", paste(unique(source_rows$source), collapse = " + "),
+      ". Source rule: ", if (require_all_sources) "intersection (every selected source must qualify)." else "union (any selected source may qualify).",
+      " Use the Market dropdown to view one market at a time, or the Dashboard to view them together."
+    ))
     rows
   }
 
