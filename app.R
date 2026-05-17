@@ -1629,7 +1629,11 @@ server <- function(input, output, session) {
           dom = '<"top"lfrip>t<"bottom"lfrip>',
           pageLength = 25,
           lengthMenu = c(10, 25, 50, 100),
-          scrollX = TRUE
+          scrollX = TRUE,
+          autoWidth = FALSE,
+          columnDefs = list(
+            list(targets = 2, width = "190px", className = "dt-nowrap")
+          )
         )
       )
     })
