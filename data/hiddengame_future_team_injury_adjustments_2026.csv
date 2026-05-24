@@ -14,7 +14,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,1,HOU,AFC,AFC South,0,0
 2026,1,IND,AFC,AFC South,0,0
 2026,1,JAX,AFC,AFC South,0,0
-2026,1,KC,AFC,AFC West,0,0
+2026,1,KC,AFC,AFC West,-2.5,0
 2026,1,LA,NFC,NFC West,0,0
 2026,1,LAC,AFC,AFC West,0,0
 2026,1,LV,AFC,AFC West,0,0
@@ -46,7 +46,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,2,HOU,AFC,AFC South,0,0
 2026,2,IND,AFC,AFC South,0,0
 2026,2,JAX,AFC,AFC South,0,0
-2026,2,KC,AFC,AFC West,0,0
+2026,2,KC,AFC,AFC West,-2.333333333,0
 2026,2,LA,NFC,NFC West,0,0
 2026,2,LAC,AFC,AFC West,0,0
 2026,2,LV,AFC,AFC West,0,0
@@ -78,7 +78,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,3,HOU,AFC,AFC South,0,0
 2026,3,IND,AFC,AFC South,0,0
 2026,3,JAX,AFC,AFC South,0,0
-2026,3,KC,AFC,AFC West,0,0
+2026,3,KC,AFC,AFC West,-2.166666667,0
 2026,3,LA,NFC,NFC West,0,0
 2026,3,LAC,AFC,AFC West,0,0
 2026,3,LV,AFC,AFC West,0,0
@@ -110,7 +110,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,4,HOU,AFC,AFC South,0,0
 2026,4,IND,AFC,AFC South,0,0
 2026,4,JAX,AFC,AFC South,0,0
-2026,4,KC,AFC,AFC West,0,0
+2026,4,KC,AFC,AFC West,-2,0
 2026,4,LA,NFC,NFC West,0,0
 2026,4,LAC,AFC,AFC West,0,0
 2026,4,LV,AFC,AFC West,0,0
@@ -142,7 +142,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,5,HOU,AFC,AFC South,0,0
 2026,5,IND,AFC,AFC South,0,0
 2026,5,JAX,AFC,AFC South,0,0
-2026,5,KC,AFC,AFC West,0,0
+2026,5,KC,AFC,AFC West,-1.833333333,0
 2026,5,LA,NFC,NFC West,0,0
 2026,5,LAC,AFC,AFC West,0,0
 2026,5,LV,AFC,AFC West,0,0
@@ -174,7 +174,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,6,HOU,AFC,AFC South,0,0
 2026,6,IND,AFC,AFC South,0,0
 2026,6,JAX,AFC,AFC South,0,0
-2026,6,KC,AFC,AFC West,0,0
+2026,6,KC,AFC,AFC West,-1.666666667,0
 2026,6,LA,NFC,NFC West,0,0
 2026,6,LAC,AFC,AFC West,0,0
 2026,6,LV,AFC,AFC West,0,0
