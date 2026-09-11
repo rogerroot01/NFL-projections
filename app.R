@@ -814,7 +814,10 @@ ui <- fluidPage(
             "Markets",
             choices = c("Against the spread" = "spread", "Straight up" = "straight_up", "Over / under" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
             selected = c("spread", "straight_up", "total", "home_implied", "away_implied")
-          )
+          ),
+          tags$hr(),
+          downloadButton("dashboard_download", "Download consensus CSV", class = "btn-success"),
+          helpText("Exports the selected source, season, week, markets, consensus picks, projections, edges, and betting lines.")
         ),
         mainPanel(
           h4("Weekly dashboard"),
@@ -2435,6 +2438,86 @@ server <- function(input, output, session) {
       filter(season == selected_season, week == selected_week, market %in% markets)
   })
 
+  dashboard_export_rows <- reactive({
+    rows <- dashboard_filtered_rows()
+    if (nrow(rows) == 0) return(tibble())
+
+    source_key <- input$dashboard_source %||% "combined"
+    source_label <- recode(
+      source_key,
+      legacy = "Legacy consensus",
+      next_gen = "Next-gen consensus",
+      combined = "Combined consensus",
+      .default = source_key
+    )
+    line_source <- switch(
+      source_key,
+      legacy = input$cons_line_source %||% "closing",
+      next_gen = input$ng_cons_line_source %||% "closing",
+      combined = paste(unique(c(input$cons_line_source %||% "closing", input$ng_cons_line_source %||% "closing")), collapse = "+"),
+      NA_character_
+    )
+    injury_adjustment <- switch(
+      source_key,
+      legacy = input$cons_injury_source %||% "none",
+      next_gen = input$ng_cons_injury_source %||% "none",
+      combined = paste(unique(c(input$cons_injury_source %||% "none", input$ng_cons_injury_source %||% "none")), collapse = "+"),
+      NA_character_
+    )
+
+    rows %>%
+      mutate(
+        consensus_source = source_label,
+        line_source = line_source,
+        injury_adjustment = injury_adjustment,
+        matchup = paste(away_team, "@", home_team),
+        market_label = recode(
+          market,
+          spread = "Against the spread",
+          straight_up = "Straight up",
+          total = "Over / under",
+          home_implied = "Home implied",
+          away_implied = "Away implied",
+          .default = market
+        ),
+        agreement_pct = 100 * agree_pct,
+        result_status = case_when(
+          correct %in% TRUE ~ "Win",
+          correct %in% FALSE ~ "Loss",
+          !is.na(actual_result) ~ "Push",
+          TRUE ~ "Future"
+        )
+      ) %>%
+      select(
+        consensus_source,
+        line_source,
+        injury_adjustment,
+        game_id,
+        season,
+        week,
+        away_team,
+        home_team,
+        matchup,
+        market,
+        market_label,
+        consensus_pick,
+        spread_line,
+        total_line,
+        market_line,
+        avg_projection,
+        avg_edge,
+        agreement_pct,
+        projections,
+        models_used,
+        any_of(c("sources_used", "sources_used_count")),
+        actual_result,
+        actual_side,
+        result_status,
+        correct
+      ) %>%
+      arrange(market, desc(abs(avg_edge)), away_team, home_team)
+  })
+
   dashboard_table_for_market <- function(market_key) {
     rows <- dashboard_filtered_rows()
     source_rows <- dashboard_source_rows()
@@ -2537,6 +2620,23 @@ server <- function(input, output, session) {
   output$dashboard_total <- render_dashboard_market("total")
   output$dashboard_home_implied <- render_dashboard_market("home_implied")
   output$dashboard_away_implied <- render_dashboard_market("away_implied")
+
+  output$dashboard_download <- downloadHandler(
+    filename = function() {
+      source_key <- input$dashboard_source %||% "combined"
+      selected_season <- input$dashboard_season %||% "season"
+      selected_week <- input$dashboard_week %||% "week"
+      paste0(
+        "nfl_consensus_", source_key, "_", selected_season,
+        "_week_", selected_week, "_", Sys.Date(), ".csv"
+      )
+    },
+    content = function(file) {
+      rows <- dashboard_export_rows()
+      req(nrow(rows) > 0)
+      write_csv(rows, file)
+    }
+  )
 
   output$cons_summary <- renderTable({
     req(legacy_consensus_built())
