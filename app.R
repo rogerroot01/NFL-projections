@@ -36,7 +36,7 @@ tbl_col <- function(df, nm, default = NA) {
 
 game_injury_path <- file.path(app_data_dir, "hiddengame_injury_adjustments.csv")
 team_injury_2025_path <- file.path(app_data_dir, "hiddengame_team_injury_adjustments_2025.csv")
-future_team_injury_2026_path <- file.path(app_data_dir, "hiddengame_future_team_injury_adjustments_2026.csv")
+forecast_team_adjustments_2026_path <- file.path(app_data_dir, "forecast_team_off_def_injuries_2026.csv")
 
 game_injury_raw <- read_injury_csv(game_injury_path)
 game_injuries <- tibble(
@@ -57,14 +57,79 @@ team_injuries_2025 <- tibble(
   away_def_injury_adj = suppressWarnings(as.numeric(tbl_col(team_injury_2025_raw, "away_def_injury_adj")))
 )
 
-future_team_injury_2026_raw <- read_injury_csv(future_team_injury_2026_path)
-future_team_injuries_2026 <- tibble(
-  season = suppressWarnings(as.integer(tbl_col(future_team_injury_2026_raw, "season"))),
-  week = suppressWarnings(as.integer(tbl_col(future_team_injury_2026_raw, "week"))),
-  team = as.character(tbl_col(future_team_injury_2026_raw, "team")),
-  off_injury_adj = suppressWarnings(as.numeric(tbl_col(future_team_injury_2026_raw, "off_injury_adj"))),
-  def_injury_adj = suppressWarnings(as.numeric(tbl_col(future_team_injury_2026_raw, "def_injury_adj")))
+forecast_team_adjustments_2026_raw <- read_injury_csv(forecast_team_adjustments_2026_path)
+forecast_team_adjustments_2026 <- tibble(
+  season = suppressWarnings(as.integer(tbl_col(forecast_team_adjustments_2026_raw, "season"))),
+  week = suppressWarnings(as.integer(tbl_col(forecast_team_adjustments_2026_raw, "week"))),
+  home_team = toupper(trimws(as.character(tbl_col(forecast_team_adjustments_2026_raw, "home_team")))),
+  away_team = toupper(trimws(as.character(tbl_col(forecast_team_adjustments_2026_raw, "away_team")))),
+  future_home_off_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_off_injury_adj"))),
+  future_home_def_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_def_injury_adj"))),
+  future_away_off_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_off_injury_adj"))),
+  future_away_def_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_def_injury_adj"))),
+  home_adjust_amortization = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_adjust_amortization"))),
+  away_adjust_amortization = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_adjust_amortization")))
 )
+
+apply_projection_adjustments <- function(base, injury_source = "none", apply_amortization = FALSE) {
+  injury_enabled <- identical(injury_source, "apply")
+  amortization_enabled <- isTRUE(apply_amortization)
+  if (!injury_enabled && !amortization_enabled) {
+    return(base %>%
+      mutate(
+        spread_projection_adj = 0,
+        total_projection_adj = 0,
+        home_score_projection_adj = 0,
+        away_score_projection_adj = 0
+      ))
+  }
+
+  base %>%
+    left_join(game_injuries, by = "game_id") %>%
+    left_join(team_injuries_2025, by = "game_id") %>%
+    left_join(
+      forecast_team_adjustments_2026,
+      by = c("season", "week", "home_team", "away_team")
+    ) %>%
+    mutate(
+      home_score_injury_component = if (injury_enabled) {
+        coalesce(home_off_injury_adj, future_home_off_injury_adj, 0) +
+          coalesce(away_def_injury_adj, future_away_def_injury_adj, 0)
+      } else 0,
+      away_score_injury_component = if (injury_enabled) {
+        coalesce(away_off_injury_adj, future_away_off_injury_adj, 0) +
+          coalesce(home_def_injury_adj, future_home_def_injury_adj, 0)
+      } else 0,
+      spread_injury_component = if (injury_enabled) {
+        coalesce(injury_adj, home_score_injury_component - away_score_injury_component, 0)
+      } else 0,
+      home_score_amortization_component = if (amortization_enabled) coalesce(home_adjust_amortization, 0) else 0,
+      away_score_amortization_component = if (amortization_enabled) coalesce(away_adjust_amortization, 0) else 0,
+      home_score_projection_adj = home_score_injury_component + home_score_amortization_component,
+      away_score_projection_adj = away_score_injury_component + away_score_amortization_component,
+      spread_projection_adj = spread_injury_component + home_score_amortization_component - away_score_amortization_component,
+      total_projection_adj = home_score_injury_component + away_score_injury_component +
+        home_score_amortization_component + away_score_amortization_component
+    ) %>%
+    select(
+      -injury_adj,
+      -home_off_injury_adj,
+      -home_def_injury_adj,
+      -away_off_injury_adj,
+      -away_def_injury_adj,
+      -future_home_off_injury_adj,
+      -future_home_def_injury_adj,
+      -future_away_off_injury_adj,
+      -future_away_def_injury_adj,
+      -home_adjust_amortization,
+      -away_adjust_amortization,
+      -home_score_injury_component,
+      -away_score_injury_component,
+      -spread_injury_component,
+      -home_score_amortization_component,
+      -away_score_amortization_component
+    )
+}
 
 family_labels <- c(
   ScoresTrees = "Scores Trees",
@@ -661,6 +726,12 @@ ui <- fluidPage(
             choices = c("No injury adjustment" = "none", "Apply injury adjustments" = "apply"),
             selected = "none"
           ),
+          checkboxInput(
+            "cons_apply_amortization",
+            "Apply 2026 offseason amortization",
+            value = FALSE
+          ),
+          helpText("2026 source: Forecast Team Off Def Injuries (injuries H-K; amortization L-M)."),
           sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
           actionButton("cons_run", "Build consensus", class = "btn-primary"),
@@ -731,6 +802,12 @@ ui <- fluidPage(
             choices = c("No injury adjustment" = "none", "Apply injury adjustments" = "apply"),
             selected = "none"
           ),
+          checkboxInput(
+            "ng_cons_apply_amortization",
+            "Apply 2026 offseason amortization",
+            value = FALSE
+          ),
+          helpText("2026 source: Forecast Team Off Def Injuries (injuries H-K; amortization L-M)."),
           sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
           actionButton("ng_cons_run", "Build next-gen consensus", class = "btn-primary"),
@@ -1359,7 +1436,7 @@ server <- function(input, output, session) {
     }
   }
 
-  long_nextgen_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none", projection_sources = c("direct", "implied_team_scores")) {
+  long_nextgen_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none", apply_amortization = FALSE, projection_sources = c("direct", "implied_team_scores")) {
     df <- read_nextgen_model_file(meta$path)
     cols <- nextgen_projection_columns_for_market(df, market, projection_sources)
     if (length(cols) == 0) return(tibble())
@@ -1423,56 +1500,7 @@ server <- function(input, output, session) {
         ) %>%
         select(-early_spread_line, -early_total_line)
     }
-    if (identical(injury_source, "apply")) {
-      future_home_injuries <- future_team_injuries_2026 %>%
-        rename(
-          home_team = team,
-          future_home_off_injury_adj = off_injury_adj,
-          future_home_def_injury_adj = def_injury_adj
-        )
-      future_away_injuries <- future_team_injuries_2026 %>%
-        rename(
-          away_team = team,
-          future_away_off_injury_adj = off_injury_adj,
-          future_away_def_injury_adj = def_injury_adj
-        )
-
-      base <- base %>%
-        left_join(game_injuries, by = "game_id") %>%
-        left_join(team_injuries_2025, by = "game_id") %>%
-        left_join(future_home_injuries, by = c("season", "week", "home_team")) %>%
-        left_join(future_away_injuries, by = c("season", "week", "away_team")) %>%
-        mutate(
-          home_off_injury_adj = coalesce(home_off_injury_adj, future_home_off_injury_adj, 0),
-          home_def_injury_adj = coalesce(home_def_injury_adj, future_home_def_injury_adj, 0),
-          away_off_injury_adj = coalesce(away_off_injury_adj, future_away_off_injury_adj, 0),
-          away_def_injury_adj = coalesce(away_def_injury_adj, future_away_def_injury_adj, 0),
-          home_score_injury_adj = home_off_injury_adj + away_def_injury_adj,
-          away_score_injury_adj = away_off_injury_adj + home_def_injury_adj,
-          split_spread_injury_adj = home_score_injury_adj - away_score_injury_adj,
-          spread_injury_adj = coalesce(injury_adj, split_spread_injury_adj, 0),
-          total_injury_adj = home_score_injury_adj + away_score_injury_adj
-        ) %>%
-        select(
-          -injury_adj,
-          -home_off_injury_adj,
-          -home_def_injury_adj,
-          -away_off_injury_adj,
-          -away_def_injury_adj,
-          -future_home_off_injury_adj,
-          -future_home_def_injury_adj,
-          -future_away_off_injury_adj,
-          -future_away_def_injury_adj
-        )
-    } else {
-      base <- base %>%
-        mutate(
-          spread_injury_adj = 0,
-          total_injury_adj = 0,
-          home_score_injury_adj = 0,
-          away_score_injury_adj = 0
-        )
-    }
+    base <- apply_projection_adjustments(base, injury_source, apply_amortization)
 
     out <- map_dfr(cols, function(col) {
       model_score <- score_lookup %>% filter(projection_col == col) %>% dplyr::slice_head(n = 1)
@@ -1488,13 +1516,13 @@ server <- function(input, output, session) {
 
       pred <- suppressWarnings(as.numeric(df[[col]]))
       if (market %in% c("spread", "straight_up")) {
-        pred <- pred + base$spread_injury_adj
+        pred <- pred + base$spread_projection_adj
       } else if (market == "total") {
-        pred <- pred + base$total_injury_adj
+        pred <- pred + base$total_projection_adj
       } else if (market == "home_implied") {
-        pred <- pred + base$home_score_injury_adj
+        pred <- pred + base$home_score_projection_adj
       } else if (market == "away_implied") {
-        pred <- pred + base$away_score_injury_adj
+        pred <- pred + base$away_score_projection_adj
       }
 
       line <- nextgen_line_for_market(base, market)
@@ -1739,7 +1767,7 @@ server <- function(input, output, session) {
       )
   }
 
-  long_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none") {
+  long_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none", apply_amortization = FALSE) {
     df <- read_model_file(meta$path)
     cols <- projection_columns_for_market(df, market)
     if (length(cols) == 0) return(tibble())
@@ -1783,56 +1811,7 @@ server <- function(input, output, session) {
         ) %>%
         select(-early_spread_line, -early_total_line)
     }
-    if (identical(injury_source, "apply")) {
-      future_home_injuries <- future_team_injuries_2026 %>%
-        rename(
-          home_team = team,
-          future_home_off_injury_adj = off_injury_adj,
-          future_home_def_injury_adj = def_injury_adj
-        )
-      future_away_injuries <- future_team_injuries_2026 %>%
-        rename(
-          away_team = team,
-          future_away_off_injury_adj = off_injury_adj,
-          future_away_def_injury_adj = def_injury_adj
-        )
-
-      base <- base %>%
-        left_join(game_injuries, by = "game_id") %>%
-        left_join(team_injuries_2025, by = "game_id") %>%
-        left_join(future_home_injuries, by = c("season", "week", "home_team")) %>%
-        left_join(future_away_injuries, by = c("season", "week", "away_team")) %>%
-        mutate(
-          home_off_injury_adj = coalesce(home_off_injury_adj, future_home_off_injury_adj, 0),
-          home_def_injury_adj = coalesce(home_def_injury_adj, future_home_def_injury_adj, 0),
-          away_off_injury_adj = coalesce(away_off_injury_adj, future_away_off_injury_adj, 0),
-          away_def_injury_adj = coalesce(away_def_injury_adj, future_away_def_injury_adj, 0),
-          home_score_injury_adj = home_off_injury_adj + away_def_injury_adj,
-          away_score_injury_adj = away_off_injury_adj + home_def_injury_adj,
-          split_spread_injury_adj = home_score_injury_adj - away_score_injury_adj,
-          spread_injury_adj = coalesce(injury_adj, split_spread_injury_adj, 0),
-          total_injury_adj = home_score_injury_adj + away_score_injury_adj
-        ) %>%
-        select(
-          -injury_adj,
-          -home_off_injury_adj,
-          -home_def_injury_adj,
-          -away_off_injury_adj,
-          -away_def_injury_adj,
-          -future_home_off_injury_adj,
-          -future_home_def_injury_adj,
-          -future_away_off_injury_adj,
-          -future_away_def_injury_adj
-        )
-    } else {
-      base <- base %>%
-        mutate(
-          spread_injury_adj = 0,
-          total_injury_adj = 0,
-          home_score_injury_adj = 0,
-          away_score_injury_adj = 0
-        )
-    }
+    base <- apply_projection_adjustments(base, injury_source, apply_amortization)
 
     out <- map_dfr(cols, function(col) {
       model_score <- score_lookup %>% filter(projection_col == col) %>% dplyr::slice_head(n = 1)
@@ -1855,13 +1834,13 @@ server <- function(input, output, session) {
       if (market == "away_implied" && str_detect(split, "^home") && str_detect(col, "^(Score_|Score$|Score_final|ImpliedTeamScored)")) pred <- NA_real_
       if (market == "away_implied" && str_detect(split, "^away") && str_detect(col, "OppScore|ImpliedOppScored")) pred <- NA_real_
       if (market %in% c("spread", "straight_up")) {
-        pred <- pred + base$spread_injury_adj
+        pred <- pred + base$spread_projection_adj
       } else if (market == "total") {
-        pred <- pred + base$total_injury_adj
+        pred <- pred + base$total_projection_adj
       } else if (market == "home_implied") {
-        pred <- pred + base$home_score_injury_adj
+        pred <- pred + base$home_score_projection_adj
       } else if (market == "away_implied") {
-        pred <- pred + base$away_score_injury_adj
+        pred <- pred + base$away_score_projection_adj
       }
 
       line <- if (market == "spread") {
@@ -1919,6 +1898,7 @@ server <- function(input, output, session) {
     markets <- dashboard_market_keys
     line_source <- input$cons_line_source %||% "closing"
     injury_source <- input$cons_injury_source %||% "none"
+    apply_amortization <- isTRUE(input$cons_apply_amortization)
     min_agree <- (input$cons_agree %||% 50) / 100
     withProgress(message = "Building consensus, please wait...", value = 0, {
       selected_seasons <- unique(c(as.integer(input$cons_seasons %||% integer()), as.integer(input$cons_future_seasons %||% integer())))
@@ -1942,7 +1922,8 @@ server <- function(input, output, session) {
             market,
             min_win,
             line_source,
-            injury_source
+            injury_source,
+            apply_amortization
           )
         }) %>%
           mutate(market = .env$market)
@@ -2041,6 +2022,7 @@ server <- function(input, output, session) {
     markets <- dashboard_market_keys
     line_source <- input$ng_cons_line_source %||% "closing"
     injury_source <- input$ng_cons_injury_source %||% "none"
+    apply_amortization <- isTRUE(input$ng_cons_apply_amortization)
     min_agree <- (input$ng_cons_agree %||% 50) / 100
 
     withProgress(message = "Building next-gen consensus, please wait...", value = 0, {
@@ -2066,6 +2048,7 @@ server <- function(input, output, session) {
             min_win,
             line_source,
             injury_source,
+            apply_amortization,
             projection_sources
           )
         }) %>%
@@ -2464,12 +2447,20 @@ server <- function(input, output, session) {
       combined = paste(unique(c(input$cons_injury_source %||% "none", input$ng_cons_injury_source %||% "none")), collapse = "+"),
       NA_character_
     )
+    offseason_amortization <- switch(
+      source_key,
+      legacy = isTRUE(input$cons_apply_amortization),
+      next_gen = isTRUE(input$ng_cons_apply_amortization),
+      combined = paste(unique(c(isTRUE(input$cons_apply_amortization), isTRUE(input$ng_cons_apply_amortization))), collapse = "+"),
+      NA
+    )
 
     rows %>%
       mutate(
         consensus_source = source_label,
         line_source = line_source,
         injury_adjustment = injury_adjustment,
+        offseason_amortization = offseason_amortization,
         matchup = paste(away_team, "@", home_team),
         market_label = recode(
           market,
@@ -2492,6 +2483,7 @@ server <- function(input, output, session) {
         consensus_source,
         line_source,
         injury_adjustment,
+        offseason_amortization,
         game_id,
         season,
         week,
