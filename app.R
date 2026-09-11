@@ -732,6 +732,7 @@ ui <- fluidPage(
             value = FALSE
           ),
           helpText("2026 source: Forecast Team Off Def Injuries (injuries H-K; amortization L-M)."),
+          actionButton("cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
           actionButton("cons_run", "Build consensus", class = "btn-primary"),
@@ -808,6 +809,7 @@ ui <- fluidPage(
             value = FALSE
           ),
           helpText("2026 source: Forecast Team Off Def Injuries (injuries H-K; amortization L-M)."),
+          actionButton("ng_cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
           actionButton("ng_cons_run", "Build next-gen consensus", class = "btn-primary"),
@@ -926,6 +928,39 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
+  show_forecast_adjustments <- function() {
+    showModal(modalDialog(
+      title = "2026 forecast adjustments",
+      DTOutput("forecast_adjustments_preview"),
+      size = "l",
+      easyClose = TRUE,
+      footer = tagList(
+        downloadButton("forecast_adjustments_download", "Download CSV"),
+        modalButton("Close")
+      )
+    ))
+  }
+
+  observeEvent(input$cons_view_adjustments, show_forecast_adjustments(), ignoreInit = TRUE)
+  observeEvent(input$ng_cons_view_adjustments, show_forecast_adjustments(), ignoreInit = TRUE)
+
+  output$forecast_adjustments_preview <- renderDT({
+    if (nrow(forecast_team_adjustments_2026_raw) == 0) {
+      return(datatable(tibble(Message = "The deployed 2026 adjustment source is empty."), rownames = FALSE))
+    }
+    datatable(
+      forecast_team_adjustments_2026_raw,
+      rownames = FALSE,
+      filter = "top",
+      options = list(pageLength = 16, lengthMenu = c(16, 32, 64, 272), scrollX = TRUE)
+    )
+  })
+
+  output$forecast_adjustments_download <- downloadHandler(
+    filename = function() paste0("forecast_team_off_def_injuries_2026_", Sys.Date(), ".csv"),
+    content = function(file) write_csv(forecast_team_adjustments_2026_raw, file, na = "")
+  )
+
   bind_family <- function(id, family_key) {
     family_key_norm <- norm_key(family_key)
     target_label_norm <- norm_key(family_labels[[family_key]] %||% family_key)

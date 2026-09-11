@@ -58,10 +58,10 @@ if (any(adjustments$season != 2026, na.rm = TRUE)) {
 
 zero_if_na <- function(x) replace(x, is.na(x), 0)
 expected_home <- zero_if_na(adjustments$home_off_injury_adj) +
-  zero_if_na(adjustments$home_def_injury_adj) +
+  zero_if_na(adjustments$away_def_injury_adj) +
   zero_if_na(adjustments$home_adjust_amortization)
 expected_away <- zero_if_na(adjustments$away_off_injury_adj) +
-  zero_if_na(adjustments$away_def_injury_adj) +
+  zero_if_na(adjustments$home_def_injury_adj) +
   zero_if_na(adjustments$away_adjust_amortization)
 
 home_mismatch <- !is.na(adjustments$home_injury_adj) & abs(adjustments$home_injury_adj - expected_home) > 1e-6
