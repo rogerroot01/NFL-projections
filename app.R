@@ -10,6 +10,7 @@ library(DT)
 
 app_data_dir <- file.path(getwd(), "data")
 early_lines_path <- file.path(app_data_dir, "early_lines.csv")
+current_lines_path <- file.path(app_data_dir, "current_lines_2026.csv")
 
 early_lines <- if (file.exists(early_lines_path)) {
   read_csv(early_lines_path, show_col_types = FALSE) %>%
@@ -24,6 +25,41 @@ early_lines <- if (file.exists(early_lines_path)) {
     early_spread_line = numeric(),
     early_total_line = numeric()
   )
+}
+
+current_lines <- if (file.exists(current_lines_path)) {
+  read_csv(current_lines_path, show_col_types = FALSE) %>%
+    transmute(
+      game_id = as.character(.data[["game_id"]]),
+      current_spread_line = suppressWarnings(as.numeric(.data[["spread_line"]])),
+      current_total_line = suppressWarnings(as.numeric(.data[["total_line"]]))
+    ) %>%
+    distinct(game_id, .keep_all = TRUE)
+} else {
+  tibble(
+    game_id = character(),
+    current_spread_line = numeric(),
+    current_total_line = numeric()
+  )
+}
+
+apply_current_lines <- function(df) {
+  if (!is.data.frame(df) || nrow(df) == 0 || !"game_id" %in% names(df) || nrow(current_lines) == 0) {
+    return(df)
+  }
+
+  line_row <- match(as.character(df$game_id), current_lines$game_id)
+  if ("spread_line" %in% names(df)) {
+    replacement <- current_lines$current_spread_line[line_row]
+    replace_at <- !is.na(line_row) & !is.na(replacement)
+    df$spread_line[replace_at] <- replacement[replace_at]
+  }
+  if ("total_line" %in% names(df)) {
+    replacement <- current_lines$current_total_line[line_row]
+    replace_at <- !is.na(line_row) & !is.na(replacement)
+    df$total_line[replace_at] <- replacement[replace_at]
+  }
+  df
 }
 
 read_injury_csv <- function(path) {
@@ -269,7 +305,7 @@ cols_needed_for_file <- function(path) {
 
 read_model_file <- function(path) {
   nm <- basename(path)
-  if (nm %in% names(compact_models)) return(compact_models[[nm]])
+  if (nm %in% names(compact_models)) return(apply_current_lines(compact_models[[nm]]))
   stop("Compact prepared data is missing for ", nm, ". Run prepare_data.R locally and deploy data/compact_models.rds plus data/model_inventory.rds.")
 }
 
@@ -1315,7 +1351,7 @@ server <- function(input, output, session) {
 
   read_nextgen_model_file <- function(path) {
     nm <- basename(path)
-    if (nm %in% names(nextgen_compact_models)) return(nextgen_compact_models[[nm]])
+    if (nm %in% names(nextgen_compact_models)) return(apply_current_lines(nextgen_compact_models[[nm]]))
     stop("Next-gen compact prepared data is missing for ", nm, ". Run prepare_data_nextgen.R and deploy data/nextgen_compact_models.rds plus data/nextgen_model_inventory.rds.")
   }
 
