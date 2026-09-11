@@ -895,8 +895,14 @@ ui <- fluidPage(
             selected = c("spread", "straight_up", "total", "home_implied", "away_implied")
           ),
           tags$hr(),
-          downloadButton("dashboard_download", "Download consensus CSV", class = "btn-success"),
-          helpText("Exports the selected source, season, week, markets, consensus picks, projections, edges, and betting lines.")
+          h4("Downloads"),
+          downloadButton("dashboard_download", "Download selected markets", class = "btn-success btn-block"),
+          downloadButton("dashboard_download_spread", "Download against the spread", class = "btn-default btn-block"),
+          downloadButton("dashboard_download_straight_up", "Download straight up", class = "btn-default btn-block"),
+          downloadButton("dashboard_download_total", "Download total", class = "btn-default btn-block"),
+          downloadButton("dashboard_download_home_implied", "Download home implied", class = "btn-default btn-block"),
+          downloadButton("dashboard_download_away_implied", "Download away implied", class = "btn-default btn-block"),
+          helpText("Each CSV uses the selected consensus source, season, and week. A single-market filename ends with that market; a combined selection ends with multiple_markets.")
         ),
         mainPanel(
           h4("Weekly dashboard"),
@@ -2456,8 +2462,7 @@ server <- function(input, output, session) {
       filter(season == selected_season, week == selected_week, market %in% markets)
   })
 
-  dashboard_export_rows <- reactive({
-    rows <- dashboard_filtered_rows()
+  format_dashboard_export_rows <- function(rows) {
     if (nrow(rows) == 0) return(tibble())
 
     source_key <- input$dashboard_source %||% "combined"
@@ -2543,7 +2548,51 @@ server <- function(input, output, session) {
         correct
       ) %>%
       arrange(market, desc(abs(avg_edge)), away_team, home_team)
+  }
+
+  dashboard_export_rows <- reactive({
+    format_dashboard_export_rows(dashboard_filtered_rows())
   })
+
+  dashboard_export_rows_for_market <- function(market_key) {
+    rows <- dashboard_source_rows()
+    selected_season <- suppressWarnings(as.integer(input$dashboard_season))
+    selected_week <- suppressWarnings(as.integer(input$dashboard_week))
+    if (
+      nrow(rows) == 0 ||
+        length(selected_season) == 0 ||
+        length(selected_week) == 0 ||
+        is.na(selected_season) ||
+        is.na(selected_week)
+    ) {
+      return(tibble())
+    }
+
+    rows %>%
+      filter(
+        season == selected_season,
+        week == selected_week,
+        market == market_key
+      ) %>%
+      format_dashboard_export_rows()
+  }
+
+  dashboard_market_file_suffix <- function(markets) {
+    markets <- unique(markets %||% character())
+    if (length(markets) == 1) return(markets[[1]])
+    if (length(markets) > 1) return("multiple_markets")
+    "no_markets"
+  }
+
+  dashboard_download_filename <- function(market_suffix) {
+    source_key <- input$dashboard_source %||% "combined"
+    selected_season <- input$dashboard_season %||% "season"
+    selected_week <- input$dashboard_week %||% "week"
+    paste0(
+      "nfl_consensus_", source_key, "_", selected_season,
+      "_week_", selected_week, "_", Sys.Date(), "_", market_suffix, ".csv"
+    )
+  }
 
   dashboard_table_for_market <- function(market_key) {
     rows <- dashboard_filtered_rows()
@@ -2650,13 +2699,7 @@ server <- function(input, output, session) {
 
   output$dashboard_download <- downloadHandler(
     filename = function() {
-      source_key <- input$dashboard_source %||% "combined"
-      selected_season <- input$dashboard_season %||% "season"
-      selected_week <- input$dashboard_week %||% "week"
-      paste0(
-        "nfl_consensus_", source_key, "_", selected_season,
-        "_week_", selected_week, "_", Sys.Date(), ".csv"
-      )
+      dashboard_download_filename(dashboard_market_file_suffix(input$dashboard_markets))
     },
     content = function(file) {
       rows <- dashboard_export_rows()
@@ -2664,6 +2707,23 @@ server <- function(input, output, session) {
       write_csv(rows, file)
     }
   )
+
+  bind_dashboard_market_download <- function(output_id, market_key) {
+    output[[output_id]] <- downloadHandler(
+      filename = function() dashboard_download_filename(market_key),
+      content = function(file) {
+        rows <- dashboard_export_rows_for_market(market_key)
+        req(nrow(rows) > 0)
+        write_csv(rows, file)
+      }
+    )
+  }
+
+  bind_dashboard_market_download("dashboard_download_spread", "spread")
+  bind_dashboard_market_download("dashboard_download_straight_up", "straight_up")
+  bind_dashboard_market_download("dashboard_download_total", "total")
+  bind_dashboard_market_download("dashboard_download_home_implied", "home_implied")
+  bind_dashboard_market_download("dashboard_download_away_implied", "away_implied")
 
   output$cons_summary <- renderTable({
     req(legacy_consensus_built())
