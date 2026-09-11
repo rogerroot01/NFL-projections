@@ -905,6 +905,27 @@ server <- function(input, output, session) {
 
       if (nrow(summary_rows) == 0) return(tibble())
 
+      # Legacy spread and total predictions are game-level signals copied into
+      # both the home and away exports. Away spreads become exact copies after
+      # normalization to the home perspective. Keep every CSV for spreadsheet
+      # compatibility, but show each independent signal only once in the app.
+      # The two XGBoost tree families also export ImpliedScoreDiff_xgb as an
+      # exact alias of ScoreDiff_xgb_score.
+      summary_rows <- summary_rows %>%
+        mutate(
+          .signal_key = case_when(
+            market == "spread" & projection_col == "ImpliedScoreDiff_xgb" ~ "ScoreDiff_xgb_score",
+            market %in% c("spread", "total") ~ projection_col,
+            TRUE ~ paste(File, projection_col, sep = "::")
+          ),
+          .home_first = !str_detect(Split, "^home")
+        ) %>%
+        arrange(.home_first) %>%
+        group_by(Season, market, .signal_key) %>%
+        slice_head(n = 1) %>%
+        ungroup() %>%
+        select(-.signal_key, -.home_first)
+
       summary_rows <- mutate(summary_rows, WinPct = round(100 * win_pct, 1))
       summary_rows <- select(
         summary_rows,
@@ -1178,13 +1199,30 @@ server <- function(input, output, session) {
   }
 
   nextgen_prediction_cols <- function(df) {
+    family_suffix <- paste0("_(", paste(names(next_gen_family_labels), collapse = "|"), ")$")
     names(df)[
       str_detect(
         names(df),
         regex("^Score_|^HomeScore_|^AwayScore_|^OppScore_|^ScoreTotal_|^TotalScore_|^ScoreDiff_|^HomeMargin_", TRUE)
       ) &
+        str_detect(names(df), regex(family_suffix, TRUE)) &
         !str_detect(names(df), regex("^Cover_|_target|_cover$|_pm1$", TRUE))
     ]
+  }
+
+  dedupe_exact_prediction_cols <- function(df, cols, tolerance = 1e-12) {
+    kept <- character()
+    for (col in cols) {
+      candidate <- suppressWarnings(as.numeric(df[[col]]))
+      is_duplicate <- any(vapply(kept, function(existing) {
+        prior <- suppressWarnings(as.numeric(df[[existing]]))
+        if (length(candidate) != length(prior) || !identical(is.na(candidate), is.na(prior))) return(FALSE)
+        complete <- !is.na(candidate)
+        !any(complete) || max(abs(candidate[complete] - prior[complete])) <= tolerance
+      }, logical(1)))
+      if (!is_duplicate) kept <- c(kept, col)
+    }
+    kept
   }
 
   nextgen_projection_source <- function(cols) {
@@ -1220,7 +1258,8 @@ server <- function(input, output, session) {
     } else {
       character()
     }
-    nextgen_filter_projection_sources(market_cols, market, projection_sources)
+    market_cols <- nextgen_filter_projection_sources(market_cols, market, projection_sources)
+    dedupe_exact_prediction_cols(df, market_cols)
   }
 
   nextgen_cover_market <- function(col) {
@@ -1245,7 +1284,7 @@ server <- function(input, output, session) {
   detect_nextgen_cover_summary <- function(df) {
     cover_cols <- grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE)
     if (length(cover_cols) == 0) return(tibble())
-    purrr::map_dfr(cover_cols, function(col) {
+    out <- purrr::map_dfr(cover_cols, function(col) {
       vals <- suppressWarnings(as.numeric(df[[col]]))
       proj <- nextgen_projection_candidates_for_cover(col)
       proj <- proj[proj %in% names(df)][1] %||% NA_character_
@@ -1260,6 +1299,18 @@ server <- function(input, output, session) {
         win_pct = ifelse(picks > 0, wins / picks, NA_real_)
       )
     })
+    if (nrow(out) == 0) return(out)
+
+    # If direct and team-score-derived projections are numerically identical,
+    # keep the first canonical result instead of reporting/scoring it twice.
+    out %>%
+      group_by(market) %>%
+      group_modify(~ {
+        candidates <- unique(stats::na.omit(.x$projection_col))
+        keep <- dedupe_exact_prediction_cols(df, candidates)
+        filter(.x, is.na(projection_col) | projection_col %in% keep)
+      }) %>%
+      ungroup()
   }
 
   historical_nextgen_model_scores <- function(market) {
@@ -1603,7 +1654,11 @@ server <- function(input, output, session) {
       market <- input[[paste0(id, "_market")]] %||% "all"
       rows <- pmap_dfr(files, function(path, file, season, framework, sample, family, family_label) {
         df <- read_nextgen_model_file(path)
-        cols <- if (identical(market, "all")) nextgen_prediction_cols(df) else nextgen_projection_columns_for_market(df, market)
+        cols <- if (identical(market, "all")) {
+          dedupe_exact_prediction_cols(df, nextgen_prediction_cols(df))
+        } else {
+          nextgen_projection_columns_for_market(df, market)
+        }
         cols <- cols[cols %in% names(df)]
         cols <- cols[vapply(df[cols], function(x) any(!is.na(x)), logical(1))]
         if (length(cols) == 0) return(tibble())
@@ -1894,6 +1949,23 @@ server <- function(input, output, session) {
         consensus_status("No projections passed the current selections.")
         return(tibble())
       }
+
+      # Do not let duplicated legacy home/away exports or XGBoost aliases count
+      # as separate votes. Home/away team-score markets remain distinct.
+      long <- long %>%
+        mutate(
+          .signal_key = case_when(
+            market %in% c("spread", "straight_up") & projection_col == "ImpliedScoreDiff_xgb" ~ "ScoreDiff_xgb_score",
+            market %in% c("spread", "straight_up", "total") ~ projection_col,
+            TRUE ~ paste(file, projection_col, sep = "::")
+          ),
+          .home_first = !str_detect(split, "^home")
+        ) %>%
+        arrange(.home_first) %>%
+        group_by(game_id, season, week, market, family, .signal_key) %>%
+        slice_head(n = 1) %>%
+        ungroup() %>%
+        select(-.signal_key, -.home_first)
 
       incProgress(0.7, detail = "Averaging model signals")
       rows <- long %>%

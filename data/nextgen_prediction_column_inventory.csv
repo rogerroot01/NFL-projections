@@ -1,13 +1,4 @@
 File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRows,MissingRows,AllMissing
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,score_diff,163,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,score_diff_sum,351,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,score_diff_opp,525,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,score_diff_diff,713,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,score_diff_x_opp,887,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,home_implied,1099,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,away_implied,1100,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,posteam_implied,1101,275,0,FALSE
-2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,defteam_implied,1102,275,0,FALSE
 2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,Score_decision_tree_rpart,1119,275,0,FALSE
 2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,HomeScore_decision_tree_rpart,1126,275,0,FALSE
 2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,OppScore_decision_tree_rpart,1127,275,0,FALSE
@@ -19,15 +10,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,PredictedScore_decision_tree_rpart,1151,275,0,FALSE
 2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,HomeMargin_ImpliedFromTeamScores_decision_tree_rpart,1152,275,0,FALSE
 2024_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Decision Tree,TotalScore_ImpliedFromTeamScores_decision_tree_rpart,1153,275,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,score_diff,163,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,score_diff_sum,351,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,score_diff_opp,525,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,score_diff_diff,713,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,score_diff_x_opp,887,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,home_implied,1099,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,away_implied,1100,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,posteam_implied,1101,269,0,FALSE
-2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,defteam_implied,1102,269,0,FALSE
 2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,Score_decision_tree_rpart,1119,269,0,FALSE
 2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,HomeScore_decision_tree_rpart,1126,269,0,FALSE
 2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,OppScore_decision_tree_rpart,1127,269,0,FALSE
@@ -39,15 +21,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,PredictedScore_decision_tree_rpart,1151,269,0,FALSE
 2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,HomeMargin_ImpliedFromTeamScores_decision_tree_rpart,1152,269,0,FALSE
 2025_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Decision Tree,TotalScore_ImpliedFromTeamScores_decision_tree_rpart,1153,269,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,score_diff,163,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,score_diff_sum,351,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,score_diff_opp,525,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,score_diff_diff,713,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,score_diff_x_opp,887,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,home_implied,1099,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,away_implied,1100,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,posteam_implied,1101,272,0,FALSE
-2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,defteam_implied,1102,272,0,FALSE
 2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,Score_decision_tree_rpart,1119,272,0,FALSE
 2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,HomeScore_decision_tree_rpart,1126,272,0,FALSE
 2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,OppScore_decision_tree_rpart,1127,272,0,FALSE
@@ -59,15 +32,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,PredictedScore_decision_tree_rpart,1151,272,0,FALSE
 2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,HomeMargin_ImpliedFromTeamScores_decision_tree_rpart,1152,272,0,FALSE
 2026_decision_tree_rpart_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Decision Tree,TotalScore_ImpliedFromTeamScores_decision_tree_rpart,1153,272,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,score_diff,163,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,score_diff_sum,351,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,score_diff_opp,525,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,score_diff_diff,713,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,score_diff_x_opp,887,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,home_implied,1099,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,away_implied,1100,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,posteam_implied,1101,275,0,FALSE
-2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,defteam_implied,1102,275,0,FALSE
 2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,Score_elastic_net_lasso,1119,275,0,FALSE
 2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,HomeScore_elastic_net_lasso,1126,275,0,FALSE
 2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,OppScore_elastic_net_lasso,1127,275,0,FALSE
@@ -79,15 +43,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,PredictedScore_elastic_net_lasso,1151,275,0,FALSE
 2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,HomeMargin_ImpliedFromTeamScores_elastic_net_lasso,1152,275,0,FALSE
 2024_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Elastic Net Lasso,TotalScore_ImpliedFromTeamScores_elastic_net_lasso,1153,275,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,score_diff,163,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,score_diff_sum,351,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,score_diff_opp,525,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,score_diff_diff,713,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,score_diff_x_opp,887,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,home_implied,1099,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,away_implied,1100,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,posteam_implied,1101,269,0,FALSE
-2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,defteam_implied,1102,269,0,FALSE
 2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,Score_elastic_net_lasso,1119,269,0,FALSE
 2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,HomeScore_elastic_net_lasso,1126,269,0,FALSE
 2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,OppScore_elastic_net_lasso,1127,269,0,FALSE
@@ -99,15 +54,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,PredictedScore_elastic_net_lasso,1151,269,0,FALSE
 2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,HomeMargin_ImpliedFromTeamScores_elastic_net_lasso,1152,269,0,FALSE
 2025_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Elastic Net Lasso,TotalScore_ImpliedFromTeamScores_elastic_net_lasso,1153,269,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,score_diff,163,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,score_diff_sum,351,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,score_diff_opp,525,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,score_diff_diff,713,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,score_diff_x_opp,887,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,home_implied,1099,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,away_implied,1100,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,posteam_implied,1101,272,0,FALSE
-2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,defteam_implied,1102,272,0,FALSE
 2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,Score_elastic_net_lasso,1119,272,0,FALSE
 2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,HomeScore_elastic_net_lasso,1126,272,0,FALSE
 2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,OppScore_elastic_net_lasso,1127,272,0,FALSE
@@ -119,15 +65,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,PredictedScore_elastic_net_lasso,1151,272,0,FALSE
 2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,HomeMargin_ImpliedFromTeamScores_elastic_net_lasso,1152,272,0,FALSE
 2026_elastic_net_lasso_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Elastic Net Lasso,TotalScore_ImpliedFromTeamScores_elastic_net_lasso,1153,272,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,score_diff,163,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,score_diff_sum,351,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,score_diff_opp,525,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,score_diff_diff,713,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,score_diff_x_opp,887,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,home_implied,1099,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,away_implied,1100,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,posteam_implied,1101,275,0,FALSE
-2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,defteam_implied,1102,275,0,FALSE
 2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,Score_gbm_boosted_trees,1119,275,0,FALSE
 2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,HomeScore_gbm_boosted_trees,1126,275,0,FALSE
 2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,OppScore_gbm_boosted_trees,1127,275,0,FALSE
@@ -139,15 +76,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,PredictedScore_gbm_boosted_trees,1151,275,0,FALSE
 2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,HomeMargin_ImpliedFromTeamScores_gbm_boosted_trees,1152,275,0,FALSE
 2024_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,GBM Boosted Trees,TotalScore_ImpliedFromTeamScores_gbm_boosted_trees,1153,275,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,score_diff,163,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,score_diff_sum,351,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,score_diff_opp,525,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,score_diff_diff,713,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,score_diff_x_opp,887,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,home_implied,1099,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,away_implied,1100,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,posteam_implied,1101,269,0,FALSE
-2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,defteam_implied,1102,269,0,FALSE
 2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,Score_gbm_boosted_trees,1119,269,0,FALSE
 2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,HomeScore_gbm_boosted_trees,1126,269,0,FALSE
 2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,OppScore_gbm_boosted_trees,1127,269,0,FALSE
@@ -159,15 +87,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,PredictedScore_gbm_boosted_trees,1151,269,0,FALSE
 2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,HomeMargin_ImpliedFromTeamScores_gbm_boosted_trees,1152,269,0,FALSE
 2025_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,GBM Boosted Trees,TotalScore_ImpliedFromTeamScores_gbm_boosted_trees,1153,269,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,score_diff,163,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,score_diff_sum,351,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,score_diff_opp,525,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,score_diff_diff,713,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,score_diff_x_opp,887,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,home_implied,1099,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,away_implied,1100,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,posteam_implied,1101,272,0,FALSE
-2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,defteam_implied,1102,272,0,FALSE
 2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,Score_gbm_boosted_trees,1119,272,0,FALSE
 2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,HomeScore_gbm_boosted_trees,1126,272,0,FALSE
 2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,OppScore_gbm_boosted_trees,1127,272,0,FALSE
@@ -179,15 +98,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,PredictedScore_gbm_boosted_trees,1151,272,0,FALSE
 2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,HomeMargin_ImpliedFromTeamScores_gbm_boosted_trees,1152,272,0,FALSE
 2026_gbm_boosted_trees_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,GBM Boosted Trees,TotalScore_ImpliedFromTeamScores_gbm_boosted_trees,1153,272,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,score_diff,163,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,score_diff_sum,351,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,score_diff_opp,525,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,score_diff_diff,713,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,score_diff_x_opp,887,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,home_implied,1099,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,away_implied,1100,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,posteam_implied,1101,275,0,FALSE
-2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,defteam_implied,1102,275,0,FALSE
 2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,Score_random_forest_ranger,1119,275,0,FALSE
 2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,HomeScore_random_forest_ranger,1126,275,0,FALSE
 2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,OppScore_random_forest_ranger,1127,275,0,FALSE
@@ -199,15 +109,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,PredictedScore_random_forest_ranger,1151,275,0,FALSE
 2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,HomeMargin_ImpliedFromTeamScores_random_forest_ranger,1152,275,0,FALSE
 2024_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Random Forest,TotalScore_ImpliedFromTeamScores_random_forest_ranger,1153,275,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,score_diff,163,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,score_diff_sum,351,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,score_diff_opp,525,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,score_diff_diff,713,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,score_diff_x_opp,887,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,home_implied,1099,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,away_implied,1100,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,posteam_implied,1101,269,0,FALSE
-2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,defteam_implied,1102,269,0,FALSE
 2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,Score_random_forest_ranger,1119,269,0,FALSE
 2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,HomeScore_random_forest_ranger,1126,269,0,FALSE
 2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,OppScore_random_forest_ranger,1127,269,0,FALSE
@@ -219,15 +120,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,PredictedScore_random_forest_ranger,1151,269,0,FALSE
 2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,HomeMargin_ImpliedFromTeamScores_random_forest_ranger,1152,269,0,FALSE
 2025_random_forest_ranger_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Random Forest,TotalScore_ImpliedFromTeamScores_random_forest_ranger,1153,269,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,score_diff,163,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,score_diff_sum,351,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,score_diff_opp,525,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,score_diff_diff,713,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,score_diff_x_opp,887,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,home_implied,1099,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,away_implied,1100,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,posteam_implied,1101,272,0,FALSE
-2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,defteam_implied,1102,272,0,FALSE
 2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,Score_random_forest_ranger,1119,272,0,FALSE
 2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,HomeScore_random_forest_ranger,1126,272,0,FALSE
 2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,OppScore_random_forest_ranger,1127,272,0,FALSE
@@ -239,15 +131,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,PredictedScore_random_forest_ranger,1151,272,0,FALSE
 2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,HomeMargin_ImpliedFromTeamScores_random_forest_ranger,1152,272,0,FALSE
 2026_random_forest_ranger_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Random Forest,TotalScore_ImpliedFromTeamScores_random_forest_ranger,1153,272,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,score_diff,163,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,score_diff_sum,351,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,score_diff_opp,525,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,score_diff_diff,713,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,score_diff_x_opp,887,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,home_implied,1099,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,away_implied,1100,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,posteam_implied,1101,275,0,FALSE
-2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,defteam_implied,1102,275,0,FALSE
 2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,Score_weighted_linear_regression,1119,275,0,FALSE
 2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,HomeScore_weighted_linear_regression,1126,275,0,FALSE
 2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,OppScore_weighted_linear_regression,1127,275,0,FALSE
@@ -259,15 +142,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,PredictedScore_weighted_linear_regression,1151,275,0,FALSE
 2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,HomeMargin_ImpliedFromTeamScores_weighted_linear_regression,1152,275,0,FALSE
 2024_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,Weighted Linear Regression,TotalScore_ImpliedFromTeamScores_weighted_linear_regression,1153,275,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,score_diff,163,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,score_diff_sum,351,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,score_diff_opp,525,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,score_diff_diff,713,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,score_diff_x_opp,887,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,home_implied,1099,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,away_implied,1100,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,posteam_implied,1101,269,0,FALSE
-2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,defteam_implied,1102,269,0,FALSE
 2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,Score_weighted_linear_regression,1119,269,0,FALSE
 2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,HomeScore_weighted_linear_regression,1126,269,0,FALSE
 2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,OppScore_weighted_linear_regression,1127,269,0,FALSE
@@ -279,15 +153,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,PredictedScore_weighted_linear_regression,1151,269,0,FALSE
 2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,HomeMargin_ImpliedFromTeamScores_weighted_linear_regression,1152,269,0,FALSE
 2025_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,Weighted Linear Regression,TotalScore_ImpliedFromTeamScores_weighted_linear_regression,1153,269,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,score_diff,163,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,score_diff_sum,351,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,score_diff_opp,525,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,score_diff_diff,713,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,score_diff_x_opp,887,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,home_implied,1099,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,away_implied,1100,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,posteam_implied,1101,272,0,FALSE
-2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,defteam_implied,1102,272,0,FALSE
 2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,Score_weighted_linear_regression,1119,256,16,FALSE
 2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,HomeScore_weighted_linear_regression,1126,256,16,FALSE
 2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,OppScore_weighted_linear_regression,1127,256,16,FALSE
@@ -299,15 +164,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,PredictedScore_weighted_linear_regression,1151,0,272,TRUE
 2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,HomeMargin_ImpliedFromTeamScores_weighted_linear_regression,1152,256,16,FALSE
 2026_weighted_linear_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,Weighted Linear Regression,TotalScore_ImpliedFromTeamScores_weighted_linear_regression,1153,256,16,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,score_diff,163,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,score_diff_sum,351,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,score_diff_opp,525,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,score_diff_diff,713,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,score_diff_x_opp,887,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,home_implied,1099,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,away_implied,1100,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,posteam_implied,1101,275,0,FALSE
-2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,defteam_implied,1102,275,0,FALSE
 2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,Score_xgboost_regression,1119,275,0,FALSE
 2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,HomeScore_xgboost_regression,1126,275,0,FALSE
 2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,OppScore_xgboost_regression,1127,275,0,FALSE
@@ -319,15 +175,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,PredictedScore_xgboost_regression,1151,275,0,FALSE
 2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,HomeMargin_ImpliedFromTeamScores_xgboost_regression,1152,275,0,FALSE
 2024_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2024,early,test,XGBoost Regression,TotalScore_ImpliedFromTeamScores_xgboost_regression,1153,275,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,score_diff,163,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,score_diff_sum,351,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,score_diff_opp,525,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,score_diff_diff,713,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,score_diff_x_opp,887,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,home_implied,1099,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,away_implied,1100,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,posteam_implied,1101,269,0,FALSE
-2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,defteam_implied,1102,269,0,FALSE
 2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,Score_xgboost_regression,1119,269,0,FALSE
 2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,HomeScore_xgboost_regression,1126,269,0,FALSE
 2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,OppScore_xgboost_regression,1127,269,0,FALSE
@@ -339,15 +186,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,PredictedScore_xgboost_regression,1151,269,0,FALSE
 2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,HomeMargin_ImpliedFromTeamScores_xgboost_regression,1152,269,0,FALSE
 2025_xgboost_regression_early_FINAL_MODEL_legacy_wide_test.csv,2025,early,test,XGBoost Regression,TotalScore_ImpliedFromTeamScores_xgboost_regression,1153,269,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,score_diff,163,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,score_diff_sum,351,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,score_diff_opp,525,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,score_diff_diff,713,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,score_diff_x_opp,887,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,home_implied,1099,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,away_implied,1100,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,posteam_implied,1101,272,0,FALSE
-2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,defteam_implied,1102,272,0,FALSE
 2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,Score_xgboost_regression,1119,272,0,FALSE
 2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,HomeScore_xgboost_regression,1126,272,0,FALSE
 2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,OppScore_xgboost_regression,1127,272,0,FALSE
@@ -359,15 +197,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,PredictedScore_xgboost_regression,1151,272,0,FALSE
 2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,HomeMargin_ImpliedFromTeamScores_xgboost_regression,1152,272,0,FALSE
 2026_xgboost_regression_early_FINAL_MODEL_legacy_wide_val.csv,2026,early,val,XGBoost Regression,TotalScore_ImpliedFromTeamScores_xgboost_regression,1153,272,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,score_diff,163,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,score_diff_sum,351,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,score_diff_opp,525,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,score_diff_diff,713,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,score_diff_x_opp,887,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,home_implied,1099,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,away_implied,1100,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,posteam_implied,1101,275,0,FALSE
-2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,defteam_implied,1102,275,0,FALSE
 2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,Score_decision_tree_rpart,1119,275,0,FALSE
 2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,HomeScore_decision_tree_rpart,1126,275,0,FALSE
 2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,OppScore_decision_tree_rpart,1127,275,0,FALSE
@@ -379,15 +208,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,PredictedScore_decision_tree_rpart,1151,275,0,FALSE
 2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,HomeMargin_ImpliedFromTeamScores_decision_tree_rpart,1152,275,0,FALSE
 2024_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Decision Tree,TotalScore_ImpliedFromTeamScores_decision_tree_rpart,1153,275,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,score_diff,163,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,score_diff_sum,351,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,score_diff_opp,525,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,score_diff_diff,713,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,score_diff_x_opp,887,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,home_implied,1099,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,away_implied,1100,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,posteam_implied,1101,269,0,FALSE
-2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,defteam_implied,1102,269,0,FALSE
 2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,Score_decision_tree_rpart,1119,269,0,FALSE
 2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,HomeScore_decision_tree_rpart,1126,269,0,FALSE
 2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,OppScore_decision_tree_rpart,1127,269,0,FALSE
@@ -399,15 +219,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,PredictedScore_decision_tree_rpart,1151,269,0,FALSE
 2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,HomeMargin_ImpliedFromTeamScores_decision_tree_rpart,1152,269,0,FALSE
 2025_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Decision Tree,TotalScore_ImpliedFromTeamScores_decision_tree_rpart,1153,269,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,score_diff,163,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,score_diff_sum,351,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,score_diff_opp,525,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,score_diff_diff,713,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,score_diff_x_opp,887,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,home_implied,1099,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,away_implied,1100,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,posteam_implied,1101,272,0,FALSE
-2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,defteam_implied,1102,272,0,FALSE
 2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,Score_decision_tree_rpart,1119,272,0,FALSE
 2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,HomeScore_decision_tree_rpart,1126,272,0,FALSE
 2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,OppScore_decision_tree_rpart,1127,272,0,FALSE
@@ -419,15 +230,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,PredictedScore_decision_tree_rpart,1151,272,0,FALSE
 2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,HomeMargin_ImpliedFromTeamScores_decision_tree_rpart,1152,272,0,FALSE
 2026_decision_tree_rpart_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Decision Tree,TotalScore_ImpliedFromTeamScores_decision_tree_rpart,1153,272,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,score_diff,163,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,score_diff_sum,351,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,score_diff_opp,525,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,score_diff_diff,713,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,score_diff_x_opp,887,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,home_implied,1099,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,away_implied,1100,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,posteam_implied,1101,275,0,FALSE
-2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,defteam_implied,1102,275,0,FALSE
 2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,Score_elastic_net_lasso,1119,275,0,FALSE
 2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,HomeScore_elastic_net_lasso,1126,275,0,FALSE
 2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,OppScore_elastic_net_lasso,1127,275,0,FALSE
@@ -439,15 +241,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,PredictedScore_elastic_net_lasso,1151,275,0,FALSE
 2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,HomeMargin_ImpliedFromTeamScores_elastic_net_lasso,1152,275,0,FALSE
 2024_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Elastic Net Lasso,TotalScore_ImpliedFromTeamScores_elastic_net_lasso,1153,275,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,score_diff,163,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,score_diff_sum,351,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,score_diff_opp,525,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,score_diff_diff,713,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,score_diff_x_opp,887,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,home_implied,1099,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,away_implied,1100,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,posteam_implied,1101,269,0,FALSE
-2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,defteam_implied,1102,269,0,FALSE
 2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,Score_elastic_net_lasso,1119,269,0,FALSE
 2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,HomeScore_elastic_net_lasso,1126,269,0,FALSE
 2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,OppScore_elastic_net_lasso,1127,269,0,FALSE
@@ -459,15 +252,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,PredictedScore_elastic_net_lasso,1151,269,0,FALSE
 2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,HomeMargin_ImpliedFromTeamScores_elastic_net_lasso,1152,269,0,FALSE
 2025_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Elastic Net Lasso,TotalScore_ImpliedFromTeamScores_elastic_net_lasso,1153,269,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,score_diff,163,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,score_diff_sum,351,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,score_diff_opp,525,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,score_diff_diff,713,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,score_diff_x_opp,887,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,home_implied,1099,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,away_implied,1100,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,posteam_implied,1101,272,0,FALSE
-2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,defteam_implied,1102,272,0,FALSE
 2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,Score_elastic_net_lasso,1119,272,0,FALSE
 2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,HomeScore_elastic_net_lasso,1126,272,0,FALSE
 2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,OppScore_elastic_net_lasso,1127,272,0,FALSE
@@ -479,15 +263,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,PredictedScore_elastic_net_lasso,1151,272,0,FALSE
 2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,HomeMargin_ImpliedFromTeamScores_elastic_net_lasso,1152,272,0,FALSE
 2026_elastic_net_lasso_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Elastic Net Lasso,TotalScore_ImpliedFromTeamScores_elastic_net_lasso,1153,272,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,score_diff,163,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,score_diff_sum,351,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,score_diff_opp,525,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,score_diff_diff,713,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,score_diff_x_opp,887,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,home_implied,1099,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,away_implied,1100,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,posteam_implied,1101,275,0,FALSE
-2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,defteam_implied,1102,275,0,FALSE
 2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,Score_gbm_boosted_trees,1119,275,0,FALSE
 2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,HomeScore_gbm_boosted_trees,1126,275,0,FALSE
 2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,OppScore_gbm_boosted_trees,1127,275,0,FALSE
@@ -499,15 +274,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,PredictedScore_gbm_boosted_trees,1151,275,0,FALSE
 2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,HomeMargin_ImpliedFromTeamScores_gbm_boosted_trees,1152,275,0,FALSE
 2024_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,GBM Boosted Trees,TotalScore_ImpliedFromTeamScores_gbm_boosted_trees,1153,275,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,score_diff,163,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,score_diff_sum,351,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,score_diff_opp,525,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,score_diff_diff,713,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,score_diff_x_opp,887,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,home_implied,1099,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,away_implied,1100,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,posteam_implied,1101,269,0,FALSE
-2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,defteam_implied,1102,269,0,FALSE
 2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,Score_gbm_boosted_trees,1119,269,0,FALSE
 2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,HomeScore_gbm_boosted_trees,1126,269,0,FALSE
 2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,OppScore_gbm_boosted_trees,1127,269,0,FALSE
@@ -519,15 +285,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,PredictedScore_gbm_boosted_trees,1151,269,0,FALSE
 2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,HomeMargin_ImpliedFromTeamScores_gbm_boosted_trees,1152,269,0,FALSE
 2025_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,GBM Boosted Trees,TotalScore_ImpliedFromTeamScores_gbm_boosted_trees,1153,269,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,score_diff,163,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,score_diff_sum,351,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,score_diff_opp,525,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,score_diff_diff,713,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,score_diff_x_opp,887,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,home_implied,1099,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,away_implied,1100,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,posteam_implied,1101,272,0,FALSE
-2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,defteam_implied,1102,272,0,FALSE
 2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,Score_gbm_boosted_trees,1119,272,0,FALSE
 2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,HomeScore_gbm_boosted_trees,1126,272,0,FALSE
 2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,OppScore_gbm_boosted_trees,1127,272,0,FALSE
@@ -539,15 +296,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,PredictedScore_gbm_boosted_trees,1151,272,0,FALSE
 2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,HomeMargin_ImpliedFromTeamScores_gbm_boosted_trees,1152,272,0,FALSE
 2026_gbm_boosted_trees_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,GBM Boosted Trees,TotalScore_ImpliedFromTeamScores_gbm_boosted_trees,1153,272,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,score_diff,163,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,score_diff_sum,351,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,score_diff_opp,525,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,score_diff_diff,713,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,score_diff_x_opp,887,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,home_implied,1099,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,away_implied,1100,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,posteam_implied,1101,275,0,FALSE
-2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,defteam_implied,1102,275,0,FALSE
 2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,Score_random_forest_ranger,1119,275,0,FALSE
 2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,HomeScore_random_forest_ranger,1126,275,0,FALSE
 2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,OppScore_random_forest_ranger,1127,275,0,FALSE
@@ -559,15 +307,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,PredictedScore_random_forest_ranger,1151,275,0,FALSE
 2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,HomeMargin_ImpliedFromTeamScores_random_forest_ranger,1152,275,0,FALSE
 2024_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Random Forest,TotalScore_ImpliedFromTeamScores_random_forest_ranger,1153,275,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,score_diff,163,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,score_diff_sum,351,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,score_diff_opp,525,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,score_diff_diff,713,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,score_diff_x_opp,887,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,home_implied,1099,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,away_implied,1100,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,posteam_implied,1101,269,0,FALSE
-2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,defteam_implied,1102,269,0,FALSE
 2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,Score_random_forest_ranger,1119,269,0,FALSE
 2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,HomeScore_random_forest_ranger,1126,269,0,FALSE
 2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,OppScore_random_forest_ranger,1127,269,0,FALSE
@@ -579,15 +318,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,PredictedScore_random_forest_ranger,1151,269,0,FALSE
 2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,HomeMargin_ImpliedFromTeamScores_random_forest_ranger,1152,269,0,FALSE
 2025_random_forest_ranger_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Random Forest,TotalScore_ImpliedFromTeamScores_random_forest_ranger,1153,269,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,score_diff,163,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,score_diff_sum,351,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,score_diff_opp,525,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,score_diff_diff,713,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,score_diff_x_opp,887,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,home_implied,1099,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,away_implied,1100,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,posteam_implied,1101,272,0,FALSE
-2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,defteam_implied,1102,272,0,FALSE
 2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,Score_random_forest_ranger,1119,272,0,FALSE
 2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,HomeScore_random_forest_ranger,1126,272,0,FALSE
 2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,OppScore_random_forest_ranger,1127,272,0,FALSE
@@ -599,15 +329,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,PredictedScore_random_forest_ranger,1151,272,0,FALSE
 2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,HomeMargin_ImpliedFromTeamScores_random_forest_ranger,1152,272,0,FALSE
 2026_random_forest_ranger_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Random Forest,TotalScore_ImpliedFromTeamScores_random_forest_ranger,1153,272,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,score_diff,163,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,score_diff_sum,351,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,score_diff_opp,525,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,score_diff_diff,713,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,score_diff_x_opp,887,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,home_implied,1099,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,away_implied,1100,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,posteam_implied,1101,275,0,FALSE
-2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,defteam_implied,1102,275,0,FALSE
 2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,Score_weighted_linear_regression,1119,275,0,FALSE
 2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,HomeScore_weighted_linear_regression,1126,275,0,FALSE
 2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,OppScore_weighted_linear_regression,1127,275,0,FALSE
@@ -619,15 +340,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,PredictedScore_weighted_linear_regression,1151,275,0,FALSE
 2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,HomeMargin_ImpliedFromTeamScores_weighted_linear_regression,1152,275,0,FALSE
 2024_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,Weighted Linear Regression,TotalScore_ImpliedFromTeamScores_weighted_linear_regression,1153,275,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,score_diff,163,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,score_diff_sum,351,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,score_diff_opp,525,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,score_diff_diff,713,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,score_diff_x_opp,887,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,home_implied,1099,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,away_implied,1100,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,posteam_implied,1101,269,0,FALSE
-2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,defteam_implied,1102,269,0,FALSE
 2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,Score_weighted_linear_regression,1119,269,0,FALSE
 2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,HomeScore_weighted_linear_regression,1126,269,0,FALSE
 2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,OppScore_weighted_linear_regression,1127,269,0,FALSE
@@ -639,15 +351,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,PredictedScore_weighted_linear_regression,1151,269,0,FALSE
 2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,HomeMargin_ImpliedFromTeamScores_weighted_linear_regression,1152,269,0,FALSE
 2025_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,Weighted Linear Regression,TotalScore_ImpliedFromTeamScores_weighted_linear_regression,1153,269,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,score_diff,163,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,score_diff_sum,351,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,score_diff_opp,525,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,score_diff_diff,713,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,score_diff_x_opp,887,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,home_implied,1099,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,away_implied,1100,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,posteam_implied,1101,272,0,FALSE
-2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,defteam_implied,1102,272,0,FALSE
 2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,Score_weighted_linear_regression,1119,256,16,FALSE
 2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,HomeScore_weighted_linear_regression,1126,256,16,FALSE
 2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,OppScore_weighted_linear_regression,1127,256,16,FALSE
@@ -659,15 +362,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,PredictedScore_weighted_linear_regression,1151,0,272,TRUE
 2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,HomeMargin_ImpliedFromTeamScores_weighted_linear_regression,1152,256,16,FALSE
 2026_weighted_linear_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,Weighted Linear Regression,TotalScore_ImpliedFromTeamScores_weighted_linear_regression,1153,256,16,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,score_diff,163,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,score_diff_sum,351,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,score_diff_opp,525,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,score_diff_diff,713,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,score_diff_x_opp,887,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,home_implied,1099,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,away_implied,1100,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,posteam_implied,1101,275,0,FALSE
-2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,defteam_implied,1102,275,0,FALSE
 2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,Score_xgboost_regression,1119,275,0,FALSE
 2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,HomeScore_xgboost_regression,1126,275,0,FALSE
 2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,OppScore_xgboost_regression,1127,275,0,FALSE
@@ -679,15 +373,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,PredictedScore_xgboost_regression,1151,275,0,FALSE
 2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,HomeMargin_ImpliedFromTeamScores_xgboost_regression,1152,275,0,FALSE
 2024_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2024,late,test,XGBoost Regression,TotalScore_ImpliedFromTeamScores_xgboost_regression,1153,275,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,score_diff,163,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,score_diff_sum,351,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,score_diff_opp,525,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,score_diff_diff,713,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,score_diff_x_opp,887,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,home_implied,1099,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,away_implied,1100,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,posteam_implied,1101,269,0,FALSE
-2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,defteam_implied,1102,269,0,FALSE
 2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,Score_xgboost_regression,1119,269,0,FALSE
 2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,HomeScore_xgboost_regression,1126,269,0,FALSE
 2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,OppScore_xgboost_regression,1127,269,0,FALSE
@@ -699,15 +384,6 @@ File,Season,Framework,Sample,Family,PredictionColumn,ColumnPosition,NonMissingRo
 2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,PredictedScore_xgboost_regression,1151,269,0,FALSE
 2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,HomeMargin_ImpliedFromTeamScores_xgboost_regression,1152,269,0,FALSE
 2025_xgboost_regression_late_FINAL_MODEL_legacy_wide_test.csv,2025,late,test,XGBoost Regression,TotalScore_ImpliedFromTeamScores_xgboost_regression,1153,269,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,score_diff,163,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,score_diff_sum,351,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,score_diff_opp,525,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,score_diff_diff,713,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,score_diff_x_opp,887,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,home_implied,1099,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,away_implied,1100,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,posteam_implied,1101,272,0,FALSE
-2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,defteam_implied,1102,272,0,FALSE
 2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,Score_xgboost_regression,1119,272,0,FALSE
 2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,HomeScore_xgboost_regression,1126,272,0,FALSE
 2026_xgboost_regression_late_FINAL_MODEL_legacy_wide_val.csv,2026,late,val,XGBoost Regression,OppScore_xgboost_regression,1127,272,0,FALSE
