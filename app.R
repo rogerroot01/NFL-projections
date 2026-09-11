@@ -62,6 +62,14 @@ apply_current_lines <- function(df) {
   df
 }
 
+apply_consensus_edge_threshold <- function(rows, minimum_edge = 2) {
+  if (!is.data.frame(rows) || nrow(rows) == 0 || !"avg_edge" %in% names(rows)) return(rows)
+  threshold <- suppressWarnings(as.numeric(minimum_edge))
+  if (length(threshold) == 0 || !is.finite(threshold[[1L]])) threshold <- 2
+  threshold <- max(0, threshold[[1L]])
+  rows[!is.na(rows$avg_edge) & abs(rows$avg_edge) >= threshold, , drop = FALSE]
+}
+
 read_injury_csv <- function(path) {
   if (file.exists(path)) read_csv(path, show_col_types = FALSE) else tibble()
 }
@@ -894,6 +902,7 @@ ui <- fluidPage(
             selected = "spread"
           ),
           sliderInput("overall_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
+          sliderInput("overall_cons_min_edge", "Minimum edge", min = 0, max = 10, value = 2, step = 0.5, post = " pts"),
           actionButton("overall_cons_run", "Build combined consensus", class = "btn-primary")
         ),
         mainPanel(
@@ -2223,6 +2232,7 @@ server <- function(input, output, session) {
     sources <- input$overall_cons_sources %||% c("legacy", "next_gen")
     markets <- dashboard_market_keys
     min_agree <- (input$overall_cons_agree %||% 50) / 100
+    min_edge <- input$overall_cons_min_edge %||% 2
     require_all_sources <- isTRUE(input$overall_cons_require_all_sources %||% TRUE)
     required_source_labels <- c(
       if ("legacy" %in% sources) "Legacy",
@@ -2303,12 +2313,14 @@ server <- function(input, output, session) {
       select(-positive_source_picks, -negative_source_picks, -source_pick_count, -positive_avg_projection, -negative_avg_projection) %>%
       filter(!require_all_sources | sources_used_count == length(required_source_labels)) %>%
       filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
+      apply_consensus_edge_threshold(min_edge) %>%
       arrange(market, season, week, game_id)
 
     overall_consensus_status(paste0(
       "Complete. Built ", nrow(rows), " combined consensus rows across ", length(markets),
       " markets from ", paste(unique(source_rows$source), collapse = " + "),
       ". Source rule: ", if (require_all_sources) "intersection (every selected source must qualify)." else "union (any selected source may qualify).",
+      " Minimum edge: ", format(as.numeric(min_edge), trim = TRUE), " points.",
       " Use the Market dropdown to view one market at a time, or the Dashboard to view them together."
     ))
     rows
