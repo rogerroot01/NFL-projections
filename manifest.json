@@ -89,6 +89,34 @@
         "Archs": "x64"
       }
     },
+    "askpass": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "askpass",
+        "Type": "Package",
+        "Title": "Password Entry Utilities for R, Git, and SSH",
+        "Version": "1.2.1",
+        "Authors@R": "person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), \n    email = \"jeroenooms@gmail.com\", comment = c(ORCID = \"0000-0002-4035-0289\"))",
+        "Description": "Cross-platform utilities for prompting the user for credentials or a \n    passphrase, for example to authenticate with a server or read a protected key.\n    Includes native programs for MacOS and Windows, hence no 'tcltk' is required. \n    Password entry can be invoked in two different ways: directly from R via the \n    askpass() function, or indirectly as password-entry back-end for 'ssh-agent' \n    or 'git-credential' via the SSH_ASKPASS and GIT_ASKPASS environment variables.\n    Thereby the user can be prompted for credentials or a passphrase if needed \n    when R calls out to git or ssh.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://r-lib.r-universe.dev/askpass",
+        "BugReports": "https://github.com/r-lib/askpass/issues",
+        "Encoding": "UTF-8",
+        "Imports": "sys (>= 2.1)",
+        "RoxygenNote": "7.2.3",
+        "Suggests": "testthat",
+        "Language": "en-US",
+        "NeedsCompilation": "yes",
+        "Packaged": "2024-10-03 14:12:09 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2024-10-04 07:20:03 UTC",
+        "Built": "R 4.4.2; x86_64-w64-mingw32; 2024-12-06 02:27:58 UTC; windows",
+        "Archs": "x64"
+      }
+    },
     "base64enc": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -424,6 +452,36 @@
         "Repository": "CRAN",
         "Date/Publication": "2023-11-23 08:50:07 UTC",
         "Built": "R 4.4.2; ; 2024-12-21 02:44:54 UTC; windows"
+      }
+    },
+    "curl": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "curl",
+        "Type": "Package",
+        "Title": "A Modern and Flexible Web Client for R",
+        "Version": "7.1.0",
+        "Authors@R": "c(\n    person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), email = \"jeroenooms@gmail.com\",\n      comment = c(ORCID = \"0000-0002-4035-0289\")),\n    person(\"Hadley\", \"Wickham\", role = \"ctb\"),\n    person(\"Posit Software, PBC\", role = \"cph\"))",
+        "Description": "Bindings to 'libcurl' <https://curl.se/libcurl/> for performing fully\n    configurable HTTP/FTP requests where responses can be processed in memory, on\n    disk, or streaming via the callback or connection interfaces. Some knowledge\n    of 'libcurl' is recommended; for a more-user-friendly web client see the \n    'httr2' package which builds on this package with http specific tools and logic.",
+        "License": "MIT + file LICENSE",
+        "SystemRequirements": "libcurl (>= 7.73): libcurl-devel (rpm) or\nlibcurl4-openssl-dev (deb)",
+        "URL": "https://jeroen.r-universe.dev/curl",
+        "BugReports": "https://github.com/jeroen/curl/issues",
+        "Suggests": "spelling, testthat (>= 1.0.0), knitr, jsonlite, later,\nrmarkdown, httpuv (>= 1.4.4), webutils",
+        "VignetteBuilder": "knitr",
+        "Depends": "R (>= 3.0.0)",
+        "RoxygenNote": "7.3.2",
+        "Encoding": "UTF-8",
+        "Language": "en-US",
+        "NeedsCompilation": "yes",
+        "Packaged": "2026-04-21 14:47:54 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (ORCID: <https://orcid.org/0000-0002-4035-0289>),\n  Hadley Wickham [ctb],\n  Posit Software, PBC [cph]",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2026-04-22 09:40:02 UTC",
+        "Built": "R 4.4.3; x86_64-w64-mingw32; 2026-04-23 11:49:59 UTC; windows",
+        "Archs": "x64"
       }
     },
     "digest": {
@@ -1003,6 +1061,37 @@
         "Built": "R 4.4.3; ; 2026-04-22 01:53:00 UTC; windows"
       }
     },
+    "magick": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "magick",
+        "Type": "Package",
+        "Title": "Advanced Graphics and Image-Processing in R",
+        "Version": "2.8.5",
+        "Authors@R": "person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), email = \"jeroenooms@gmail.com\",\n    comment = c(ORCID = \"0000-0002-4035-0289\"))",
+        "Description": "Bindings to 'ImageMagick': the most comprehensive open-source image\n    processing library available. Supports many common formats (png, jpeg, tiff,\n    pdf, etc) and manipulations (rotate, scale, crop, trim, flip, blur, etc).\n    All operations are vectorized via the Magick++ STL meaning they operate either\n    on a single frame or a series of frames for working with layers, collages,\n    or animation. In RStudio images are automatically previewed when printed to\n    the console, resulting in an interactive editing environment. The latest \n    version of the package includes a native graphics device for creating \n    in-memory graphics or drawing onto images using pixel coordinates.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://docs.ropensci.org/magick/\nhttps://ropensci.r-universe.dev/magick",
+        "BugReports": "https://github.com/ropensci/magick/issues",
+        "SystemRequirements": "ImageMagick++: ImageMagick-c++-devel (rpm) or\nlibmagick++-dev (deb)",
+        "VignetteBuilder": "knitr",
+        "Imports": "Rcpp (>= 0.12.12), magrittr, curl",
+        "LinkingTo": "Rcpp",
+        "Suggests": "av (>= 0.3), spelling, jsonlite, methods, knitr, rmarkdown,\nrsvg, webp, pdftools, ggplot2, gapminder, IRdisplay, tesseract\n(>= 2.0), gifski",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.3.2",
+        "Language": "en-US",
+        "NeedsCompilation": "yes",
+        "Packaged": "2024-09-19 16:13:03 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2024-09-20 08:40:10 UTC",
+        "Built": "R 4.4.2; x86_64-w64-mingw32; 2024-12-08 01:30:11 UTC; windows",
+        "Archs": "x64"
+      }
+    },
     "magrittr": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -1081,6 +1170,35 @@
         "Repository": "CRAN",
         "Date/Publication": "2021-09-28 05:00:05 UTC",
         "Built": "R 4.4.0; x86_64-w64-mingw32; 2024-04-23 00:24:00 UTC; windows",
+        "Archs": "x64"
+      }
+    },
+    "pdftools": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "pdftools",
+        "Type": "Package",
+        "Title": "Text Extraction, Rendering and Converting of PDF Documents",
+        "Version": "3.9.1",
+        "Authors@R": "person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), email = \"jeroenooms@gmail.com\",\n      comment = c(ORCID = \"0000-0002-4035-0289\"))",
+        "Description": "Utilities based on 'libpoppler' <https://poppler.freedesktop.org> for extracting\n    text, fonts, attachments and metadata from a PDF file. Also supports high quality rendering\n    of PDF documents into PNG, JPEG, TIFF format, or into raw bitmap vectors for further \n    processing in R.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://ropensci.r-universe.dev/pdftools,\nhttps://docs.ropensci.org/pdftools/",
+        "BugReports": "https://github.com/ropensci/pdftools/issues",
+        "SystemRequirements": "Poppler C++ API: libpoppler-cpp-dev (deb) or\npoppler-cpp-devel (rpm), and poppler-data (rpm/deb) package.",
+        "Encoding": "UTF-8",
+        "Imports": "Rcpp (>= 0.12.12), qpdf",
+        "LinkingTo": "Rcpp",
+        "Suggests": "png, webp, tesseract, testthat",
+        "RoxygenNote": "7.3.2",
+        "NeedsCompilation": "yes",
+        "Packaged": "2026-09-01 09:12:49 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (ORCID: <https://orcid.org/0000-0002-4035-0289>)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2026-09-01 10:20:02 UTC",
+        "Built": "R 4.4.2; x86_64-w64-mingw32; 2026-09-13 17:26:52 UTC; windows",
         "Archs": "x64"
       }
     },
@@ -1256,6 +1374,35 @@
         "Repository": "CRAN",
         "Date/Publication": "2026-01-09 10:30:02 UTC",
         "Built": "R 4.4.3; x86_64-w64-mingw32; 2026-03-12 15:42:43 UTC; windows",
+        "Archs": "x64"
+      }
+    },
+    "qpdf": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "qpdf",
+        "Type": "Package",
+        "Title": "Split, Combine and Compress PDF Files",
+        "Version": "1.4.1",
+        "Authors@R": "c(person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), \n    email = \"jeroenooms@gmail.com\", comment = c(ORCID = \"0000-0002-4035-0289\")),\n        person(\"Ben\", \"Raymond\", role = \"ctb\"),\n        person(\"Jay Berkenbilt\", role = \"cph\", comment = \"Author of libqpdf\"))",
+        "Description": "Content-preserving transformations transformations of PDF files such \n    as split, combine, and compress. This package interfaces directly to the 'qpdf' \n    C++ library <https://qpdf.sourceforge.io/> and does not require any command \n    line utilities. Note that 'qpdf' does not read actual content from PDF files: \n    to extract text and data you need the 'pdftools' package.",
+        "License": "Apache License 2.0",
+        "URL": "https://docs.ropensci.org/qpdf/\nhttps://ropensci.r-universe.dev/qpdf",
+        "BugReports": "https://github.com/ropensci/qpdf/issues",
+        "Encoding": "UTF-8",
+        "Imports": "Rcpp, askpass, curl",
+        "LinkingTo": "Rcpp",
+        "RoxygenNote": "7.2.1",
+        "Suggests": "testthat",
+        "SystemRequirements": "libjpeg",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-06-30 11:12:14 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (ORCID: <https://orcid.org/0000-0002-4035-0289>),\n  Ben Raymond [ctb],\n  Jay Berkenbilt [cph] (Author of libqpdf)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2025-07-02 09:40:02 UTC",
+        "Built": "R 4.4.3; x86_64-w64-mingw32; 2026-04-22 01:54:02 UTC; windows",
         "Archs": "x64"
       }
     },
@@ -1584,6 +1731,64 @@
         "Repository": "CRAN",
         "Date/Publication": "2023-11-14 23:10:02 UTC",
         "Built": "R 4.4.2; ; 2024-12-06 02:59:40 UTC; windows"
+      }
+    },
+    "sys": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "sys",
+        "Type": "Package",
+        "Title": "Powerful and Reliable Tools for Running System Commands in R",
+        "Version": "3.4.3",
+        "Authors@R": "c(person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), \n      email = \"jeroenooms@gmail.com\", comment = c(ORCID = \"0000-0002-4035-0289\")),\n    person(\"Gábor\", \"Csárdi\", , \"csardi.gabor@gmail.com\", role = \"ctb\"))",
+        "Description": "Drop-in replacements for the base system2() function with fine control\n    and consistent behavior across platforms. Supports clean interruption, timeout, \n    background tasks, and streaming STDIN / STDOUT / STDERR over binary or text \n    connections. Arguments on Windows automatically get encoded and quoted to work \n    on different locales.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://jeroen.r-universe.dev/sys",
+        "BugReports": "https://github.com/jeroen/sys/issues",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.1.1",
+        "Suggests": "unix (>= 1.4), spelling, testthat",
+        "Language": "en-US",
+        "NeedsCompilation": "yes",
+        "Packaged": "2024-10-03 14:13:17 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>),\n  Gábor Csárdi [ctb]",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2024-10-04 09:40:02 UTC",
+        "Built": "R 4.4.2; x86_64-w64-mingw32; 2024-12-06 01:45:14 UTC; windows",
+        "Archs": "x64"
+      }
+    },
+    "tesseract": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "tesseract",
+        "Type": "Package",
+        "Title": "Open Source OCR Engine",
+        "Version": "5.3.1",
+        "Authors@R": "person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), email = \"jeroenooms@gmail.com\",\n    comment = c(ORCID = \"0000-0002-4035-0289\"))",
+        "Description": "Bindings to 'Tesseract': \n     a powerful optical character recognition (OCR) engine that supports over 100 languages.\n     The engine is highly configurable in order to tune the detection algorithms and\n     obtain the best possible results.",
+        "License": "Apache License 2.0",
+        "URL": "https://docs.ropensci.org/tesseract/\nhttps://ropensci.r-universe.dev/tesseract",
+        "BugReports": "https://github.com/ropensci/tesseract/issues",
+        "SystemRequirements": "Tesseract >= 3.03 (libtesseract-dev /\ntesseract-devel) and Leptonica (libleptonica-dev /\nleptonica-devel). On Debian you need to install the English\ntraining data separately (tesseract-ocr-eng)",
+        "Imports": "Rcpp (>= 0.12.12), pdftools (>= 1.5), curl, rappdirs, digest",
+        "LinkingTo": "Rcpp",
+        "RoxygenNote": "7.3.3",
+        "Suggests": "magick (>= 1.7), spelling, knitr, tibble, rmarkdown",
+        "Encoding": "UTF-8",
+        "VignetteBuilder": "knitr",
+        "Language": "en-US",
+        "NeedsCompilation": "yes",
+        "Packaged": "2026-09-12 09:25:37 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (ORCID: <https://orcid.org/0000-0002-4035-0289>)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2026-09-12 09:40:02 UTC",
+        "Built": "R 4.4.2; x86_64-w64-mingw32; 2026-09-13 17:27:33 UTC; windows",
+        "Archs": "x64"
       }
     },
     "tibble": {
@@ -1943,7 +2148,10 @@
   },
   "files": {
     "app.R": {
-      "checksum": "b1ef60273d1c1a7d666308369104af2f"
+      "checksum": "71a86be0b17cb26825ac8924631d147f"
+    },
+    "data/circa_million_2026_week_1.csv": {
+      "checksum": "2ecf611daf37604024c4f8b3e90f7e80"
     },
     "data/compact_models.rds": {
       "checksum": "c57e093f4545b6e525420de588183e22"
@@ -1955,7 +2163,7 @@
       "checksum": "f377de48ff466fb95d57e0629c13496d"
     },
     "data/forecast_team_off_def_injuries_2026.csv": {
-      "checksum": "7abd671544dc2f0f0be016175a6970b6"
+      "checksum": "a4ab88f7de566e56d52b440f4fbe6c43"
     },
     "data/hiddengame_future_team_injury_adjustments_2026.csv": {
       "checksum": "ecfa12fd2a2fb122727c33dd8eb65ae2"
@@ -1988,7 +2196,7 @@
       "checksum": "9be48a958b699cbb4e582eff265b8975"
     },
     "refresh_forecast_adjustments.R": {
-      "checksum": "0f635c04a969b6f97f50d626a6f320ee"
+      "checksum": "007d57d1559944865faedbb5c51acbab"
     },
     "www/ensemble-icon.png": {
       "checksum": "33e48f584eb62b03fa6b1a88519156e6"

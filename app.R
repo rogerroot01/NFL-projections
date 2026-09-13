@@ -226,6 +226,241 @@ market_labels <- c(
 market_choices <- stats::setNames(names(market_labels), market_labels)
 dashboard_market_keys <- c("spread", "straight_up", "total", "home_implied", "away_implied")
 
+circa_team_aliases <- c(
+  CARDINALS = "ARI", FALCONS = "ATL", RAVENS = "BAL", BILLS = "BUF",
+  PANTHERS = "CAR", BEARS = "CHI", BENGALS = "CIN", BROWNS = "CLE",
+  COWBOYS = "DAL", BRONCOS = "DEN", LIONS = "DET", PACKERS = "GB",
+  TEXANS = "HOU", COLTS = "IND", JAGUARS = "JAX", CHIEFS = "KC",
+  RAIDERS = "LV", CHARGERS = "LAC", RAMS = "LA", DOLPHINS = "MIA",
+  VIKINGS = "MIN", PATRIOTS = "NE", SAINTS = "NO", GIANTS = "NYG",
+  JETS = "NYJ", EAGLES = "PHI", STEELERS = "PIT", `49ERS` = "SF",
+  SEAHAWKS = "SEA", BUCS = "TB", TITANS = "TEN", COMMANDERS = "WAS"
+)
+
+circa_normalize_team <- function(x) {
+  key <- toupper(gsub("[^A-Z0-9]", "", trimws(as.character(x))))
+  mapped <- unname(circa_team_aliases[key])
+  ifelse(!is.na(mapped), mapped, key)
+}
+
+circa_parse_ocr_spread <- function(token) {
+  token <- as.character(token %||% "")
+  cleaned <- token
+  for (code_point in c(0x2212, 0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D)) {
+    cleaned <- str_replace_all(cleaned, fixed(intToUtf8(code_point)), "-")
+  }
+  upper <- toupper(cleaned)
+  if (str_detect(upper, "PK|PICK")) return(0)
+
+  sign <- case_when(
+    str_detect(upper, fixed("+")) ~ 1,
+    str_detect(upper, fixed("-")) ~ -1,
+    TRUE ~ NA_real_
+  )
+  if (is.na(sign)) return(NA_real_)
+
+  digits <- str_extract(upper, "[0-9]+")
+  whole <- suppressWarnings(as.numeric(digits))
+  if (is.na(whole) && str_detect(upper, "A")) whole <- 4
+  half_mark <- str_detect(upper, "[%HVY,]") | str_detect(upper, fixed(intToUtf8(0x00BD)))
+  if (is.na(whole) && half_mark) whole <- 0
+  if (is.na(whole)) return(NA_real_)
+  sign * (whole + ifelse(half_mark, 0.5, 0))
+}
+
+validate_circa_lines <- function(rows) {
+  required <- c("contest", "season", "week", "game_id", "away_team", "home_team", "circa_away_line", "circa_home_line")
+  missing <- setdiff(required, names(rows))
+  if (length(missing) > 0) stop("Circa lines are missing: ", paste(missing, collapse = ", "))
+  if (nrow(rows) == 0) stop("No Circa matchups were found.")
+  if (any(is.na(rows$circa_away_line)) || any(is.na(rows$circa_home_line))) stop("At least one Circa spread could not be read.")
+  if (any(abs(rows$circa_away_line + rows$circa_home_line) > 0.001)) stop("At least one Circa matchup has non-opposite spreads.")
+  teams <- c(rows$away_team, rows$home_team)
+  if (any(is.na(teams) | teams == "") || anyDuplicated(teams)) stop("Each team must appear exactly once on the Circa weekly sheet.")
+  rows
+}
+
+read_circa_lines_csv <- function(path, default_season = 2026L, default_week = 1L) {
+  raw <- read_csv(path, show_col_types = FALSE)
+  find_col <- function(options) {
+    found <- intersect(options, names(raw))
+    if (length(found) == 0) NULL else found[[1L]]
+  }
+  away_team_col <- find_col(c("away_team", "away", "visitor_team", "visitor"))
+  home_team_col <- find_col(c("home_team", "home"))
+  away_line_col <- find_col(c("circa_away_line", "away_line", "away_spread", "visitor_line"))
+  home_line_col <- find_col(c("circa_home_line", "home_line", "home_spread"))
+  if (is.null(away_team_col) || is.null(home_team_col)) stop("CSV must include away_team and home_team columns.")
+  if (is.null(away_line_col) && is.null(home_line_col)) stop("CSV must include a Circa spread column for at least one team.")
+
+  season <- if ("season" %in% names(raw)) suppressWarnings(as.integer(raw$season)) else rep(as.integer(default_season), nrow(raw))
+  week <- if ("week" %in% names(raw)) suppressWarnings(as.integer(raw$week)) else rep(as.integer(default_week), nrow(raw))
+  away_line <- if (!is.null(away_line_col)) suppressWarnings(as.numeric(raw[[away_line_col]])) else -suppressWarnings(as.numeric(raw[[home_line_col]]))
+  home_line <- if (!is.null(home_line_col)) suppressWarnings(as.numeric(raw[[home_line_col]])) else -away_line
+  rows <- tibble(
+    contest = if ("contest" %in% names(raw)) as.character(raw$contest) else "Circa Sports Million",
+    season = season,
+    week = week,
+    away_team = circa_normalize_team(raw[[away_team_col]]),
+    home_team = circa_normalize_team(raw[[home_team_col]]),
+    circa_away_line = away_line,
+    circa_home_line = home_line
+  ) %>%
+    mutate(
+      game_id = if ("game_id" %in% names(raw)) as.character(raw$game_id) else paste(season, week, away_team, home_team, sep = "_")
+    ) %>%
+    select(contest, season, week, game_id, away_team, home_team, circa_away_line, circa_home_line)
+  validate_circa_lines(rows)
+}
+
+parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
+  needed <- c("pdftools", "tesseract", "magick")
+  missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(missing) > 0) stop("PDF import requires: ", paste(missing, collapse = ", "), ". A CSV upload is also supported.")
+
+  png_pattern <- file.path(tempdir(), paste0("circa-", as.integer(Sys.time()), "-%d.png"))
+  png_files <- pdftools::pdf_convert(path, format = "png", dpi = 300, pages = 1, filenames = png_pattern, verbose = FALSE)
+  on.exit(unlink(png_files, force = TRUE), add = TRUE)
+  image <- magick::image_read(png_files[[1L]])
+  image_width <- magick::image_info(image)$width[[1L]]
+  ocr <- tesseract::ocr_data(image, engine = tesseract::tesseract(options = list(tessedit_pageseg_mode = 11)))
+  bbox <- str_split_fixed(as.character(ocr$bbox), ",", 4)
+  words <- tibble(
+    word = as.character(ocr$word),
+    x1 = suppressWarnings(as.numeric(bbox[, 1])),
+    y1 = suppressWarnings(as.numeric(bbox[, 2])),
+    x2 = suppressWarnings(as.numeric(bbox[, 3])),
+    y2 = suppressWarnings(as.numeric(bbox[, 4]))
+  ) %>%
+    mutate(x = (x1 + x2) / 2, y = (y1 + y2) / 2, x_ratio = x / image_width, key = toupper(gsub("[^A-Z0-9]", "", word)))
+
+  team_rows <- words %>%
+    filter(key %in% names(circa_team_aliases)) %>%
+    transmute(team = unname(circa_team_aliases[key]), y, side = ifelse(x_ratio < 0.5, "left", "right")) %>%
+    distinct(team, .keep_all = TRUE)
+  side_counts <- table(team_rows$side)
+  if (nrow(team_rows) < 2 || nrow(team_rows) %% 2 != 0 || any(side_counts %% 2 != 0) || n_distinct(team_rows$team) != nrow(team_rows)) {
+    stop("The PDF import did not find a valid set of paired NFL matchups. Upload the official one-page Circa sheet or use CSV.")
+  }
+
+  odds_words <- words %>%
+    filter(x_ratio > 0.35, x_ratio < 0.86) %>%
+    mutate(parsed_line = map_dbl(word, circa_parse_ocr_spread))
+
+  attach_line <- function(team, y, side) {
+    candidates <- odds_words %>%
+      filter(abs(.data$y - !!y) <= 36) %>%
+      filter(if (side == "left") x_ratio > 0.36 & x_ratio < 0.48 else x_ratio > 0.74 & x_ratio < 0.86) %>%
+      arrange(abs(.data$y - !!y))
+    if (nrow(candidates) == 0) return(NA_real_)
+    non_missing <- candidates$parsed_line[!is.na(candidates$parsed_line)]
+    if (length(non_missing) == 0) NA_real_ else non_missing[[1L]]
+  }
+
+  ordered <- team_rows %>%
+    arrange(side, y) %>%
+    group_by(side) %>%
+    mutate(row_in_column = row_number(), game_in_column = ceiling(row_in_column / 2), team_role = ifelse(row_in_column %% 2 == 1, "away", "home")) %>%
+    ungroup() %>%
+    rowwise() %>%
+    mutate(parsed_line = attach_line(team, y, side)) %>%
+    ungroup()
+
+  games <- ordered %>%
+    group_by(side, game_in_column) %>%
+    summarise(
+      away_team = team[team_role == "away"][[1L]],
+      home_team = team[team_role == "home"][[1L]],
+      parsed_away = parsed_line[team_role == "away"][[1L]],
+      parsed_home = parsed_line[team_role == "home"][[1L]],
+      .groups = "drop"
+    ) %>%
+    rowwise() %>%
+    mutate(
+      magnitude = if (all(is.na(c(parsed_away, parsed_home)))) NA_real_ else max(abs(c(parsed_away, parsed_home)), na.rm = TRUE),
+      away_sign = case_when(!is.na(parsed_away) ~ sign(parsed_away), !is.na(parsed_home) ~ -sign(parsed_home), TRUE ~ NA_real_),
+      circa_away_line = away_sign * magnitude,
+      circa_home_line = -circa_away_line
+    ) %>%
+    ungroup() %>%
+    transmute(
+      contest = "Circa Sports Million",
+      season = as.integer(season),
+      week = as.integer(week),
+      game_id = paste(season, week, away_team, home_team, sep = "_"),
+      away_team,
+      home_team,
+      circa_away_line,
+      circa_home_line
+    )
+  validate_circa_lines(games)
+}
+
+load_circa_lines <- function(path, season = 2026L, week = 1L) {
+  extension <- tolower(tools::file_ext(path))
+  switch(
+    extension,
+    pdf = parse_circa_pdf(path, season, week),
+    csv = read_circa_lines_csv(path, season, week),
+    stop("Upload a PDF or CSV file.")
+  )
+}
+
+download_circa_week_from_web <- function(season = 2026L, week = 1L) {
+  season <- as.integer(season)
+  week <- as.integer(week)
+  if (!is.finite(season) || !is.finite(week)) stop("Enter a valid Circa season and week.")
+  contest_number <- season - 2018L
+  if (contest_number < 1L) stop("Automatic Circa refresh is available for Million I and later.")
+  contest_roman <- as.character(as.roman(contest_number))
+  filename <- paste0(
+    "Circa-Sports-Million-", contest_roman,
+    "-Contest-Point-Spreads-Week-", week, ".pdf"
+  )
+  estimated_month <- case_when(
+    week <= 3 ~ "09",
+    week <= 8 ~ "10",
+    week <= 13 ~ "11",
+    week <= 17 ~ "12",
+    TRUE ~ "01"
+  )
+  months <- unique(c(estimated_month, "09", "10", "11", "12", "01"))
+  candidates <- map_chr(months, function(month) {
+    upload_year <- if (identical(month, "01")) season + 1L else season
+    paste0(
+      "https://www.circasports.com/wp-content/uploads/", upload_year, "/", month, "/", filename
+    )
+  })
+  downloaded <- NULL
+  source_url <- NULL
+  for (candidate in candidates) {
+    destination <- tempfile(fileext = ".pdf")
+    status <- tryCatch(
+      suppressWarnings(utils::download.file(candidate, destination, mode = "wb", quiet = TRUE, method = "libcurl")),
+      error = function(e) 1L
+    )
+    is_pdf <- identical(status, 0L) && file.exists(destination) && file.info(destination)$size > 4 &&
+      identical(rawToChar(readBin(destination, what = "raw", n = 4)), "%PDF")
+    if (is_pdf) {
+      downloaded <- destination
+      source_url <- candidate
+      break
+    }
+    unlink(destination, force = TRUE)
+  }
+  if (is.null(downloaded)) {
+    stop("The official Circa weekly sheet was not found yet. It is normally posted Thursday; use the manual PDF/CSV fallback if you already have it.")
+  }
+  on.exit(unlink(downloaded, force = TRUE), add = TRUE)
+  rows <- parse_circa_pdf(downloaded, season, week)
+  rows$contest <- paste("Circa Sports Million", contest_roman)
+  attr(rows, "source_url") <- source_url
+  rows
+}
+
+circa_default_path <- file.path(app_data_dir, "circa_million_2026_week_1.csv")
+circa_default_lines <- if (file.exists(circa_default_path)) read_circa_lines_csv(circa_default_path) else tibble()
+
 parse_model_file <- function(path) {
   nm <- basename(path)
   m <- str_match(nm, "^(\\d{4})_(.+)_(home|away|home_score|away_score)\\.csv$")
@@ -991,6 +1226,60 @@ ui <- fluidPage(
       )
     ),
     tabPanel(
+      "Circa Dashboard",
+      sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          fluidRow(
+            column(6, numericInput("circa_season", "Season", value = 2026, min = 2024, max = 2100, step = 1)),
+            column(6, numericInput("circa_week", "Week", value = 1, min = 1, max = 22, step = 1))
+          ),
+          actionButton("circa_refresh_web", "Refresh from Circa Sports", class = "btn-primary btn-block"),
+          tags$a(
+            "Open official Circa Million page",
+            href = "https://www.circasports.com/circa-million",
+            target = "_blank",
+            rel = "noopener noreferrer"
+          ),
+          tags$hr(),
+          h5("Manual fallback"),
+          fileInput(
+            "circa_lines_file",
+            "Upload weekly Circa lines",
+            accept = c(".pdf", ".csv")
+          ),
+          actionButton("circa_use_default", "Use bundled Week 1 lines", class = "btn-default btn-block"),
+          helpText("The refresh button retrieves Circa's official weekly PDF. Upload is retained as a fallback for a newly posted or differently named sheet."),
+          tags$hr(),
+          selectInput(
+            "circa_source",
+            "Consensus source",
+            choices = c("Legacy consensus" = "legacy", "Next-gen consensus" = "next_gen", "Combined consensus" = "combined"),
+            selected = "combined"
+          ),
+          sliderInput("circa_min_edge", "Minimum Circa edge", min = 0, max = 10, value = 0, step = 0.5, post = " pts"),
+          actionButton("circa_build", "Build Circa dashboard", class = "btn-primary btn-block"),
+          tags$hr(),
+          downloadButton("circa_download_top_five", "Download top five", class = "btn-success btn-block"),
+          downloadButton("circa_download_all", "Download all Circa plays", class = "btn-default btn-block")
+        ),
+        mainPanel(
+          h4("Circa Sports Million VIII"),
+          p("Official contest spreads are fixed for the week. The dashboard reapplies the active consensus projections to those stale lines."),
+          verbatimTextOutput("circa_status", placeholder = TRUE),
+          tags$hr(),
+          h4("Top five shadow card"),
+          DTOutput("circa_top_five"),
+          tags$hr(),
+          h4("All potential Circa plays"),
+          DTOutput("circa_all_plays"),
+          tags$hr(),
+          h4("Loaded contest lines"),
+          DTOutput("circa_lines_preview")
+        )
+      )
+    ),
+    tabPanel(
       "Files",
       h4("Loaded app data files"),
       tableOutput("file_table")
@@ -1233,6 +1522,16 @@ server <- function(input, output, session) {
   overall_consensus_status <- reactiveVal("Build legacy and/or next-gen consensus first.")
   nextgen_consensus_rows <- reactiveVal(tibble())
   overall_consensus_rows <- reactiveVal(tibble())
+  circa_lines_state <- reactiveVal(circa_default_lines)
+  circa_results_state <- reactiveVal(tibble())
+  circa_source_url_state <- reactiveVal(if (nrow(circa_default_lines) > 0) "Bundled verified Week 1 copy" else "")
+  circa_status_state <- reactiveVal(
+    if (nrow(circa_default_lines) > 0) {
+      paste0("Bundled Week 1 contest sheet loaded: ", nrow(circa_default_lines), " matchups. Click Build Circa dashboard.")
+    } else {
+      "Upload the official weekly Circa PDF or a compatible CSV."
+    }
+  )
 
   observe({
     session$sendCustomMessage("toggleMinWinSlider", identical(input$cons_market, "straight_up"))
@@ -2246,6 +2545,394 @@ server <- function(input, output, session) {
       TRUE ~ TRUE
     )
   }
+
+  aggregate_circa_model_rows <- function(long, source_label, min_agree) {
+    if (nrow(long) == 0) return(tibble())
+    long %>%
+      mutate(
+        circa_vote = case_when(
+          projection > circa_market_line ~ 1,
+          projection < circa_market_line ~ -1,
+          TRUE ~ NA_real_
+        )
+      ) %>%
+      group_by(
+        game_id, season, week, home_team, away_team,
+        circa_away_line, circa_home_line, circa_market_line
+      ) %>%
+      summarise(
+        projections = n(),
+        models_used = n_distinct(paste(file, projection_col, sep = "::")),
+        avg_projection = mean(projection, na.rm = TRUE),
+        current_market_line = first_non_na(market_line),
+        positive_votes = sum(circa_vote == 1, na.rm = TRUE),
+        negative_votes = sum(circa_vote == -1, na.rm = TRUE),
+        vote_count = sum(!is.na(circa_vote)),
+        agree_pct = ifelse(
+          all(is.na(circa_vote)),
+          NA_real_,
+          max(mean(circa_vote == 1, na.rm = TRUE), mean(circa_vote == -1, na.rm = TRUE))
+        ),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        source = source_label,
+        source_pick = case_when(
+          vote_count == 0 ~ NA_character_,
+          positive_votes > negative_votes ~ "Home",
+          negative_votes > positive_votes ~ "Away",
+          avg_projection > circa_market_line ~ "Home",
+          avg_projection < circa_market_line ~ "Away",
+          TRUE ~ NA_character_
+        )
+      ) %>%
+      select(-positive_votes, -negative_votes, -vote_count) %>%
+      filter(is.na(agree_pct) | agree_pct >= min_agree)
+  }
+
+  build_circa_legacy_source <- function(lines) {
+    families <- input$cons_families %||% names(family_labels)
+    seasons <- unique(as.integer(lines$season))
+    selected <- inventory %>% filter(family %in% families, season %in% seasons)
+    if (nrow(selected) == 0) return(tibble())
+    min_win <- (input$cons_min_win %||% 40) / 100
+    long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
+      long_predictions_for_file(
+        tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
+        "spread",
+        min_win,
+        input$cons_line_source %||% "closing",
+        input$cons_injury_source %||% "none",
+        isTRUE(input$cons_apply_amortization)
+      )
+    }) %>%
+      inner_join(
+        lines %>% select(game_id, circa_away_line, circa_home_line),
+        by = "game_id"
+      ) %>%
+      mutate(
+        circa_market_line = -circa_home_line,
+        .signal_key = case_when(
+          projection_col == "ImpliedScoreDiff_xgb" ~ "ScoreDiff_xgb_score",
+          TRUE ~ projection_col
+        ),
+        .home_first = !str_detect(split, "^home")
+      ) %>%
+      arrange(.home_first) %>%
+      group_by(game_id, season, week, family, .signal_key) %>%
+      slice_head(n = 1) %>%
+      ungroup() %>%
+      select(-.signal_key, -.home_first)
+    aggregate_circa_model_rows(long, "Legacy", (input$cons_agree %||% 50) / 100)
+  }
+
+  build_circa_nextgen_source <- function(lines) {
+    if (!nextgen_data_available) return(tibble())
+    frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
+    families <- input$ng_cons_families %||% names(next_gen_family_labels)
+    projection_sources <- input$ng_cons_projection_sources %||% c("direct", "implied_team_scores")
+    seasons <- unique(as.integer(lines$season))
+    selected <- nextgen_inventory %>%
+      filter(framework %in% frameworks, family %in% families, season %in% seasons)
+    if (nrow(selected) == 0) return(tibble())
+    min_win <- (input$ng_cons_min_win %||% 40) / 100
+    long <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label) {
+      long_nextgen_predictions_for_file(
+        tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
+        "spread",
+        min_win,
+        input$ng_cons_line_source %||% "closing",
+        input$ng_cons_injury_source %||% "none",
+        isTRUE(input$ng_cons_apply_amortization),
+        projection_sources
+      )
+    }) %>%
+      inner_join(
+        lines %>% select(game_id, circa_away_line, circa_home_line),
+        by = "game_id"
+      ) %>%
+      mutate(circa_market_line = -circa_home_line)
+    aggregate_circa_model_rows(long, "Next-gen", (input$ng_cons_agree %||% 50) / 100)
+  }
+
+  combine_circa_sources <- function(source_rows, selected_source) {
+    if (nrow(source_rows) == 0) return(tibble())
+    if (!identical(selected_source, "combined")) {
+      return(source_rows %>%
+        transmute(
+          game_id, season, week, home_team, away_team,
+          circa_away_line, circa_home_line, circa_market_line,
+          projections, models_used, sources_used = source,
+          sources_used_count = 1L,
+          avg_projection, current_market_line, agree_pct,
+          consensus_pick = source_pick
+        ))
+    }
+
+    required <- input$overall_cons_sources %||% c("legacy", "next_gen")
+    required_labels <- c(if ("legacy" %in% required) "Legacy", if ("next_gen" %in% required) "Next-gen")
+    require_all <- isTRUE(input$overall_cons_require_all_sources %||% TRUE)
+    min_agree <- (input$overall_cons_agree %||% 50) / 100
+    source_rows %>%
+      filter(source %in% required_labels) %>%
+      mutate(source_vote = case_when(source_pick == "Home" ~ 1, source_pick == "Away" ~ -1, TRUE ~ NA_real_)) %>%
+      group_by(
+        game_id, season, week, home_team, away_team,
+        circa_away_line, circa_home_line, circa_market_line
+      ) %>%
+      summarise(
+        projections = sum(projections, na.rm = TRUE),
+        models_used = sum(models_used, na.rm = TRUE),
+        sources_used = paste(sort(unique(source)), collapse = ", "),
+        sources_used_count = n_distinct(source),
+        avg_projection = mean(avg_projection, na.rm = TRUE),
+        current_market_line = first_non_na(current_market_line),
+        positive_votes = sum(source_vote == 1, na.rm = TRUE),
+        negative_votes = sum(source_vote == -1, na.rm = TRUE),
+        vote_count = sum(!is.na(source_vote)),
+        agree_pct = ifelse(
+          all(is.na(source_vote)),
+          NA_real_,
+          max(mean(source_vote == 1, na.rm = TRUE), mean(source_vote == -1, na.rm = TRUE))
+        ),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        consensus_pick = case_when(
+          vote_count == 0 ~ NA_character_,
+          positive_votes > negative_votes ~ "Home",
+          negative_votes > positive_votes ~ "Away",
+          avg_projection > circa_market_line ~ "Home",
+          avg_projection < circa_market_line ~ "Away",
+          TRUE ~ NA_character_
+        )
+      ) %>%
+      select(-positive_votes, -negative_votes, -vote_count) %>%
+      filter(!require_all | sources_used_count == length(required_labels)) %>%
+      filter(is.na(agree_pct) | agree_pct >= min_agree)
+  }
+
+  observeEvent(input$circa_refresh_web, {
+    season <- input$circa_season %||% 2026L
+    week <- input$circa_week %||% 1L
+    circa_status_state("Checking Circa Sports for the official weekly sheet...")
+    rows <- tryCatch(
+      withProgress(
+        message = "Refreshing official Circa lines, please wait...",
+        value = 0.35,
+        download_circa_week_from_web(season, week)
+      ),
+      error = function(e) {
+        circa_status_state(paste("Circa web refresh error:", conditionMessage(e)))
+        NULL
+      }
+    )
+    if (!is.null(rows)) {
+      source_url <- attr(rows, "source_url") %||% "https://www.circasports.com/circa-million"
+      circa_lines_state(rows)
+      circa_results_state(tibble())
+      circa_source_url_state(source_url)
+      circa_status_state(paste0(
+        "Official Circa Sports sheet loaded: ", nrow(rows), " matchups for ",
+        first(rows$season), " Week ", first(rows$week), ". Click Build Circa dashboard."
+      ))
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$circa_lines_file, {
+    req(input$circa_lines_file$datapath)
+    circa_status_state("Reading the uploaded Circa sheet...")
+    rows <- tryCatch(
+      withProgress(
+        message = "Reading Circa contest lines, please wait...",
+        value = 0.5,
+        load_circa_lines(
+          input$circa_lines_file$datapath,
+          input$circa_season %||% 2026L,
+          input$circa_week %||% 1L
+        )
+      ),
+      error = function(e) {
+        circa_status_state(paste("Circa upload error:", conditionMessage(e)))
+        NULL
+      }
+    )
+    if (!is.null(rows)) {
+      circa_lines_state(rows)
+      circa_results_state(tibble())
+      circa_source_url_state(paste("Manual upload:", input$circa_lines_file$name))
+      circa_status_state(paste0("Loaded ", nrow(rows), " Circa matchups for ", first(rows$season), " Week ", first(rows$week), ". Click Build Circa dashboard."))
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$circa_use_default, {
+    if (nrow(circa_default_lines) == 0) {
+      circa_status_state("The bundled Week 1 Circa lines file is missing.")
+    } else {
+      circa_lines_state(circa_default_lines)
+      circa_results_state(tibble())
+      circa_source_url_state("Bundled verified Week 1 copy")
+      updateNumericInput(session, "circa_season", value = first(circa_default_lines$season))
+      updateNumericInput(session, "circa_week", value = first(circa_default_lines$week))
+      circa_status_state(paste0("Bundled Week 1 contest sheet restored: ", nrow(circa_default_lines), " matchups. Click Build Circa dashboard."))
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$circa_build, {
+    lines <- circa_lines_state()
+    if (nrow(lines) == 0) {
+      circa_status_state("Upload a Circa weekly sheet before building the dashboard.")
+      return()
+    }
+    selected_source <- input$circa_source %||% "combined"
+    circa_status_state("Building Circa plays from the active model settings...")
+    rows <- tryCatch(
+      withProgress(message = "Building Circa dashboard, please wait...", value = 0, {
+        required <- if (identical(selected_source, "combined")) input$overall_cons_sources %||% c("legacy", "next_gen") else selected_source
+        incProgress(0.1, detail = "Applying the stale contest lines")
+        source_rows <- bind_rows(
+          if ("legacy" %in% required) build_circa_legacy_source(lines) else tibble(),
+          if ("next_gen" %in% required) build_circa_nextgen_source(lines) else tibble()
+        )
+        incProgress(0.8, detail = "Ranking the contest sides")
+        combine_circa_sources(source_rows, selected_source)
+      }),
+      error = function(e) {
+        circa_status_state(paste("Circa dashboard error:", conditionMessage(e)))
+        tibble()
+      }
+    )
+    circa_results_state(rows)
+    if (nrow(rows) > 0) {
+      circa_status_state(paste0(
+        "Complete. Ranked ", nrow(rows), " Circa sides from ",
+        if (identical(selected_source, "combined")) "the selected consensus sources" else paste0("the ", selected_source, " consensus"),
+        ". The top five are the shadow card."
+      ))
+    } else if (!str_detect(circa_status_state(), "error")) {
+      circa_status_state("No Circa plays passed the active model and agreement settings.")
+    }
+  }, ignoreInit = TRUE)
+
+  format_spread_price <- function(x) {
+    rounded <- round(as.numeric(x), 1)
+    magnitude <- sub("\\.0$", "", sprintf("%.1f", abs(rounded)))
+    case_when(
+      is.na(rounded) ~ "-",
+      abs(rounded) < 0.001 ~ "PK",
+      rounded > 0 ~ paste0("+", magnitude),
+      TRUE ~ paste0("-", magnitude)
+    )
+  }
+
+  circa_ranked_rows <- reactive({
+    rows <- circa_results_state()
+    if (nrow(rows) == 0) return(tibble())
+    minimum_edge <- suppressWarnings(as.numeric(input$circa_min_edge %||% 0))
+    if (!is.finite(minimum_edge)) minimum_edge <- 0
+    current_threshold <- if (identical(input$circa_source %||% "combined", "combined")) suppressWarnings(as.numeric(input$overall_cons_min_edge %||% 2)) else 0
+    rows %>%
+      mutate(
+        current_pick = case_when(
+          avg_projection > current_market_line ~ "Home",
+          avg_projection < current_market_line ~ "Away",
+          TRUE ~ NA_character_
+        ),
+        current_signed_edge = avg_projection - current_market_line,
+        current_edge = abs(current_signed_edge),
+        circa_signed_edge = avg_projection - circa_market_line,
+        circa_edge = abs(circa_signed_edge),
+        circa_pick = case_when(circa_signed_edge > 0 ~ "Home", circa_signed_edge < 0 ~ "Away", TRUE ~ NA_character_),
+        pick_team = ifelse(circa_pick == "Home", home_team, away_team),
+        pick_line = ifelse(circa_pick == "Home", circa_home_line, circa_away_line),
+        projected_line = ifelse(circa_pick == "Home", -avg_projection, avg_projection),
+        current_pick_team = ifelse(current_pick == "Home", home_team, away_team),
+        current_pick_line = ifelse(current_pick == "Home", -current_market_line, current_market_line),
+        current_qualifies = !is.na(current_edge) & current_edge >= current_threshold,
+        circa_qualifies = !is.na(circa_edge) & circa_edge >= minimum_edge,
+        status = case_when(
+          is.na(current_pick) ~ "Circa only",
+          circa_pick != current_pick ~ "Side flips",
+          circa_qualifies & !current_qualifies ~ "New at Circa",
+          !circa_qualifies & current_qualifies ~ "Drops at Circa",
+          circa_qualifies & current_qualifies ~ "Carries over",
+          TRUE ~ "Below threshold"
+        )
+      ) %>%
+      filter(circa_qualifies, !is.na(circa_pick)) %>%
+      arrange(desc(circa_edge), away_team, home_team) %>%
+      mutate(rank = row_number())
+  })
+
+  format_circa_table <- function(rows) {
+    if (nrow(rows) == 0) return(tibble(Message = "Build the Circa dashboard to rank the uploaded contest lines."))
+    rows %>%
+      transmute(
+        Rank = rank,
+        Matchup = paste(away_team, "@", home_team),
+        Pick = paste(pick_team, format_spread_price(pick_line)),
+        `Projected line` = paste(pick_team, format_spread_price(projected_line)),
+        `Circa edge` = sprintf("%.1f", circa_edge),
+        `Current dashboard` = paste(current_pick_team, format_spread_price(current_pick_line)),
+        Status = status,
+        Agreement = ifelse(is.na(agree_pct), "-", paste0(sprintf("%.0f", 100 * agree_pct), "%")),
+        Models = models_used
+      )
+  }
+
+  output$circa_status <- renderText({
+    source_note <- circa_source_url_state()
+    paste0(circa_status_state(), if (nzchar(source_note)) paste0("\nSource: ", source_note) else "")
+  })
+
+  output$circa_lines_preview <- renderDT({
+    rows <- circa_lines_state()
+    if (nrow(rows) == 0) return(datatable(tibble(Message = "No Circa lines loaded."), rownames = FALSE))
+    display <- rows %>%
+      transmute(
+        Season = season,
+        Week = week,
+        Matchup = paste(away_team, "@", home_team),
+        Away = paste(away_team, format_spread_price(circa_away_line)),
+        Home = paste(home_team, format_spread_price(circa_home_line))
+      )
+    datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = nrow(display), scrollX = TRUE))
+  })
+
+  output$circa_top_five <- renderDT({
+    datatable(
+      format_circa_table(circa_ranked_rows() %>% slice_head(n = 5)),
+      rownames = FALSE,
+      options = list(dom = "t", pageLength = 5, scrollX = TRUE)
+    )
+  })
+
+  output$circa_all_plays <- renderDT({
+    datatable(
+      format_circa_table(circa_ranked_rows()),
+      rownames = FALSE,
+      filter = "top",
+      options = list(pageLength = 16, lengthMenu = c(16, 32, 64), scrollX = TRUE)
+    )
+  })
+
+  output$circa_download_top_five <- downloadHandler(
+    filename = function() paste0("circa_shadow_card_", first(circa_lines_state()$season), "_week_", first(circa_lines_state()$week), ".csv"),
+    content = function(file) {
+      rows <- circa_ranked_rows() %>% slice_head(n = 5)
+      req(nrow(rows) > 0)
+      write_csv(rows, file)
+    }
+  )
+
+  output$circa_download_all <- downloadHandler(
+    filename = function() paste0("circa_all_plays_", first(circa_lines_state()$season), "_week_", first(circa_lines_state()$week), ".csv"),
+    content = function(file) {
+      rows <- circa_ranked_rows()
+      req(nrow(rows) > 0)
+      write_csv(rows, file)
+    }
+  )
 
   build_overall_consensus_rows <- function() {
     overall_consensus_status("Building combined consensus...")
