@@ -1194,6 +1194,8 @@ ui <- fluidPage(
             choices = c("Against the spread" = "spread", "Straight up" = "straight_up", "Over / under" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
             selected = c("spread", "straight_up", "total", "home_implied", "away_implied")
           ),
+          checkboxInput("dashboard_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
+          checkboxInput("dashboard_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
           tags$hr(),
           h4("Downloads"),
           downloadButton("dashboard_download", "Download selected markets", class = "btn-success btn-block"),
@@ -1258,6 +1260,8 @@ ui <- fluidPage(
             selected = "combined"
           ),
           sliderInput("circa_min_edge", "Minimum Circa edge", min = 0, max = 10, value = 0, step = 0.5, post = " pts"),
+          checkboxInput("circa_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
+          checkboxInput("circa_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
           actionButton("circa_build", "Build Circa dashboard", class = "btn-primary btn-block"),
           tags$hr(),
           downloadButton("circa_download_top_five", "Download top five", class = "btn-success btn-block"),
@@ -2859,7 +2863,12 @@ server <- function(input, output, session) {
           TRUE ~ "Below threshold"
         )
       ) %>%
-      filter(circa_qualifies, !is.na(circa_pick)) %>%
+      filter(
+        circa_qualifies,
+        !is.na(circa_pick),
+        !(isTRUE(input$circa_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
+        !(isTRUE(input$circa_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5))
+      ) %>%
       arrange(desc(circa_edge), away_team, home_team) %>%
       mutate(rank = row_number())
   })
@@ -3207,6 +3216,23 @@ server <- function(input, output, session) {
     updateSelectInput(session, "dashboard_week", choices = week_choices, selected = selected)
   })
 
+  apply_dashboard_spread_overrides <- function(rows) {
+    rows %>%
+      mutate(
+        dashboard_pick_line = case_when(
+          market != "spread" ~ NA_real_,
+          consensus_pick == "Home" ~ -market_line,
+          consensus_pick == "Away" ~ market_line,
+          TRUE ~ NA_real_
+        )
+      ) %>%
+      filter(
+        !(market == "spread" & isTRUE(input$dashboard_no_minus_3_5_favorites) & dplyr::near(dashboard_pick_line, -3.5)),
+        !(market == "spread" & isTRUE(input$dashboard_no_plus_2_5_underdogs) & dplyr::near(dashboard_pick_line, 2.5))
+      ) %>%
+      select(-dashboard_pick_line)
+  }
+
   dashboard_filtered_rows <- reactive({
     rows <- dashboard_source_rows()
     selected_season <- suppressWarnings(as.integer(input$dashboard_season))
@@ -3214,7 +3240,8 @@ server <- function(input, output, session) {
     markets <- input$dashboard_markets %||% character()
     if (nrow(rows) == 0 || length(selected_season) == 0 || length(selected_week) == 0 || is.na(selected_season) || is.na(selected_week)) return(tibble())
     rows %>%
-      filter(season == selected_season, week == selected_week, market %in% markets)
+      filter(season == selected_season, week == selected_week, market %in% markets) %>%
+      apply_dashboard_spread_overrides()
   })
 
   format_dashboard_export_rows <- function(rows) {
@@ -3329,6 +3356,7 @@ server <- function(input, output, session) {
         week == selected_week,
         market == market_key
       ) %>%
+      apply_dashboard_spread_overrides() %>%
       format_dashboard_export_rows()
   }
 
