@@ -505,6 +505,20 @@ inventory <- if (compact_data_available) {
 }
 
 compact_models <- if (compact_data_available) readRDS(compact_models_rds) else list()
+model_game_dates <- purrr::map_dfr(compact_models, function(model_rows) {
+  if (!all(c("game_id", "game_date") %in% names(model_rows))) return(tibble())
+  tibble(
+    game_id = as.character(model_rows$game_id),
+    game_date = suppressWarnings(as.Date(model_rows$game_date))
+  ) %>%
+    filter(!is.na(game_id), nzchar(game_id), !is.na(game_date)) %>%
+    distinct(game_id, game_date)
+}) %>%
+  arrange(game_date) %>%
+  distinct(game_id, .keep_all = TRUE)
+early_week_game_ids <- model_game_dates %>%
+  filter(as.POSIXlt(game_date)$wday %in% 2:5) %>%
+  pull(game_id)
 nextgen_inventory <- if (nextgen_data_available) {
   readRDS(nextgen_inventory_rds) %>%
     mutate(path = file.path(getwd(), path))
@@ -1196,6 +1210,7 @@ ui <- fluidPage(
           ),
           checkboxInput("dashboard_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
           checkboxInput("dashboard_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
+          checkboxInput("dashboard_no_early_week_games", "No early-week games", value = FALSE),
           tags$hr(),
           h4("Downloads"),
           downloadButton("dashboard_download", "Download selected markets", class = "btn-success btn-block"),
@@ -1262,6 +1277,7 @@ ui <- fluidPage(
           sliderInput("circa_min_edge", "Minimum Circa edge", min = 0, max = 10, value = 0, step = 0.5, post = " pts"),
           checkboxInput("circa_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
           checkboxInput("circa_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
+          checkboxInput("circa_no_early_week_games", "No early-week games", value = TRUE),
           actionButton("circa_build", "Build Circa dashboard", class = "btn-primary btn-block"),
           tags$hr(),
           downloadButton("circa_download_top_five", "Download top five", class = "btn-success btn-block"),
@@ -2867,7 +2883,8 @@ server <- function(input, output, session) {
         circa_qualifies,
         !is.na(circa_pick),
         !(isTRUE(input$circa_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
-        !(isTRUE(input$circa_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5))
+        !(isTRUE(input$circa_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5)),
+        !(isTRUE(input$circa_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%
       arrange(desc(circa_edge), away_team, home_team) %>%
       mutate(rank = row_number())
@@ -3228,7 +3245,8 @@ server <- function(input, output, session) {
       ) %>%
       filter(
         !(market == "spread" & isTRUE(input$dashboard_no_minus_3_5_favorites) & dplyr::near(dashboard_pick_line, -3.5)),
-        !(market == "spread" & isTRUE(input$dashboard_no_plus_2_5_underdogs) & dplyr::near(dashboard_pick_line, 2.5))
+        !(market == "spread" & isTRUE(input$dashboard_no_plus_2_5_underdogs) & dplyr::near(dashboard_pick_line, 2.5)),
+        !(isTRUE(input$dashboard_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%
       select(-dashboard_pick_line)
   }
