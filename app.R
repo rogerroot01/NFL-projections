@@ -107,10 +107,10 @@ forecast_team_adjustments_2026 <- tibble(
   week = suppressWarnings(as.integer(tbl_col(forecast_team_adjustments_2026_raw, "week"))),
   home_team = toupper(trimws(as.character(tbl_col(forecast_team_adjustments_2026_raw, "home_team")))),
   away_team = toupper(trimws(as.character(tbl_col(forecast_team_adjustments_2026_raw, "away_team")))),
-  future_home_off_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_off_injury_adj"))),
-  future_home_def_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_def_injury_adj"))),
-  future_away_off_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_off_injury_adj"))),
-  future_away_def_injury_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_def_injury_adj"))),
+  future_home_spread_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_spread_adj"))),
+  future_away_spread_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_spread_adj"))),
+  future_home_score_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_score_adj"))),
+  future_away_score_adj = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_score_adj"))),
   home_adjust_amortization = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "home_adjust_amortization"))),
   away_adjust_amortization = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_adjust_amortization")))
 )
@@ -137,23 +137,43 @@ apply_projection_adjustments <- function(base, injury_source = "none", apply_amo
     ) %>%
     mutate(
       home_score_injury_component = if (injury_enabled) {
-        coalesce(home_off_injury_adj, future_home_off_injury_adj, 0) +
-          coalesce(away_def_injury_adj, future_away_def_injury_adj, 0)
+        coalesce(
+          future_home_score_adj,
+          coalesce(home_off_injury_adj, 0) + coalesce(away_def_injury_adj, 0),
+          0
+        )
       } else 0,
       away_score_injury_component = if (injury_enabled) {
-        coalesce(away_off_injury_adj, future_away_off_injury_adj, 0) +
-          coalesce(home_def_injury_adj, future_home_def_injury_adj, 0)
+        coalesce(
+          future_away_score_adj,
+          coalesce(away_off_injury_adj, 0) + coalesce(home_def_injury_adj, 0),
+          0
+        )
       } else 0,
       spread_injury_component = if (injury_enabled) {
-        coalesce(injury_adj, home_score_injury_component - away_score_injury_component, 0)
+        coalesce(
+          future_home_score_adj - future_away_score_adj,
+          injury_adj,
+          home_score_injury_component - away_score_injury_component,
+          0
+        )
       } else 0,
-      home_score_amortization_component = if (amortization_enabled) coalesce(home_adjust_amortization, 0) else 0,
-      away_score_amortization_component = if (amortization_enabled) coalesce(away_adjust_amortization, 0) else 0,
-      home_score_projection_adj = home_score_injury_component + home_score_amortization_component,
-      away_score_projection_adj = away_score_injury_component + away_score_amortization_component,
-      spread_projection_adj = spread_injury_component + home_score_amortization_component - away_score_amortization_component,
-      total_projection_adj = home_score_injury_component + away_score_injury_component +
-        home_score_amortization_component + away_score_amortization_component
+      spread_amortization_component = if (amortization_enabled) {
+        coalesce(home_adjust_amortization, 0) - coalesce(away_adjust_amortization, 0)
+      } else 0,
+      forecast_spread_available = !is.na(future_home_spread_adj) | !is.na(future_away_spread_adj),
+      home_score_projection_adj = home_score_injury_component,
+      away_score_projection_adj = away_score_injury_component,
+      spread_projection_adj = if (injury_enabled && amortization_enabled) {
+        if_else(
+          forecast_spread_available,
+          coalesce(future_home_spread_adj, 0) - coalesce(future_away_spread_adj, 0),
+          spread_injury_component + spread_amortization_component
+        )
+      } else {
+        spread_injury_component + spread_amortization_component
+      },
+      total_projection_adj = home_score_injury_component + away_score_injury_component
     ) %>%
     select(
       -injury_adj,
@@ -161,17 +181,17 @@ apply_projection_adjustments <- function(base, injury_source = "none", apply_amo
       -home_def_injury_adj,
       -away_off_injury_adj,
       -away_def_injury_adj,
-      -future_home_off_injury_adj,
-      -future_home_def_injury_adj,
-      -future_away_off_injury_adj,
-      -future_away_def_injury_adj,
+      -future_home_spread_adj,
+      -future_away_spread_adj,
+      -future_home_score_adj,
+      -future_away_score_adj,
       -home_adjust_amortization,
       -away_adjust_amortization,
       -home_score_injury_component,
       -away_score_injury_component,
       -spread_injury_component,
-      -home_score_amortization_component,
-      -away_score_amortization_component
+      -spread_amortization_component,
+      -forecast_spread_available
     )
 }
 
@@ -775,7 +795,7 @@ ui <- fluidPage(
             "Apply 2026 offseason amortization",
             value = FALSE
           ),
-          helpText("2026 source: Forecast Team Off Def Injuries (injuries H-K; amortization L-M)."),
+          helpText("2026 source: Forecast Team Off Def Injuries (spread F-G; score H-I; components J-M; amortization N-O)."),
           actionButton("cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
@@ -852,7 +872,7 @@ ui <- fluidPage(
             "Apply 2026 offseason amortization",
             value = FALSE
           ),
-          helpText("2026 source: Forecast Team Off Def Injuries (injuries H-K; amortization L-M)."),
+          helpText("2026 source: Forecast Team Off Def Injuries (spread F-G; score H-I; components J-M; amortization N-O)."),
           actionButton("ng_cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),

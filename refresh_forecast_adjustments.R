@@ -25,7 +25,8 @@ source_xlsx <- normalizePath(source_xlsx, winslash = "/", mustWork = TRUE)
 
 required_columns <- c(
   "game_id", "season", "week", "home_team", "away_team",
-  "home_injury_adj", "away_injury_adj",
+  "home_spread_adj", "away_spread_adj",
+  "home_score_adj", "away_score_adj",
   "home_off_injury_adj", "home_def_injury_adj",
   "away_off_injury_adj", "away_def_injury_adj",
   "home_adjust_amortization", "away_adjust_amortization"
@@ -57,17 +58,30 @@ if (any(adjustments$season != 2026, na.rm = TRUE)) {
 }
 
 zero_if_na <- function(x) replace(x, is.na(x), 0)
-expected_home <- zero_if_na(adjustments$home_off_injury_adj) +
-  zero_if_na(adjustments$away_def_injury_adj) +
+expected_home_score <- zero_if_na(adjustments$home_off_injury_adj) +
+  zero_if_na(adjustments$away_def_injury_adj)
+expected_away_score <- zero_if_na(adjustments$away_off_injury_adj) +
+  zero_if_na(adjustments$home_def_injury_adj)
+
+home_score_mismatch <- !is.na(adjustments$home_score_adj) &
+  abs(adjustments$home_score_adj - expected_home_score) > 1e-6
+away_score_mismatch <- !is.na(adjustments$away_score_adj) &
+  abs(adjustments$away_score_adj - expected_away_score) > 1e-6
+if (any(home_score_mismatch) || any(away_score_mismatch)) {
+  stop("Columns H/I do not reconcile to the offensive and defensive injury components.", call. = FALSE)
+}
+
+expected_home_spread <- zero_if_na(adjustments$home_score_adj) +
   zero_if_na(adjustments$home_adjust_amortization)
-expected_away <- zero_if_na(adjustments$away_off_injury_adj) +
-  zero_if_na(adjustments$home_def_injury_adj) +
+expected_away_spread <- zero_if_na(adjustments$away_score_adj) +
   zero_if_na(adjustments$away_adjust_amortization)
 
-home_mismatch <- !is.na(adjustments$home_injury_adj) & abs(adjustments$home_injury_adj - expected_home) > 1e-6
-away_mismatch <- !is.na(adjustments$away_injury_adj) & abs(adjustments$away_injury_adj - expected_away) > 1e-6
-if (any(home_mismatch) || any(away_mismatch)) {
-  stop("Columns F/G do not reconcile to the injury components plus amortization columns.", call. = FALSE)
+home_spread_mismatch <- !is.na(adjustments$home_spread_adj) &
+  abs(adjustments$home_spread_adj - expected_home_spread) > 1e-6
+away_spread_mismatch <- !is.na(adjustments$away_spread_adj) &
+  abs(adjustments$away_spread_adj - expected_away_spread) > 1e-6
+if (any(home_spread_mismatch) || any(away_spread_mismatch)) {
+  stop("Columns F/G do not reconcile to the score adjustments plus amortization columns.", call. = FALSE)
 }
 
 output_csv <- file.path(app_dir, "data", "forecast_team_off_def_injuries_2026.csv")
