@@ -44,6 +44,23 @@ if (length(missing_columns) > 0) {
 }
 
 adjustments <- adjustments[required_columns]
+# The workbook carries zero-valued F:I formulas through Excel's last row.
+# Ignore those formula-only rows, but retain any row with an identity,
+# a nonzero projection, or an entered component for validation below.
+identity_columns <- c("game_id", "season", "week", "home_team", "away_team")
+projection_columns <- c("home_spread_adj", "away_spread_adj", "home_score_adj", "away_score_adj")
+component_columns <- setdiff(required_columns, c(identity_columns, projection_columns))
+has_identity <- Reduce(`|`, lapply(adjustments[identity_columns], function(column) {
+  !is.na(column) & nzchar(trimws(as.character(column)))
+}))
+has_nonzero_projection <- Reduce(`|`, lapply(adjustments[projection_columns], function(column) {
+  !is.na(column) & suppressWarnings(as.numeric(column)) != 0
+}))
+has_component <- Reduce(`|`, lapply(adjustments[component_columns], function(column) {
+  !is.na(column)
+}))
+row_has_content <- has_identity | has_nonzero_projection | has_component
+adjustments <- adjustments[row_has_content, , drop = FALSE]
 numeric_columns <- setdiff(required_columns, c("game_id", "home_team", "away_team"))
 adjustments[numeric_columns] <- lapply(adjustments[numeric_columns], function(x) suppressWarnings(as.numeric(x)))
 adjustments$game_id <- as.character(adjustments$game_id)
