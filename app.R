@@ -115,7 +115,7 @@ forecast_team_adjustments_2026 <- tibble(
   away_adjust_amortization = suppressWarnings(as.numeric(tbl_col(forecast_team_adjustments_2026_raw, "away_adjust_amortization")))
 )
 
-apply_projection_adjustments <- function(base, injury_source = "none", apply_amortization = FALSE) {
+apply_projection_adjustments <- function(base, injury_source = "apply", apply_amortization = TRUE) {
   injury_enabled <- identical(injury_source, "apply")
   amortization_enabled <- isTRUE(apply_amortization)
   if (!injury_enabled && !amortization_enabled) {
@@ -1037,14 +1037,14 @@ ui <- fluidPage(
             "cons_injury_source",
             "Projection injury adjustment",
             choices = c("No injury adjustment" = "none", "Apply injury adjustments" = "apply"),
-            selected = "none"
+            selected = "apply"
           ),
           checkboxInput(
             "cons_apply_amortization",
             "Apply 2026 offseason amortization",
-            value = FALSE
+            value = TRUE
           ),
-          helpText("2026 source: Forecast Team Off Def Injuries (spread F-G; score H-I; components J-M; amortization N-O)."),
+          helpText("2026 source: Forecast Team Off Def Injuries. With both adjustments enabled, spread uses home F minus away G; home and away scores use H and I, and the total uses H plus I."),
           actionButton("cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
@@ -1114,14 +1114,14 @@ ui <- fluidPage(
             "ng_cons_injury_source",
             "Projection injury adjustment",
             choices = c("No injury adjustment" = "none", "Apply injury adjustments" = "apply"),
-            selected = "none"
+            selected = "apply"
           ),
           checkboxInput(
             "ng_cons_apply_amortization",
             "Apply 2026 offseason amortization",
-            value = FALSE
+            value = TRUE
           ),
-          helpText("2026 source: Forecast Team Off Def Injuries (spread F-G; score H-I; components J-M; amortization N-O)."),
+          helpText("2026 source: Forecast Team Off Def Injuries. With both adjustments enabled, spread uses home F minus away G; home and away scores use H and I, and the total uses H plus I."),
           actionButton("ng_cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
@@ -1861,7 +1861,7 @@ server <- function(input, output, session) {
     }
   }
 
-  long_nextgen_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none", apply_amortization = FALSE, projection_sources = c("direct", "implied_team_scores")) {
+  long_nextgen_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "apply", apply_amortization = TRUE, projection_sources = c("direct", "implied_team_scores")) {
     df <- read_nextgen_model_file(meta$path)
     cols <- nextgen_projection_columns_for_market(df, market, projection_sources)
     if (length(cols) == 0) return(tibble())
@@ -2192,7 +2192,7 @@ server <- function(input, output, session) {
       )
   }
 
-  long_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "none", apply_amortization = FALSE) {
+  long_predictions_for_file <- function(meta, market, min_win_pct = 0.40, line_source = "closing", injury_source = "apply", apply_amortization = TRUE) {
     df <- read_model_file(meta$path)
     cols <- projection_columns_for_market(df, market)
     if (length(cols) == 0) return(tibble())
@@ -2322,7 +2322,7 @@ server <- function(input, output, session) {
     families <- input$cons_families %||% names(family_labels)
     markets <- dashboard_market_keys
     line_source <- input$cons_line_source %||% "closing"
-    injury_source <- input$cons_injury_source %||% "none"
+    injury_source <- input$cons_injury_source %||% "apply"
     apply_amortization <- isTRUE(input$cons_apply_amortization)
     min_agree <- (input$cons_agree %||% 50) / 100
     withProgress(message = "Building consensus, please wait...", value = 0, {
@@ -2446,7 +2446,7 @@ server <- function(input, output, session) {
     projection_sources <- input$ng_cons_projection_sources %||% c("direct", "implied_team_scores")
     markets <- dashboard_market_keys
     line_source <- input$ng_cons_line_source %||% "closing"
-    injury_source <- input$ng_cons_injury_source %||% "none"
+    injury_source <- input$ng_cons_injury_source %||% "apply"
     apply_amortization <- isTRUE(input$ng_cons_apply_amortization)
     min_agree <- (input$ng_cons_agree %||% 50) / 100
 
@@ -2622,7 +2622,7 @@ server <- function(input, output, session) {
         "spread",
         min_win,
         input$cons_line_source %||% "closing",
-        input$cons_injury_source %||% "none",
+        input$cons_injury_source %||% "apply",
         isTRUE(input$cons_apply_amortization)
       )
     }) %>%
@@ -2662,7 +2662,7 @@ server <- function(input, output, session) {
         "spread",
         min_win,
         input$ng_cons_line_source %||% "closing",
-        input$ng_cons_injury_source %||% "none",
+        input$ng_cons_injury_source %||% "apply",
         isTRUE(input$ng_cons_apply_amortization),
         projection_sources
       )
@@ -3282,9 +3282,9 @@ server <- function(input, output, session) {
     )
     injury_adjustment <- switch(
       source_key,
-      legacy = input$cons_injury_source %||% "none",
-      next_gen = input$ng_cons_injury_source %||% "none",
-      combined = paste(unique(c(input$cons_injury_source %||% "none", input$ng_cons_injury_source %||% "none")), collapse = "+"),
+      legacy = input$cons_injury_source %||% "apply",
+      next_gen = input$ng_cons_injury_source %||% "apply",
+      combined = paste(unique(c(input$cons_injury_source %||% "apply", input$ng_cons_injury_source %||% "apply")), collapse = "+"),
       NA_character_
     )
     offseason_amortization <- switch(
