@@ -516,6 +516,14 @@ model_game_dates <- purrr::map_dfr(compact_models, function(model_rows) {
 }) %>%
   arrange(game_date) %>%
   distinct(game_id, .keep_all = TRUE)
+model_week_dates <- model_game_dates %>%
+  mutate(
+    season = suppressWarnings(as.integer(stringr::str_match(game_id, "^(\\d{4})_(\\d{1,2})_")[, 2])),
+    week = suppressWarnings(as.integer(stringr::str_match(game_id, "^(\\d{4})_(\\d{1,2})_")[, 3]))
+  ) %>%
+  filter(!is.na(season), !is.na(week)) %>%
+  group_by(season, week) %>%
+  summarise(last_game_date = max(game_date), .groups = "drop")
 early_week_game_ids <- model_game_dates %>%
   filter(as.POSIXlt(game_date)$wday %in% 2:5) %>%
   pull(game_id)
@@ -3228,7 +3236,19 @@ server <- function(input, output, session) {
       sort(unique(as.integer(rows$week[rows$season == selected_season])))
     }
     current <- isolate(input$dashboard_week)
-    selected <- if (length(weeks) == 0) character() else if (length(current) > 0 && current %in% as.character(weeks)) current else as.character(min(weeks, na.rm = TRUE))
+    upcoming <- if (length(weeks) == 0 || length(selected_season) == 0 || is.na(selected_season)) {
+      integer()
+    } else {
+      model_week_dates %>%
+        filter(
+          season == selected_season,
+          week %in% weeks,
+          last_game_date >= as.Date(Sys.time(), tz = "America/New_York")
+        ) %>%
+        pull(week)
+    }
+    default_week <- if (length(upcoming) > 0) min(upcoming) else if (length(weeks) > 0) min(weeks) else NA_integer_
+    selected <- if (length(weeks) == 0) character() else if (length(current) > 0 && current %in% as.character(weeks)) current else as.character(default_week)
     week_choices <- if (length(weeks) == 0) character() else stats::setNames(as.character(weeks), paste("Week", weeks))
     updateSelectInput(session, "dashboard_week", choices = week_choices, selected = selected)
   })
