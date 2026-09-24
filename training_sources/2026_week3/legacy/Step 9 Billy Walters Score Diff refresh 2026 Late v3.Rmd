@@ -1,0 +1,2745 @@
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+```{r message=FALSE}
+library(dplyr)
+library(expss)
+library(xgboost)
+library(ggplot2)
+
+library(gridExtra)
+library(reshape)
+library(rpart)
+library(MASS)
+library(glmnet)
+getwd()
+setwd('..')
+   #load splines package
+    library(splines)
+```
+
+
+```{r}
+# levels(data.frame$CATEGORICAL)
+# data.frame$CATEGORICAL <- relevel(data.frame$CATEGORICAL, ref = "Level Name")
+# levels(data.frame$CATEGORICAL)
+# the levels function might help you see the effect of the change
+# replace "data.frame" with the name of your dataframe (2 times)
+# replace "CATEGORICAL" with the name of a variable that is a factor (categorical variable) (2 times)
+# replace "Level Name" with the name of the level that should become the first level
+```
+
+
+
+```{r}
+LLfunction <- function(targets, predicted_values){
+  p_v_zero <- ifelse(predicted_values <= 0, 0, predicted_values)
+  p_v_pos <- ifelse(predicted_values <= 0, 0.000001 ,predicted_values)
+  return(sum(targets*log(p_v_pos)) - sum(p_v_zero))
+}
+# "targets" is a vector containing the actual values for the target variable
+# "predicted_values" is a vector containing the predicted values for the target variable
+```
+
+
+```{r}
+
+RMSE <- function(actual, predicted){
+  return(sqrt(mean((actual - predicted)^2)))
+}
+
+
+MSE <- function(actual, predicted){
+  return(mean((actual - predicted)^2))
+}
+
+```
+
+ 
+
+# Load data
+```{r}
+load(file = "../output/dataV11.RData")
+datav11 <- data
+
+load(file = "../output/ScoresRegressionLate2024_data.RData")
+#data <- data[data$season != 2025, ]
+```
+
+
+```{r}
+#Columns in datav11 but not in data
+setdiff(names(datav11), names(data))
+```
+
+
+```{r}
+#Columns in data but not in datav11
+setdiff(names(data), names(datav11))
+
+```
+
+
+```{r}
+data$home_implied <- data$total_line / 2 + data$spread_line / 2
+data$away_implied <- data$total_line / 2 - data$spread_line / 2
+
+data$posteam_implied <- ifelse(data$posteam == data$home_team, data$home_implied, data$away_implied)
+data$defteam_implied <- ifelse(data$posteam == data$home_team, data$away_implied, data$home_implied)
+
+data$Score_target <- ifelse(data$posteam == data$home_team, data$home_score, data$away_score)
+data$Score_target_cover <- ifelse(data$Score_target  > data$posteam_implied, 1, 0)
+
+data$OppScore_target <- ifelse(data$posteam == data$home_team, data$away_score, data$home_score)
+data$OppScore_target_cover <- ifelse(data$OppScore_target  > data$defteam_implied, 1, 0)
+
+
+data$favored_by <- ifelse(data$posteam == data$home_team, data$spread_line, -data$spread_line)
+
+data$ScoreAllowed_target <- ifelse(data$posteam == data$home_team, data$away_score, data$home_score)
+data$ScoreAllowed_target_cover <- ifelse(data$ScoreAllowed_target  > data$defteam_implied, 1, 0)
+
+data$Win_target <- ifelse(data$Score_target > data$ScoreAllowed_target, 1, 0)
+
+data$ScoreDiff_target <- ifelse(data$posteam == data$home_team, data$home_score-data$away_score, data$away_score-data$home_score)
+data$ScoreDiff_target_cover <- ifelse(data$ScoreDiff_target  > data$favored_by, 1, 0)
+
+data$ScoreTotal_target <- data$home_score+data$away_score
+data$ScoreTotal_target_cover <- ifelse(data$ScoreTotal_target  > data$total_line, 1, 0)
+
+
+```
+
+
+
+```{r}
+data$turnover_target <- NULL
+data$drive_summary_target <- NULL
+
+data$drive_summary_target_sum <- NULL
+data$drive_summary_target_diff <- NULL
+data$drive_summary_target_opp <- NULL
+data$drive_summary_target_x_opp  <- NULL
+data$turnover_target_sum <- NULL
+data$turnover_target_diff <- NULL
+data$turnover_target_opp <- NULL
+data$turnover_target_x_opp  <- NULL
+
+data$drive_summary_target_sum <- NULL
+data$drive_summary_target_diff <- NULL
+data$drive_summary_target_opp <- NULL
+data$drive_summary_target_x_opp  <- NULL
+
+data$roof_sum <- NULL
+data$surface_sum <- NULL	
+data$away_score_sum <- NULL	
+data$home_score_sum <- NULL
+data$spread_line_sum <- NULL
+data$total_line_sum <- NULL
+data$div_game_sum <- NULL
+data$Neutral_sum <- NULL
+
+data$roof_diff <- NULL
+data$surface_diff <- NULL	
+data$away_score_diff <- NULL	
+data$home_score_diff <- NULL
+data$spread_line_diff <- NULL
+data$total_line_diff <- NULL
+data$div_game_diff <- NULL
+data$Neutral_diff <- NULL
+	
+```
+
+
+
+
+#################################################################################################
+
+
+```{r}
+library(dplyr)
+
+data <- data %>%
+  mutate(
+    # Win streak diffs
+    home_win_streak_diff = home_win_streak - away_win_streak,
+    away_win_streak_diff = away_win_streak - home_win_streak,
+    
+    # Loss streak diffs
+    home_loss_streak_diff = home_loss_streak - away_loss_streak,
+    away_loss_streak_diff = away_loss_streak - home_loss_streak,
+    
+    # Home-game streak diffs
+    home_home_streak_diff = home_home_streak - away_home_streak,
+    away_home_streak_diff = away_home_streak - home_home_streak,
+    
+    # Away-game streak diffs
+    home_away_streak_diff = home_away_streak - away_away_streak,
+    away_away_streak_diff = away_away_streak - home_away_streak
+  )
+
+```
+
+
+
+#################################################################################################
+
+
+
+```{r}
+library(dplyr)
+
+east_teams <- c("ATL","BAL","BUF","CAR","CIN","CLE","DET","IND","JAX",
+                "MIA","NE","NYG","NYJ","PHI","TB","TEN","WAS")
+
+stopifnot(all(c("game_id","posteam","posteam_type","night_game") %in% names(data)))
+
+data <- data %>%
+  group_by(game_id) %>%
+  mutate(
+    # Flags: does the home/away team belong to east_teams AND is this a night game?
+    home_flag_east_night = as.integer(any(
+      posteam_type == "home" &
+      posteam %in% east_teams &
+      (night_game %in% c(1L, 1, TRUE, "1")),
+      na.rm = TRUE
+    )),
+    away_flag_east_night = as.integer(any(
+      posteam_type == "away" &
+      posteam %in% east_teams &
+      (night_game %in% c(1L, 1, TRUE, "1")),
+      na.rm = TRUE
+    )),
+
+    # PM1 variables: +1 for the side that meets the condition, -1 for its opponent, else 0
+    home_east_team_night_pm1 = if_else(home_flag_east_night == 1L,
+                                       if_else(posteam_type == "home",  1L, -1L), 0L),
+    away_east_team_night_pm1 = if_else(away_flag_east_night == 1L,
+                                       if_else(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  ungroup()
+
+
+```
+
+
+```{r}
+
+data %>%
+  group_by(game_id) %>%
+  summarise(h = sum(home_east_team_night_pm1),
+            a = sum(away_east_team_night_pm1),
+            .groups = "drop") %>%
+  count(h, a)  # expect a single row h=0, a=0
+
+```
+
+
+```{r}
+table(data$posteam_type, data$home_flag_east_night)
+table(data$posteam_type, data$away_flag_east_night)
+
+table(data$posteam_type, data$home_east_team_night_pm1)
+table(data$posteam_type, data$away_east_team_night_pm1)
+
+```
+
+
+
+###################################################################################################
+
+
+So in your modeling language:
+
+You’d have a home_pm1-type variable worth ~+2 on the spread for SF.
+
+Then a west_home_MNF_vs_east_pm1-style situational variable that’s worth maybe another +0.5 to +1.
+
+Bills are going road team on a short week, always a disadvantage:
+
+
+```{r}
+library(dplyr)
+
+west_teams <- c("LAC","LAR","LV","SEA","SF","ARI")
+
+stopifnot(all(c("game_id","posteam","posteam_type","night_game") %in% names(data)))
+
+data <- data %>%
+  group_by(game_id) %>%
+  mutate(
+    # Flags: does the home/away team belong to west_teams AND is this a night game?
+    home_flag_west_night = as.integer(any(
+      posteam_type == "home" &
+      posteam %in% west_teams &
+      (night_game %in% c(1L, 1, TRUE, "1")),
+      na.rm = TRUE
+    )),
+    away_flag_west_night = as.integer(any(
+      posteam_type == "away" &
+      posteam %in% west_teams &
+      (night_game %in% c(1L, 1, TRUE, "1")),
+      na.rm = TRUE
+    )),
+
+    # PM1 variables: +1 for the side that meets the condition, -1 for its opponent, else 0
+    home_west_team_night_pm1 = if_else(home_flag_west_night == 1L,
+                                       if_else(posteam_type == "home",  1L, -1L), 0L),
+    away_west_team_night_pm1 = if_else(away_flag_west_night == 1L,
+                                       if_else(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  ungroup()
+
+
+```
+
+
+```{r}
+
+data %>%
+  group_by(game_id) %>%
+  summarise(h = sum(home_west_team_night_pm1),
+            a = sum(away_west_team_night_pm1),
+            .groups = "drop") %>%
+  count(h, a)  # expect a single row h=0, a=0
+
+```
+
+
+```{r}
+table(data$posteam_type, data$home_flag_west_night)
+table(data$posteam_type, data$away_flag_west_night)
+
+table(data$posteam_type, data$home_west_team_night_pm1)
+table(data$posteam_type, data$away_west_team_night_pm1)
+
+```
+
+
+
+
+
+
+
+
+###################################################################################################
+
+
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam","posteam_type") %in% names(data)))
+
+ord_cols <- intersect(c("season","season_year","week","game_date","game_id"), names(data))
+if (!length(ord_cols)) ord_cols <- "game_id"
+
+data <- data %>%
+  group_by(posteam) %>%
+  arrange(across(all_of(ord_cols)), .by_group = TRUE) %>%
+  mutate(
+    OffBye = as.integer(!is.na(days_since_last_game) & days_since_last_game > 12)
+  ) %>%
+  ungroup() %>%
+  group_by(game_id) %>%
+  mutate(
+    home_flag_OffBye = as.integer(any(posteam_type == "home" & OffBye == 1L, na.rm = TRUE)),
+    away_flag_OffBye = as.integer(any(posteam_type == "away" & OffBye == 1L, na.rm = TRUE)),
+    home_OffBye_pm1  = if_else(home_flag_OffBye == 1L, if_else(posteam_type == "home",  1L, -1L), 0L),
+    away_OffBye_pm1  = if_else(away_flag_OffBye == 1L, if_else(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  ungroup()
+
+```
+
+
+```{r}
+data %>% group_by(game_id) %>% summarise(h = sum(home_OffBye_pm1), a = sum(away_OffBye_pm1)) %>% count(h, a)
+
+```
+
+```{r}
+table(data$posteam_type, data$home_OffBye_pm1)
+table(data$posteam_type, data$away_OffBye_pm1)
+```
+
+
+
+###################################################################################################
+
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam","posteam_type","days_since_last_game") %in% names(data)))
+
+ord_cols <- intersect(c("season","season_year","week","game_date","game_id"), names(data))
+if (!length(ord_cols)) ord_cols <- "game_id"
+
+data <- data %>%
+  # Compute team-level BeforeBye using the next game's gap
+  group_by(posteam) %>%
+  arrange(across(all_of(ord_cols)), .by_group = TRUE) %>%
+  mutate(
+    BeforeBye = as.integer(dplyr::lead(days_since_last_game, default = NA) > 12)
+  ) %>%
+  ungroup() %>%
+  # Turn team flags into pm1 variables that sum to 0 within each game
+  group_by(game_id) %>%
+  mutate(
+    home_flag_BeforeBye = as.integer(any(posteam_type == "home" & BeforeBye == 1L, na.rm = TRUE)),
+    away_flag_BeforeBye = as.integer(any(posteam_type == "away" & BeforeBye == 1L, na.rm = TRUE)),
+    home_BeforeBye_pm1  = if_else(home_flag_BeforeBye == 1L, if_else(posteam_type == "home",  1L, -1L), 0L),
+    away_BeforeBye_pm1  = if_else(away_flag_BeforeBye == 1L, if_else(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  ungroup()
+
+```
+
+
+
+
+```{r}
+data %>%
+  group_by(game_id) %>%
+  summarise(h = sum(home_BeforeBye_pm1), a = sum(away_BeforeBye_pm1), .groups = "drop") %>%
+  count(h, a)
+
+```
+
+
+
+```{r}
+table(data$posteam_type, data$home_BeforeBye_pm1)
+table(data$posteam_type, data$away_BeforeBye_pm1)
+```
+
+
+
+##############################################################################################################
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam_type","div_game") %in% names(data)))
+
+data <- data %>%
+  group_by(game_id) %>%
+  mutate(
+    home_flag_div = as.integer(any(posteam_type == "home" & !is.na(div_game) & div_game == 1L, na.rm = TRUE)),
+    away_flag_div = as.integer(any(posteam_type == "away" & !is.na(div_game) & div_game == 1L, na.rm = TRUE)),
+
+    home_div_game_pm1 = if_else(home_flag_div == 1L,
+                                if_else(posteam_type == "home",  1L, -1L), 0L),
+    away_div_game_pm1 = if_else(away_flag_div == 1L,
+                                if_else(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  ungroup()
+
+```
+
+
+
+```{r}
+data %>%
+  group_by(game_id) %>%
+  summarise(h = sum(home_div_game_pm1), a = sum(away_div_game_pm1), .groups = "drop") %>%
+  count(h, a)
+
+```
+
+
+
+```{r}
+table(data$posteam_type, data$home_div_game_pm1)
+table(data$posteam_type, data$away_div_game_pm1)
+```
+
+
+
+##################################################################################################################
+
+
+
+```{r}
+stopifnot(all(c("game_id","posteam_type","OTLW") %in% names(data)))
+
+data <- data %>%
+  dplyr::group_by(game_id) %>%
+  dplyr::mutate(
+    # Did either side have OT last week?
+    home_flag_OTLW = as.integer(any(OTLW == 1 & posteam_type == "home", na.rm = TRUE)),
+    away_flag_OTLW = as.integer(any(OTLW == 1 & posteam_type == "away", na.rm = TRUE)),
+
+    # Symmetric pm1: away-only => +1 (away row) / -1 (home row),
+    #                 home-only => +1 (home row) / -1 (away row),
+    #                 both or neither => 0
+    OTLW_pm1 = dplyr::case_when(
+      away_flag_OTLW == 1L & home_flag_OTLW == 0L ~ ifelse(posteam_type == "away",  1L, -1L),
+      home_flag_OTLW == 1L & away_flag_OTLW == 0L ~ ifelse(posteam_type == "home",  1L, -1L),
+      TRUE ~ 0L
+    ),
+
+    # Team-specific versions (useful if you model each side’s flag separately)
+    home_OTLW_pm1 = ifelse(home_flag_OTLW == 1L,
+                           ifelse(posteam_type == "home",  1L, -1L), 0L),
+    away_OTLW_pm1 = ifelse(away_flag_OTLW == 1L,
+                           ifelse(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  dplyr::ungroup()
+
+```
+
+
+
+```{r}
+for (v in c("OTLW_pm1","home_OTLW_pm1","away_OTLW_pm1")) {
+  cat("\n", v, " — counts by home/away (-1/0/1)\n", sep = "")
+  print(cbind(table(posteam_type = data$posteam_type,
+                    value = factor(data[[v]], levels = c(-1,0,1))),
+              Sum = rowSums(table(data$posteam_type,
+                                  factor(data[[v]], levels = c(-1,0,1))))))
+}
+
+```
+
+
+
+```{r}
+# Each PM1 should sum to zero within a game
+data %>% group_by(game_id) %>%
+  summarise(h = sum(home_OTLW_pm1), a = sum(away_OTLW_pm1), .groups="drop") %>%
+  count(h, a)
+
+# Pairs must be (1,-1) or (0,0) for home_*; (-1,1) or (0,0) for away_*
+pair_home <- data %>% group_by(game_id) %>%
+  summarise(home = first(home_OTLW_pm1[posteam_type=="home"]),
+            away = first(home_OTLW_pm1[posteam_type=="away"])) %>%
+  count(pair = paste0(home,"|",away))
+pair_away <- data %>% group_by(game_id) %>%
+  summarise(home = first(away_OTLW_pm1[posteam_type=="home"]),
+            away = first(away_OTLW_pm1[posteam_type=="away"])) %>%
+  count(pair = paste0(home,"|",away))
+pair_home; pair_away
+
+```
+
+
+
+```{r}
+table(data$posteam_type, data$OTLW_pm1)
+
+table(data$posteam_type, data$home_OTLW_pm1)
+table(data$posteam_type, data$away_OTLW_pm1)
+
+```
+
+
+#######################################################################################
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam_type") %in% names(data)))
+
+# 1) Build night signals from existing columns
+pm1_cols <- intersect(
+  c("home_thursday_night_pm1","home_sunday_night_pm1","home_monday_night_pm1",
+    "away_thursday_night_pm1","away_sunday_night_pm1","away_monday_night_pm1"),
+  names(data)
+)
+night_from_pm1 <- if (length(pm1_cols)) {
+  as.integer(rowSums(abs(as.data.frame(data[pm1_cols])), na.rm = TRUE) > 0)
+} else NA_integer_
+
+flag_cols <- intersect(
+  c("thursday_night","sunday_night","monday_night","is_night_game","is_prime_time","prime_time"),
+  names(data)
+)
+night_from_flags <- if (length(flag_cols)) {
+  as.integer(rowSums(as.data.frame(lapply(data[flag_cols], function(x) as.integer(x %in% c(1L, 1, TRUE, "1")))),
+                     na.rm = TRUE) > 0)
+} else NA_integer_
+
+# Optional simple fallback if you keep an integer hour column (ET)
+hour_cols <- intersect(c("kickoff_hour_et","game_hour_et","game_hour"), names(data))
+night_from_hour <- if (length(hour_cols)) {
+  as.integer(rowSums(as.data.frame(lapply(data[hour_cols], function(x) as.integer(as.numeric(x) >= 19))),
+                     na.rm = TRUE) > 0)
+} else NA_integer_
+
+# Prefer flags > pm1 > hour, else 0
+night_game <- dplyr::coalesce(night_from_flags, night_from_pm1, night_from_hour, 0L)
+
+# 2) Create PM1s with ±1 propagation and sum==0 per game
+data <- data %>%
+  mutate(night_game = as.integer(night_game)) %>%
+  group_by(game_id) %>%
+  mutate(
+    home_flag_night = as.integer(any(posteam_type == "home" & night_game == 1L, na.rm = TRUE)),
+    away_flag_night = as.integer(any(posteam_type == "away" & night_game == 1L, na.rm = TRUE)),
+    home_night_pm1  = if_else(home_flag_night == 1L,
+                              if_else(posteam_type == "home",  1L, -1L), 0L),
+    away_night_pm1  = if_else(away_flag_night == 1L,
+                              if_else(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  ungroup()
+
+```
+
+
+```{r}
+data %>%
+  group_by(game_id) %>%
+  summarise(h = sum(home_night_pm1), a = sum(away_night_pm1), .groups = "drop") %>%
+  count(h, a)
+
+```
+
+
+#######################################################################################
+
+
+
+```{r}
+library(dplyr)
+library(stringr)
+# Requires: game_id, posteam_type, and a day-of-week column (one of below)
+stopifnot(all(c("game_id","posteam_type") %in% names(data)))
+dow_col <- intersect(c("day_of_week","game_day","weekday","wday","day"), names(data))[1]
+stopifnot(length(dow_col) == 1)
+
+# Build a robust night signal (prefer explicit flags; fallback to hour>=19 ET)
+flag_cols <- intersect(c("is_night_game","is_prime_time","prime_time","night_game"), names(data))
+night_from_flags <- if (length(flag_cols)) {
+  as.integer(rowSums(sapply(flag_cols, function(c) as.integer(data[[c]] %in% c(1L,1,TRUE,"1"))), na.rm=TRUE) > 0)
+} else NA_integer_
+
+hour_cols <- intersect(c("kickoff_hour_et","game_hour_et","kickoff_hour","game_hour"), names(data))
+night_from_hour <- if (length(hour_cols)) {
+  # coalesce the first non-NA parsed hour across provided hour cols
+  hrs <- Reduce(function(a,b) ifelse(!is.na(b), b, a),
+                lapply(hour_cols, function(c) suppressWarnings(as.numeric(data[[c]]))))
+  as.integer(hrs >= 19)
+} else NA_integer_
+
+night_hint <- dplyr::coalesce(night_from_flags, night_from_hour, 0L)
+
+data <- data %>%
+  mutate(
+    .dow = tolower(str_trim(as.character(.data[[dow_col]]))),
+    .dow = case_when(
+      .dow %in% c("thu","thurs","thursday") ~ "thu",
+      .dow %in% c("sun","sunday")           ~ "sun",
+      .dow %in% c("mon","monday")           ~ "mon",
+      TRUE                                  ~ .dow
+    ),
+    .night = as.integer(night_hint %in% c(1L,1,TRUE))
+  ) %>%
+  group_by(game_id) %>%
+  mutate(
+    # Only flag TNF/SNF/MNF when it's actually a NIGHT game
+    home_flag_thu_night = as.integer(any(posteam_type=="home" & .dow=="thu" & .night==1L, na.rm=TRUE)),
+    home_flag_sun_night = as.integer(any(posteam_type=="home" & .dow=="sun" & .night==1L, na.rm=TRUE)),
+    home_flag_mon_night = as.integer(any(posteam_type=="home" & .dow=="mon" & .night==1L, na.rm=TRUE)),
+
+    home_thursday_night_pm1 = if_else(home_flag_thu_night==1L, if_else(posteam_type=="home",  1L, -1L), 0L),
+    home_sunday_night_pm1   = if_else(home_flag_sun_night==1L, if_else(posteam_type=="home",  1L, -1L), 0L),
+    home_monday_night_pm1   = if_else(home_flag_mon_night==1L, if_else(posteam_type=="home",  1L, -1L), 0L)
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-.dow, -.night)
+
+```
+
+
+
+
+```{r}
+for (v in c("home_thursday_night_pm1","home_sunday_night_pm1","home_monday_night_pm1")) {
+  cat("\n", v, " pair counts:\n")
+  print(
+    data %>%
+      group_by(game_id) %>%
+      summarise(home = first(.[[v]][posteam_type=="home"]),
+                away = first(.[[v]][posteam_type=="away"]),
+                .groups="drop") %>%
+      count(pair = paste0(home,"|",away))
+  )
+}
+
+```
+
+
+```{r}
+table(data$posteam_type, data$home_thursday_night_pm1)
+table(data$posteam_type, data$home_sunday_night_pm1)
+table(data$posteam_type, data$home_monday_night_pm1)
+```
+
+
+##################################################################################
+
+
+```{r}
+library(dplyr)
+library(stringr)
+
+stopifnot(all(c("game_id","posteam","posteam_type") %in% names(data)))
+
+# ---- 0) Choose per-team chronological order ---------------------------------
+ord_cols <- intersect(c("season","season_year","week","game_date","game_id"), names(data))
+if (!length(ord_cols)) ord_cols <- "game_id"
+
+# ---- 1) Build a robust "night" vector and detect MNF on THIS row ------------
+# If you already have a binary 'night_game' column, prefer that directly.
+if ("night_game" %in% names(data)) {
+  night_game_vec <- as.integer(data$night_game %in% c(1L,1,TRUE,"1"))
+} else {
+  flag_cols <- intersect(c("is_night_game","is_prime_time","prime_time","night_game"), names(data))
+  hour_cols <- intersect(c("kickoff_hour_et","game_hour_et","kickoff_hour","game_hour"), names(data))
+
+  to_int01 <- function(x) as.integer(x %in% c(1L,1,TRUE,"1"))
+
+  night_from_flags <- if (length(flag_cols)) {
+    mat <- sapply(flag_cols, function(nm) to_int01(data[[nm]]))
+    as.integer(rowSums(as.data.frame(mat), na.rm = TRUE) > 0)
+  } else rep(NA_integer_, nrow(data))
+
+  night_from_hour <- if (length(hour_cols)) {
+    # Use the first non-NA hour on each row
+    hrs_mat <- sapply(hour_cols, function(nm) suppressWarnings(as.numeric(data[[nm]])))
+    hrs <- apply(as.data.frame(hrs_mat), 1, function(r) {
+      idx <- which(!is.na(r))[1]; if (length(idx)) r[idx] else NA_real_
+    })
+    as.integer(!is.na(hrs) & hrs >= 19)
+  } else rep(NA_integer_, nrow(data))
+
+  night_game_vec <- dplyr::coalesce(night_from_flags, night_from_hour, rep(0L, nrow(data)))
+}
+
+# Day-of-week normalized
+dow_col <- intersect(c("day_of_week","game_day","weekday","wday","day"), names(data))[1]
+stopifnot(length(dow_col) == 1)
+
+dow_norm <- tolower(str_trim(as.character(data[[dow_col]])))
+dow_norm <- dplyr::case_when(
+  dow_norm %in% c("mon","monday") ~ "mon",
+  dow_norm %in% c("sun","sunday") ~ "sun",
+  dow_norm %in% c("thu","thurs","thursday") ~ "thu",
+  TRUE ~ dow_norm
+)
+
+# This row is MNF iff Monday + night
+is_mnf_vec <- as.integer(dow_norm == "mon" & night_game_vec == 1L)
+
+# ---- 2) Look back to previous game for each team -----------------------------
+data <- data %>%
+  mutate(.is_mnf = is_mnf_vec) %>%
+  group_by(posteam) %>%
+  arrange(across(all_of(ord_cols)), .by_group = TRUE) %>%
+  mutate(
+    .prev_is_mnf       = dplyr::lag(.is_mnf, 1L),
+    .prev_side         = dplyr::lag(posteam_type, 1L),  # "home" or "away" in the previous game
+    .prev_MNF_prevHome = as.integer(.prev_is_mnf == 1L & .prev_side == "home"),
+    .prev_MNF_prevAway = as.integer(.prev_is_mnf == 1L & .prev_side == "away")
+  ) %>%
+  ungroup() %>%
+  # ---- 3) Convert to game-level flags + PM1 propagation ----------------------
+  group_by(game_id) %>%
+  mutate(
+    # Was the HOME team off MNF, and was their previous game HOME/AWAY?
+    home_flag_off_MNF_prevHome = as.integer(any(posteam_type == "home" & .prev_MNF_prevHome == 1L, na.rm = TRUE)),
+    home_flag_off_MNF_prevAway = as.integer(any(posteam_type == "home" & .prev_MNF_prevAway == 1L, na.rm = TRUE)),
+
+    # Was the AWAY team off MNF, and was their previous game HOME/AWAY?
+    away_flag_off_MNF_prevHome = as.integer(any(posteam_type == "away" & .prev_MNF_prevHome == 1L, na.rm = TRUE)),
+    away_flag_off_MNF_prevAway = as.integer(any(posteam_type == "away" & .prev_MNF_prevAway == 1L, na.rm = TRUE)),
+
+    # PM1s: +1 for the side that meets the condition, -1 for its opponent; else 0
+    home_off_MNF_prevHome_pm1 = dplyr::if_else(home_flag_off_MNF_prevHome == 1L,
+                                               dplyr::if_else(posteam_type == "home",  1L, -1L), 0L),
+    home_off_MNF_prevAway_pm1 = dplyr::if_else(home_flag_off_MNF_prevAway == 1L,
+                                               dplyr::if_else(posteam_type == "home",  1L, -1L), 0L),
+    away_off_MNF_prevHome_pm1 = dplyr::if_else(away_flag_off_MNF_prevHome == 1L,
+                                               dplyr::if_else(posteam_type == "away",  1L, -1L), 0L),
+    away_off_MNF_prevAway_pm1 = dplyr::if_else(away_flag_off_MNF_prevAway == 1L,
+                                               dplyr::if_else(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-.is_mnf, -.prev_is_mnf, -.prev_side, -.prev_MNF_prevHome, -.prev_MNF_prevAway)
+
+
+```
+
+
+
+```{r}
+# Sums should be zero within each game
+for (v in c("home_off_MNF_prevHome_pm1","home_off_MNF_prevAway_pm1",
+            "away_off_MNF_prevHome_pm1","away_off_MNF_prevAway_pm1")) {
+  print(
+    data %>% group_by(game_id) %>%
+      summarise(sum_v = sum(.data[[v]]), .groups = "drop") %>%
+      count(sum_v)  # expect only sum_v = 0
+  )
+}
+
+# Pair distributions should be only (1|-1) and (0|0) for home_*,
+# and only (-1|1) and (0|0) for away_*
+pair_counts <- function(col) {
+  data %>%
+    group_by(game_id) %>%
+    summarise(home = first(.data[[col]][posteam_type=="home"]),
+              away = first(.data[[col]][posteam_type=="away"]),
+              .groups="drop") %>%
+    count(pair = paste0(home,"|",away))
+}
+pair_counts("home_off_MNF_prevHome_pm1")
+pair_counts("home_off_MNF_prevAway_pm1")
+pair_counts("away_off_MNF_prevHome_pm1")
+pair_counts("away_off_MNF_prevAway_pm1")
+
+```
+
+
+
+```{r}
+table(data$posteam_type, data$home_off_MNF_prevHome_pm1)
+table(data$posteam_type, data$home_off_MNF_prevAway_pm1)
+table(data$posteam_type, data$away_off_MNF_prevHome_pm1)
+table(data$posteam_type, data$away_off_MNF_prevAway_pm1)
+
+```
+
+
+
+
+##################################################################################
+
+
+```{r}
+library(dplyr)
+library(stringr)
+
+stopifnot(all(c("game_id","posteam","posteam_type") %in% names(data)))
+
+# ---- 0) Per-team chronological order ----------------------------------------
+ord_cols <- intersect(c("season","season_year","week","game_date","game_id"), names(data))
+if (!length(ord_cols)) ord_cols <- "game_id"
+
+# ---- 1) Build robust "night" vector, then detect TNF on THIS row ------------
+if ("night_game" %in% names(data)) {
+  night_game_vec <- as.integer(data$night_game %in% c(1L,1,TRUE,"1"))
+} else {
+  flag_cols <- intersect(c("is_night_game","is_prime_time","prime_time","night_game"), names(data))
+  hour_cols <- intersect(c("kickoff_hour_et","game_hour_et","kickoff_hour","game_hour"), names(data))
+
+  to_int01 <- function(x) as.integer(x %in% c(1L,1,TRUE,"1"))
+
+  night_from_flags <- if (length(flag_cols)) {
+    mat <- sapply(flag_cols, function(nm) to_int01(data[[nm]]))
+    as.integer(rowSums(as.data.frame(mat), na.rm = TRUE) > 0)
+  } else rep(NA_integer_, nrow(data))
+
+  night_from_hour <- if (length(hour_cols)) {
+    hrs_mat <- sapply(hour_cols, function(nm) suppressWarnings(as.numeric(data[[nm]])))
+    hrs <- apply(as.data.frame(hrs_mat), 1, function(r) { i <- which(!is.na(r))[1]; if (length(i)) r[i] else NA_real_ })
+    as.integer(!is.na(hrs) & hrs >= 19)
+  } else rep(NA_integer_, nrow(data))
+
+  night_game_vec <- dplyr::coalesce(night_from_flags, night_from_hour, rep(0L, nrow(data)))
+}
+
+# Day-of-week normalized
+dow_col <- intersect(c("day_of_week","game_day","weekday","wday","day"), names(data))[1]
+stopifnot(length(dow_col) == 1)
+
+dow_norm <- tolower(str_trim(as.character(data[[dow_col]])))
+dow_norm <- dplyr::case_when(
+  dow_norm %in% c("thu","thurs","thursday") ~ "thu",
+  dow_norm %in% c("mon","monday")           ~ "mon",
+  dow_norm %in% c("sun","sunday")           ~ "sun",
+  TRUE ~ dow_norm
+)
+
+# This row is TNF iff Thursday + night
+is_tnf_vec <- as.integer(dow_norm == "thu" & night_game_vec == 1L)
+
+# ---- 2) Look back to previous game for each team -----------------------------
+data <- data %>%
+  mutate(.is_tnf = is_tnf_vec) %>%
+  group_by(posteam) %>%
+  arrange(across(all_of(ord_cols)), .by_group = TRUE) %>%
+  mutate(
+    .prev_is_tnf       = dplyr::lag(.is_tnf, 1L),
+    .prev_side         = dplyr::lag(posteam_type, 1L),  # "home" or "away" previously
+    .prev_TNF_prevHome = as.integer(.prev_is_tnf == 1L & .prev_side == "home"),
+    .prev_TNF_prevAway = as.integer(.prev_is_tnf == 1L & .prev_side == "away")
+  ) %>%
+  ungroup() %>%
+  # ---- 3) Game-level flags + PM1 propagation ---------------------------------
+  group_by(game_id) %>%
+  mutate(
+    home_flag_off_TNF_prevHome = as.integer(any(posteam_type=="home" & .prev_TNF_prevHome==1L, na.rm=TRUE)),
+    home_flag_off_TNF_prevAway = as.integer(any(posteam_type=="home" & .prev_TNF_prevAway==1L, na.rm=TRUE)),
+    away_flag_off_TNF_prevHome = as.integer(any(posteam_type=="away" & .prev_TNF_prevHome==1L, na.rm=TRUE)),
+    away_flag_off_TNF_prevAway = as.integer(any(posteam_type=="away" & .prev_TNF_prevAway==1L, na.rm=TRUE)),
+
+    home_off_TNF_prevHome_pm1 = dplyr::if_else(home_flag_off_TNF_prevHome==1L,
+                                               dplyr::if_else(posteam_type=="home",  1L, -1L), 0L),
+    home_off_TNF_prevAway_pm1 = dplyr::if_else(home_flag_off_TNF_prevAway==1L,
+                                               dplyr::if_else(posteam_type=="home",  1L, -1L), 0L),
+    away_off_TNF_prevHome_pm1 = dplyr::if_else(away_flag_off_TNF_prevHome==1L,
+                                               dplyr::if_else(posteam_type=="away",  1L, -1L), 0L),
+    away_off_TNF_prevAway_pm1 = dplyr::if_else(away_flag_off_TNF_prevAway==1L,
+                                               dplyr::if_else(posteam_type=="away",  1L, -1L), 0L)
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-.is_tnf, -.prev_is_tnf, -.prev_side, -.prev_TNF_prevHome, -.prev_TNF_prevAway)
+
+```
+
+
+```{r}
+for (v in c("home_off_TNF_prevHome_pm1","home_off_TNF_prevAway_pm1",
+            "away_off_TNF_prevHome_pm1","away_off_TNF_prevAway_pm1")) {
+  print(
+    data %>% group_by(game_id) %>%
+      summarise(sum_v = sum(.data[[v]]), .groups="drop") %>%
+      count(sum_v)  # expect only 0
+  )
+  print(
+    data %>% group_by(game_id) %>%
+      summarise(home = first(.data[[v]][posteam_type=="home"]),
+                away = first(.data[[v]][posteam_type=="away"]),
+                .groups="drop") %>%
+      count(pair = paste0(home,"|",away))
+  )
+}
+
+```
+
+
+
+
+```{r}
+table(data$posteam_type, data$home_off_TNF_prevHome_pm1)
+table(data$posteam_type, data$home_off_TNF_prevAway_pm1)
+table(data$posteam_type, data$away_off_TNF_prevHome_pm1)
+table(data$posteam_type, data$away_off_TNF_prevAway_pm1)
+
+```
+
+#############################################################################
+
+
+```{r}
+summary(data$home_vs_away_travel_2000plus_only_away)
+summary(data$away_travel_3000plus_last3w)
+summary(data$home_prevAway_and_3000mi_3w)
+summary(data$team_prev_loss_19plus)
+summary(data$team_prev_loss_29plus)
+```
+
+```{r}
+library(dplyr)
+
+# --- helpers (as before, just minor tidy-ups) ---
+is_one <- function(x) {
+  if (is.logical(x)) !is.na(x) & x
+  else if (is.numeric(x)) !is.na(x) & x == 1
+  else !is.na(x) & (as.character(x) %in% c("1","TRUE","true","T"))
+}
+norm_type <- function(x) tolower(trimws(as.character(x)))
+
+# Propagate a one-sided game flag to BOTH rows of the same game_id
+game_any <- function(v, game_id) {
+  on_row <- as.integer(is_one(v))
+  as.logical(ave(on_row, game_id, FUN = function(z) as.integer(any(z == 1L, na.rm = TRUE))))
+}
+
+make_pm1 <- function(df, col, owner = c("away","home","team"), out = paste0(col, "_pm1")) {
+  owner <- match.arg(owner)
+  stopifnot(all(c("game_id","posteam_type", col) %in% names(df)))
+
+  is_home <- norm_type(df$posteam_type) == "home"
+  is_away <- !is_home
+
+  if (owner %in% c("away","home")) {
+    on_game <- game_any(df[[col]], df$game_id)
+    df[[out]] <- dplyr::if_else(
+      on_game & (if (owner == "away") is_away else is_home),  1L,
+      dplyr::if_else(on_game & (if (owner == "away") is_home else is_away), -1L, 0L)
+    )
+  } else { # owner == "team" (apply only to the posteam row; sign by side)
+    on_row <- is_one(df[[col]])
+    df[[out]] <- dplyr::if_else(on_row & is_away,  1L,
+                     dplyr::if_else(on_row & is_home, -1L, 0L))
+  }
+  df
+}
+
+```
+
+
+```{r}
+# 1) Away-owned -> +1 away / -1 home when on (both rows flagged), else 0
+data <- make_pm1(data, "home_vs_away_travel_2000plus_only_away", owner = "away")
+data <- make_pm1(data, "away_travel_3000plus_last3w",           owner = "away")
+
+# 2) Home-owned -> +1 home / -1 away when on (both rows flagged), else 0
+data <- make_pm1(data, "home_prevAway_and_3000mi_3w",           owner = "home")
+
+# 3) Team-owned -> only the posteam row gets ±1 (away +1, home −1); opponent row stays 0
+data <- make_pm1(data, "team_prev_loss_19plus",                 owner = "team")
+data <- make_pm1(data, "team_prev_loss_29plus",                 owner = "team")
+
+```
+
+
+```{r}
+# Domain check: all outputs must be in {-1,0,1}
+pm1_cols <- c("home_vs_away_travel_2000plus_only_away_pm1",
+              "away_travel_3000plus_last3w_pm1",
+              "home_prevAway_and_3000mi_3w_pm1",
+              "team_prev_loss_19plus_pm1",
+              "team_prev_loss_29plus_pm1")
+domain <- sapply(pm1_cols[pm1_cols %in% names(data)], function(v)
+  all(data[[v]] %in% c(-1L,0L,1L) | is.na(data[[v]]))
+)
+print(domain)  # expect all TRUE
+
+# Pair counts per game for the "one-sided" game-owned variables
+pair_counts <- function(col) {
+  data %>%
+    group_by(game_id) %>%
+    summarise(home = first(.data[[col]][posteam_type=="home"]),
+              away = first(.data[[col]][posteam_type=="away"]),
+              .groups="drop") %>%
+    count(pair = paste0(home,"|",away))
+}
+
+cat("\naway-owned pairs (expect only '-1|1' and '0|0'):\n")
+print(pair_counts("home_vs_away_travel_2000plus_only_away_pm1"))
+print(pair_counts("away_travel_3000plus_last3w_pm1"))
+
+cat("\nhome-owned pairs (expect only '1|-1' and '0|0'):\n")
+print(pair_counts("home_prevAway_and_3000mi_3w_pm1"))
+
+# For team-owned, it’s row-local: expect combinations like '-1|0', '0|1', '0|0', and sometimes '-1|1'
+cat("\nteam_prev_loss_19plus_pm1 by side:\n")
+print(with(data, table(posteam_type, team_prev_loss_19plus_pm1, useNA="ifany")))
+cat("\nteam_prev_loss_29plus_pm1 by side:\n")
+print(with(data, table(posteam_type, team_prev_loss_29plus_pm1, useNA="ifany")))
+
+# Sum-to-zero check per game (only for the game-owned variables)
+sum0 <- function(col) {
+  data %>% group_by(game_id) %>%
+    summarise(s = sum(.data[[col]], na.rm = TRUE), .groups = "drop") %>%
+    count(s)
+}
+cat("\nSum-to-zero per game:\n")
+print(sum0("home_vs_away_travel_2000plus_only_away_pm1"))
+print(sum0("away_travel_3000plus_last3w_pm1"))
+print(sum0("home_prevAway_and_3000mi_3w_pm1"))
+
+```
+
+
+```{r}
+table(data$posteam_type, data$home_vs_away_travel_2000plus_only_away_pm1)
+table(data$posteam_type, data$away_travel_3000plus_last3w_pm1)
+table(data$posteam_type, data$home_prevAway_and_3000mi_3w_pm1)
+table(data$posteam_type, data$team_prev_loss_19plus_pm1)
+table(data$posteam_type, data$team_prev_loss_29plus_pm1)
+```
+
+
+##################################################################################
+
+
+```{r}
+library(dplyr)
+
+# helper consistent with your previous code
+is_one <- function(x) {
+  if (is.logical(x)) !is.na(x) & x
+  else if (is.numeric(x)) !is.na(x) & x == 1
+  else !is.na(x) & (as.character(x) %in% c("1","TRUE","true","T"))
+}
+
+stopifnot(all(c("game_id","posteam_type","home_opponent_away_3in4") %in% names(data)))
+
+data <- data %>%
+  group_by(game_id) %>%
+  mutate(
+    # Only let the HOME row assert this condition:
+    home_flag_opponent_away_3in4 = as.integer(any(
+      posteam_type == "home" & is_one(home_opponent_away_3in4), na.rm = TRUE
+    )),
+    # Propagate ±1/∓1 across both rows; sum == 0 per game
+    home_opponent_away_3in4_pm1 = if_else(
+      home_flag_opponent_away_3in4 == 1L,
+      if_else(posteam_type == "home",  1L, -1L),
+      0L
+    )
+  ) %>%
+  ungroup()
+
+```
+
+
+
+```{r}
+# 1) Domain in {-1,0,1}
+stopifnot(all(data$home_opponent_away_3in4_pm1 %in% c(-1L,0L,1L)))
+
+# 2) Sum-to-zero per game (expect only s = 0)
+data %>%
+  group_by(game_id) %>%
+  summarise(s = sum(home_opponent_away_3in4_pm1), .groups = "drop") %>%
+  count(s)
+
+# 3) Pair distribution (expect only "1|-1" and "0|0")
+data %>%
+  group_by(game_id) %>%
+  summarise(home = first(home_opponent_away_3in4_pm1[posteam_type=="home"]),
+            away = first(home_opponent_away_3in4_pm1[posteam_type=="away"]),
+            .groups = "drop") %>%
+  count(pair = paste0(home,"|",away))
+
+```
+
+```{r}
+table(data$posteam_type, data$home_opponent_away_3in4_pm1)
+```
+
+
+########################################################################
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id", "days_since_last_game_diff") %in% names(data)))
+
+has_bye_flags <- all(c("home_flag_OffBye", "away_flag_OffBye") %in% names(data))
+bye_like <- if (has_bye_flags) {
+  # exclude when either side is off a bye (you created these earlier)
+  (data$home_flag_OffBye == 1L) | (data$away_flag_OffBye == 1L)
+} else {
+  # fallback: exclude very large rest swings (treat as bye-like)
+  abs(suppressWarnings(as.numeric(data$days_since_last_game_diff))) > 4
+}
+
+diff_num <- suppressWarnings(as.numeric(data$days_since_last_game_diff))
+
+data <- data %>%
+  mutate(
+    home_extra_days_rest_pm1 = case_when(
+      !is.finite(diff_num)            ~ 0L,
+      bye_like                        ~ 0L,
+      diff_num > 0                    ~ 1L,   # home has more rest
+      diff_num < 0                    ~ -1L,  # home has less rest
+      TRUE                            ~ 0L
+    ),
+    away_extra_days_rest_pm1 = -home_extra_days_rest_pm1
+  )
+
+# Optional row-PoV PM1 (+1 if THIS row's team has more rest, -1 if less)
+if ("posteam_type" %in% names(data)) {
+  data <- data %>%
+    mutate(
+      extra_days_rest_pm1 = if_else(
+        posteam_type == "home", home_extra_days_rest_pm1, away_extra_days_rest_pm1
+      )
+    )
+}
+
+```
+
+
+```{r}
+# Domain
+stopifnot(all(data$home_extra_days_rest_pm1 %in% c(-1L,0L,1L)))
+stopifnot(all(data$away_extra_days_rest_pm1 %in% c(-1L,0L,1L)))
+
+# Sum-to-zero per game (should be only s=0)
+data %>% group_by(game_id) %>%
+  summarise(s = sum(home_extra_days_rest_pm1 + away_extra_days_rest_pm1), .groups="drop") %>%
+  count(s)
+
+# Pair pattern (expect only  1|-1, 0|0, -1|1 )
+data %>% group_by(game_id) %>%
+  summarise(h = first(home_extra_days_rest_pm1[posteam_type=="home"]),
+            a = first(away_extra_days_rest_pm1[posteam_type=="away"]),
+            .groups="drop") %>%
+  count(pair = paste0(h,"|",a))
+
+```
+
+
+
+```{r}
+table(data$posteam_type, data$home_extra_days_rest_pm1 )
+table(data$posteam_type, data$away_extra_days_rest_pm1 )
+```
+
+
+##################################################################################
+
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam_type","BeforeBye") %in% names(data)))
+
+# pick your predicted home-perspective diff column
+pred_col <- intersect(c("ScoreDiff_avg_final","score_diff_pred","score_diff"), names(data))[1]
+stopifnot(length(pred_col) == 1)
+
+data <- data %>%
+  mutate(.pred_diff = suppressWarnings(as.numeric(.data[[pred_col]]))) %>%
+  group_by(game_id) %>%
+  mutate(
+    # game-level flags (only the HOME team’s BeforeBye matters here)
+    home_flag_BeforeBye = as.integer(any(posteam_type == "home" & BeforeBye == 1L, na.rm = TRUE)),
+    # use the HOME row’s predicted diff for the game-level decision
+    .pred_home_diff     = dplyr::first(.pred_diff[posteam_type == "home"], default = NA_real_),
+    .trigger            = as.integer(home_flag_BeforeBye == 1L),
+
+    # propagate ±1/∓1 across both rows (sum==0 per game)
+    #home_BeforeBye_scoreDiff7_pm1 = if_else(
+    #  .trigger == 1L,
+    #  if_else(posteam_type == "home",  1L, -1L),
+    #  0L
+    #)
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-.pred_diff, -.pred_home_diff, -.trigger, -home_flag_BeforeBye)
+
+
+```
+
+
+
+
+##################################################################################
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam_type","home_pWL","away_pWL") %in% names(data)))
+# Use your predicted home-perspective score diff; put your preferred name first
+pred_col <- intersect(c("ScoreDiff_avg_final","score_diff_pred","score_diff"), names(data))[1]
+stopifnot(length(pred_col) == 1)
+
+is_win <- function(x) {
+  if (is.numeric(x)) !is.na(x) & x == 1
+  else if (is.logical(x)) !is.na(x) & x
+  else !is.na(x) & toupper(as.character(x)) %in% c("1","W","TRUE","T")
+}
+
+data <- data %>%
+  mutate(.pred_diff = suppressWarnings(as.numeric(.data[[pred_col]]))) %>%
+  group_by(game_id) %>%
+  mutate(
+    # game-level prev-win flags (tie/NA -> FALSE)
+    .home_prev_win = as.integer(any(posteam_type=="home" & is_win(home_pWL), na.rm=TRUE)),
+    .away_prev_win = as.integer(any(posteam_type=="away" & is_win(away_pWL), na.rm=TRUE)),
+    # use HOME row’s predicted diff for the game decision
+    .pred_home_diff = dplyr::first(.pred_diff[posteam_type=="home"], default = NA_real_),
+
+    # HOME version: home won last game & predicted to win (>0)
+    team_prevWin_and_predWin_home_pm1 = if_else(
+      .home_prev_win == 1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+
+    # AWAY version: away won last game & home is predicted to lose (<0)
+    team_prevWin_and_predWin_away_pm1 = if_else(
+      .away_prev_win == 1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    ),
+
+    # Combined (one column to use in models, still sums to 0 per game)
+    team_prevWin_and_predWin_combined_pm1 = if_else(
+      posteam_type=="home", team_prevWin_and_predWin_home_pm1, team_prevWin_and_predWin_away_pm1
+    )
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-any_of(c(".pred_diff",".pred_home_diff",".home_prev_win",".away_prev_win")))
+
+```
+
+
+```{r}
+# Domain
+sapply(c("team_prevWin_and_predWin_home_pm1",
+         "team_prevWin_and_predWin_away_pm1",
+         "team_prevWin_and_predWin_combined_pm1"),
+       \(v) all(data[[v]] %in% c(-1L,0L,1L)))
+
+# Sum-to-zero per game (expect only s = 0 for each)
+for (v in c("team_prevWin_and_predWin_home_pm1",
+            "team_prevWin_and_predWin_away_pm1",
+            "team_prevWin_and_predWin_combined_pm1")) {
+  print(
+    data %>% group_by(game_id) %>%
+      summarise(s = sum(.data[[v]]), .groups="drop") %>%
+      count(s)
+  )
+}
+
+# Pair distributions (expect only "1|-1" and "0|0")
+pair_counts <- function(col) {
+  data %>% group_by(game_id) %>%
+    summarise(h = first(.data[[col]][posteam_type=="home"]),
+              a = first(.data[[col]][posteam_type=="away"]),
+              .groups="drop") %>%
+    count(pair = paste0(h,"|",a))
+}
+pair_counts("team_prevWin_and_predWin_home_pm1")
+pair_counts("team_prevWin_and_predWin_away_pm1")
+pair_counts("team_prevWin_and_predWin_combined_pm1")
+
+```
+
+
+```{r}
+table(data$posteam_type, data$team_prevWin_and_predWin_home_pm1)
+table(data$posteam_type, data$team_prevWin_and_predWin_away_pm1)
+table(data$posteam_type, data$team_prevWin_and_predWin_combined_pm1)
+```
+
+
+##################################################################################
+
+
+```{r}
+library(dplyr)
+
+# Helper from your snippet
+is_prev_loss <- function(x) {
+  if (is.numeric(x)) !is.na(x) & x < 0 else {
+    xx <- toupper(trimws(as.character(x)))
+    !is.na(xx) & xx %in% c("L","LOSS","LOST","-1")
+  }
+}
+
+stopifnot(all(c("game_id","posteam_type","days_since_last_game","home_pWL","away_pWL","score_diff") %in% names(data)))
+
+data <- data %>%
+  mutate(.pred = suppressWarnings(as.numeric(score_diff))) %>%   # home-perspective predicted diff
+  group_by(game_id) %>%
+  mutate(
+    .pred_home = first(.pred[posteam_type=="home"]),             # use HOME row's pred diff
+    # (Optional) exclude byes if you track them per team; else keep pure ">=8"
+    # .home_not_bye = first(OffBye[posteam_type=="home"] != 1L),
+    # .away_not_bye = first(OffBye[posteam_type=="away"] != 1L),
+
+    home_qual = any(
+      posteam_type=="home" &
+      days_since_last_game >= 8 &
+      is_prev_loss(away_pWL) &
+      !is.na(.pred_home) & .pred_home < 0,                      # home expected dog
+      na.rm = TRUE
+    ),
+    away_qual = any(
+      posteam_type=="away" &
+      days_since_last_game >= 8 &
+      is_prev_loss(home_pWL) &
+      !is.na(.pred_home) & .pred_home > 0,                      # away expected dog
+      na.rm = TRUE
+    ),
+    both_qual = home_qual & away_qual,
+
+    # Home-POV, either-only: 0 when both qualify; else +1 owner / -1 opponent
+    days8_oppPrevLoss_expdog_pm1 = case_when(
+      both_qual ~ 0L,
+      posteam_type=="home" & home_qual ~  1L,
+      posteam_type=="away" & away_qual ~  1L,
+      posteam_type=="home" & away_qual ~ -1L,
+      posteam_type=="away" & home_qual ~ -1L,
+      TRUE ~ 0L
+    ),
+
+    # Away-owned pm1 (standard ±1 propagation when away qualifies)
+    days8_oppPrevLoss_awayPOV_pm1 = case_when(
+      posteam_type=="away" & away_qual ~  1L,
+      posteam_type=="home" & away_qual ~ -1L,
+      TRUE ~ 0L
+    )
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-.pred, -.pred_home, -both_qual)
+
+```
+
+
+
+```{r}
+# Domain
+stopifnot(all(data$days8_oppPrevLoss_expdog_pm1 %in% c(-1L,0L,1L)))
+stopifnot(all(data$days8_oppPrevLoss_awayPOV_pm1 %in% c(-1L,0L,1L)))
+
+# Sum-to-zero per game (awayPOV should be only s=0)
+data |> group_by(game_id) |>
+  summarise(s = sum(days8_oppPrevLoss_awayPOV_pm1), .groups="drop") |>
+  count(s)
+
+# Pair distributions
+pair_counts <- function(col) {
+  data |> group_by(game_id) |>
+    summarise(h = first(.data[[col]][posteam_type=="home"]),
+              a = first(.data[[col]][posteam_type=="away"]),
+              .groups="drop") |>
+    count(pair = paste0(h,"|",a))
+}
+pair_counts("days8_oppPrevLoss_expdog_pm1")     # expect 1|-1, -1|1, 0|0 (and 0|0 when both qualify)
+pair_counts("days8_oppPrevLoss_awayPOV_pm1")    # expect -1|1 and 0|0
+
+```
+
+```{r}
+table(data$posteam_type, data$days8_oppPrevLoss_expdog_pm1)
+table(data$posteam_type, data$days8_oppPrevLoss_awayPOV_pm1)
+
+```
+
+
+
+##################################################################################
+
+
+```{r}
+library(dplyr)
+
+is_div <- function(x) {
+  if (is.logical(x)) coalesce(x, FALSE) else coalesce(x, 0) == 1
+}
+
+stopifnot(all(c("game_id","posteam","posteam_type","div_game") %in% names(data)))
+
+order_cols <- intersect(c("season","week","game_date","game_id"), names(data))
+stopifnot(length(order_cols) > 0)
+
+data <- data %>%
+  group_by(posteam) %>%
+  arrange(across(all_of(order_cols)), .by_group = TRUE) %>%
+  mutate(
+    .div_now  = is_div(div_game),
+    .div_prev = is_div(lag(div_game)),
+    .div_next = is_div(lead(div_game)),   # <-- fixed (was 'leap = lead(...)')
+    .is_sandwich = (!.div_now) & .div_prev & .div_next
+  ) %>%
+  ungroup() %>%
+  group_by(game_id) %>%
+  mutate(
+    home_flag_sandwich = as.integer(any(posteam_type=="home" & .is_sandwich, na.rm=TRUE)),
+    away_flag_sandwich = as.integer(any(posteam_type=="away" & .is_sandwich, na.rm=TRUE)),
+    sandwich_pm1 = case_when(
+      home_flag_sandwich == 1L & away_flag_sandwich == 0L ~ if_else(posteam_type=="home",  1L, -1L),
+      away_flag_sandwich == 1L & home_flag_sandwich == 0L ~ if_else(posteam_type=="away",  1L, -1L),
+      TRUE ~ 0L
+    )
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-any_of(c(".div_now",".div_prev",".div_next",".is_sandwich",
+                   "home_flag_sandwich","away_flag_sandwich")))
+
+
+
+```
+
+
+```{r}
+# Domain
+stopifnot(all(data$sandwich_pm1 %in% c(-1L,0L,1L)))
+
+# Sum-to-zero per game (expect only s=0)
+data %>% group_by(game_id) %>%
+  summarise(s = sum(sandwich_pm1), .groups="drop") %>%
+  count(s)
+
+# Pair distribution (expect only "1|-1" and "0|0")
+data %>% group_by(game_id) %>%
+  summarise(home = first(sandwich_pm1[posteam_type=="home"]),
+            away = first(sandwich_pm1[posteam_type=="away"]),
+            .groups="drop") %>%
+  count(pair = paste0(home,"|",away))
+
+```
+
+
+
+```{r}
+table(data$posteam_type, data$sandwich_pm1)
+
+```
+
+
+##################################################################################
+
+
+
+```{r}
+# Requires: dplyr
+library(dplyr)
+
+# Normalize div_game to logical
+is_div <- function(x) {
+  if (is.logical(x)) return(dplyr::coalesce(x, FALSE))
+  xx  <- toupper(trimws(as.character(x)))
+  num <- suppressWarnings(as.numeric(xx))
+  num[is.na(num) & xx %in% c("TRUE","T")]  <- 1
+  num[is.na(num) & xx %in% c("FALSE","F")] <- 0
+  (dplyr::coalesce(num, 0) >= 1)
+}
+
+# ---- TEAM-CENTRIC (recommended): one row per team per game ----
+stopifnot(all(c("posteam","posteam_type","div_game","game_id") %in% names(data)))
+
+# Pick the best available ordering columns (for prev/next)
+.order_cols <- intersect(c("season","week","game_date","game_id"), names(data))
+stopifnot(length(.order_cols) > 0)
+
+# 1) Compute per-team prev/next division flags and sandwich indicator
+data <- data %>%
+  dplyr::arrange(dplyr::across(dplyr::all_of(.order_cols))) %>%
+  dplyr::group_by(posteam) %>%
+  dplyr::mutate(
+    div_now_tmp  = is_div(div_game),
+    div_prev_tmp = dplyr::lag(div_now_tmp, 1, default = FALSE),
+    div_next_tmp = dplyr::lead(div_now_tmp, 1, default = FALSE),
+    is_sandwich_tmp = (!div_now_tmp) & div_prev_tmp & div_next_tmp
+  ) %>%
+  dplyr::ungroup()
+
+# 2) Per-game: did the AWAY team have a sandwich? (no leading-underscore name)
+away_is_sandwich_by_game <- data %>%
+  dplyr::group_by(game_id) %>%
+  dplyr::summarise(
+    away_is_sandwich = any(posteam_type == "away" & is_sandwich_tmp, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# 3) Create the AWAY-POV signed pm1 on team rows:
+#    +1 on away row when away team is in a sandwich,
+#    -1 on home row for those games, else 0.
+data <- data %>%
+  dplyr::left_join(away_is_sandwich_by_game, by = "game_id") %>%
+  dplyr::mutate(
+    sandwich_awayPOV_pm1 = dplyr::case_when(
+      posteam_type == "away" & away_is_sandwich ~  1L,
+      posteam_type == "home" & away_is_sandwich ~ -1L,
+      TRUE ~ 0L
+    )
+  ) %>%
+  dplyr::select(-dplyr::any_of(c("div_now_tmp","div_prev_tmp","div_next_tmp","is_sandwich_tmp","away_is_sandwich")))
+
+```
+
+
+```{r}
+table(data$posteam_type, data$sandwich_awayPOV_pm1)
+```
+
+
+
+##############################################################################################
+
+
+```{r}
+library(dplyr)
+
+data <- data %>%
+  mutate(
+    # --- side-specific conditions (NA -> FALSE) ---
+    cond_home = posteam_type == "home" &
+                home_OffBye_pm1 == 1L &
+                home_pWL == -1L &
+                home_ppWL == -1L,
+    cond_away = posteam_type == "away" &
+                away_OffBye_pm1 == 1L &
+                away_pWL == -1L &
+                away_ppWL == -1L,
+    cond_home = if_else(is.na(cond_home), FALSE, cond_home),
+    cond_away = if_else(is.na(cond_away), FALSE, cond_away),
+
+    # +1 if THIS row's team meets the condition (home or away), else 0
+    team_prev2L_offBye_self = case_when(
+      cond_home ~ 1L,
+      cond_away ~ 1L,
+      TRUE      ~ 0L
+    )
+  ) %>%
+  group_by(game_id) %>%
+  mutate(
+    # Final PM1 that guarantees sum(game_id) == 0:
+    # If one side = +1, the other gets -1; if both/none meet, both end up 0.
+    team_prev2L_offBye_pm1 = 2L * team_prev2L_offBye_self -
+                             sum(team_prev2L_offBye_self, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-cond_home, -cond_away, -team_prev2L_offBye_self)
+
+```
+
+
+
+```{r}
+# Values restricted to -1/0/+1
+table(data$team_prev2L_offBye_pm1, useNA = "ifany")
+
+# Sums to 0 for every game_id
+data %>%
+  group_by(game_id) %>%
+  summarise(sum_flag = sum(team_prev2L_offBye_pm1), .groups = "drop") %>%
+  count(sum_flag)   # should show all zeros
+
+# (Optional) see distribution by side
+table(data$posteam_type, data$team_prev2L_offBye_pm1)
+
+```
+
+
+###########################################################################
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam_type","home_pWL","away_pWL") %in% names(data)))
+# Use your predicted home-perspective score diff; put your preferred name first
+pred_col <- intersect(c("ScoreDiff_avg_final","score_diff_pred","score_diff"), names(data))[1]
+stopifnot(length(pred_col) == 1)
+
+is_loss <- function(x) {
+  if (is.numeric(x)) !is.na(x) & x == -1
+  else if (is.logical(x)) !is.na(x) & !x
+  else !is.na(x) & toupper(as.character(x)) %in% c("-1","L","LOSS")
+}
+
+data <- data %>%
+  mutate(.pred_diff = suppressWarnings(as.numeric(.data[[pred_col]]))) %>%
+  group_by(game_id) %>%
+  mutate(
+    # game-level prev-loss flags (tie/NA -> FALSE)
+    .home_prev_loss = as.integer(any(posteam_type=="home" & is_loss(home_pWL), na.rm=TRUE)),
+    .away_prev_loss = as.integer(any(posteam_type=="away" & is_loss(away_pWL), na.rm=TRUE)),
+
+    # use HOME row’s predicted diff for the game decision
+    .pred_home_diff = dplyr::first(.pred_diff[posteam_type=="home"], default = NA_real_),
+
+    # HOME version: home lost last game & is predicted to win (>0)
+    team_prevLoss_and_predWin_home_pm1 = if_else(
+      .home_prev_loss == 1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+
+    # AWAY version: away lost last game & (home predicted to lose) (<0)
+    team_prevLoss_and_predWin_away_pm1 = if_else(
+      .away_prev_loss == 1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    ),
+
+    # Combined (one column; still sums to 0 per game)
+    team_prevLoss_and_predWin_combined_pm1 = if_else(
+      posteam_type=="home", team_prevLoss_and_predWin_home_pm1, team_prevLoss_and_predWin_away_pm1
+    )
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-any_of(c(".pred_diff",".pred_home_diff",".home_prev_loss",".away_prev_loss")))
+
+```
+
+
+```{r}
+# Domain
+sapply(c("team_prevLoss_and_predWin_home_pm1",
+         "team_prevLoss_and_predWin_away_pm1",
+         "team_prevLoss_and_predWin_combined_pm1"),
+       \(v) all(data[[v]] %in% c(-1L,0L,1L)))
+
+# Sum-to-zero per game (expect only s = 0 for each)
+for (v in c("team_prevLoss_and_predWin_home_pm1",
+            "team_prevLoss_and_predWin_away_pm1",
+            "team_prevLoss_and_predWin_combined_pm1")) {
+  print(
+    data %>% group_by(game_id) %>%
+      summarise(s = sum(.data[[v]]), .groups="drop") %>%
+      count(s)
+  )
+}
+
+# Pair distributions (expect only "1|-1" and "0|0")
+pair_counts <- function(col) {
+  data %>% group_by(game_id) %>%
+    summarise(h = first(.data[[col]][posteam_type=="home"]),
+              a = first(.data[[col]][posteam_type=="away"]),
+              .groups="drop") %>%
+    count(pair = paste0(h,"|",a))
+}
+pair_counts("team_prevLoss_and_predWin_home_pm1")
+pair_counts("team_prevLoss_and_predWin_away_pm1")
+pair_counts("team_prevLoss_and_predWin_combined_pm1")
+
+# By side tables
+table(data$posteam_type, data$team_prevLoss_and_predWin_home_pm1)
+table(data$posteam_type, data$team_prevLoss_and_predWin_away_pm1)
+table(data$posteam_type, data$team_prevLoss_and_predWin_combined_pm1)
+
+```
+
+
+
+```{r}
+table(data$posteam_type, data$team_prevLoss_and_predWin_home_pm1)
+table(data$posteam_type, data$team_prevLoss_and_predWin_away_pm1)
+```
+
+#########################################################################################
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam_type","home_pWL","away_pWL") %in% names(data)))
+# Pick your predicted home-perspective score diff column
+pred_col <- intersect(c("ScoreDiff_avg_final","score_diff_pred","score_diff"), names(data))[1]
+stopifnot(length(pred_col) == 1)
+
+is_win  <- function(x) {
+  if (is.numeric(x)) !is.na(x) & x == 1
+  else if (is.logical(x)) !is.na(x) & x
+  else !is.na(x) & toupper(as.character(x)) %in% c("1","W","WIN","TRUE","T")
+}
+is_loss <- function(x) {
+  if (is.numeric(x)) !is.na(x) & x == -1
+  else if (is.logical(x)) !is.na(x) & !x
+  else !is.na(x) & toupper(as.character(x)) %in% c("-1","L","LOSS","LOSE","FALSE","F")
+}
+
+data <- data %>%
+  mutate(.pred_diff = suppressWarnings(as.numeric(.data[[pred_col]]))) %>%
+  group_by(game_id) %>%
+  mutate(
+    # Use the HOME row’s predicted diff as the game-level anchor
+    .pred_home_diff = dplyr::first(.pred_diff[posteam_type=="home"], default = NA_real_),
+
+    # Game-level previous-result flags
+    .home_prev_win  = as.integer(any(posteam_type=="home" & is_win(home_pWL),  na.rm = TRUE)),
+    .away_prev_win  = as.integer(any(posteam_type=="away" & is_win(away_pWL),  na.rm = TRUE)),
+    .home_prev_loss = as.integer(any(posteam_type=="home" & is_loss(home_pWL), na.rm = TRUE)),
+    .away_prev_loss = as.integer(any(posteam_type=="away" & is_loss(away_pWL), na.rm = TRUE)),
+
+    # --- You asked for these four ---
+
+    # Prev WIN, now predicted LOSS
+    # Home prev win & home predicted to lose (<0)
+    team_prevWin_and_predLoss_home_pm1 = if_else(
+      .home_prev_win == 1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+    # Away prev win & away predicted to lose (>0 from home POV)
+    team_prevWin_and_predLoss_away_pm1 = if_else(
+      .away_prev_win == 1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    ),
+
+    # Prev LOSS, now predicted LOSS
+    # Home prev loss & home predicted to lose (<0)
+    team_prevLoss_and_predLoss_home_pm1 = if_else(
+      .home_prev_loss == 1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+    # Away prev loss & away predicted to lose (>0 from home POV)
+    team_prevLoss_and_predLoss_away_pm1 = if_else(
+      .away_prev_loss == 1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    )
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-dplyr::any_of(c(".pred_diff",".pred_home_diff",
+                                 ".home_prev_win",".away_prev_win",
+                                 ".home_prev_loss",".away_prev_loss")))
+
+```
+
+
+```{r}
+# Domain: all in {-1,0,1}
+vars <- c("team_prevWin_and_predLoss_home_pm1",
+          "team_prevWin_and_predLoss_away_pm1",
+          "team_prevLoss_and_predLoss_home_pm1",
+          "team_prevLoss_and_predLoss_away_pm1")
+sapply(vars, \(v) all(data[[v]] %in% c(-1L,0L,1L)))
+
+# Sum-to-zero per game
+for (v in vars) {
+  print(
+    data %>% group_by(game_id) %>%
+      summarise(s = sum(.data[[v]]), .groups="drop") %>%
+      count(s)
+  )
+}
+
+# Pair distributions (expect only "1|-1" and "0|0")
+pair_counts <- function(col) {
+  data %>% group_by(game_id) %>%
+    summarise(h = first(.data[[col]][posteam_type=="home"]),
+              a = first(.data[[col]][posteam_type=="away"]),
+              .groups="drop") %>%
+    count(pair = paste0(h,"|",a))
+}
+lapply(vars, pair_counts)
+
+```
+
+
+```{r}
+table(data$posteam_type, data$team_prevLoss_and_predLoss_home_pm1)
+table(data$posteam_type, data$team_prevLoss_and_predLoss_away_pm1)
+table(data$posteam_type, data$team_prevWin_and_predLoss_home_pm1)
+table(data$posteam_type, data$team_prevWin_and_predLoss_away_pm1)
+```
+
+
+#########################################################################################
+
+
+```{r}
+library(dplyr)
+
+stopifnot(all(c("game_id","posteam_type","home_pWL","home_ppWL","away_pWL","away_ppWL") %in% names(data)))
+# Use your predicted home-perspective score diff column
+pred_col <- intersect(c("ScoreDiff_avg_final","score_diff_pred","score_diff"), names(data))[1]
+stopifnot(length(pred_col) == 1)
+
+is_win  <- function(x) {
+  if (is.numeric(x)) !is.na(x) & x == 1
+  else if (is.logical(x)) !is.na(x) & x
+  else !is.na(x) & toupper(as.character(x)) %in% c("1","W","WIN","TRUE","T")
+}
+is_loss <- function(x) {
+  if (is.numeric(x)) !is.na(x) & x == -1
+  else if (is.logical(x)) !is.na(x) & !x
+  else !is.na(x) & toupper(as.character(x)) %in% c("-1","L","LOSS","LOSE","FALSE","F")
+}
+
+data <- data %>%
+  mutate(.pred_diff = suppressWarnings(as.numeric(.data[[pred_col]]))) %>%
+  group_by(game_id) %>%
+  mutate(
+    # Anchor: HOME row’s predicted diff for this game
+    .pred_home_diff = dplyr::first(.pred_diff[posteam_type=="home"], default = NA_real_),
+
+    # 2-game lookbacks (win+win, loss+loss), computed once per side per game
+    .home_prev_win2  = as.integer(any(posteam_type=="home" & is_win(home_pWL)  & is_win(home_ppWL),  na.rm=TRUE)),
+    .away_prev_win2  = as.integer(any(posteam_type=="away" & is_win(away_pWL)  & is_win(away_ppWL),  na.rm=TRUE)),
+    .home_prev_loss2 = as.integer(any(posteam_type=="home" & is_loss(home_pWL) & is_loss(home_ppWL), na.rm=TRUE)),
+    .away_prev_loss2 = as.integer(any(posteam_type=="away" & is_loss(away_pWL) & is_loss(away_ppWL), na.rm=TRUE)),
+
+    # ---- YOUR 8 VARIABLES ----
+    # prevWin+prevprevWin + predicted Win/Loss
+    team_prevWin_and_prevprevWin_predWin_home_pm1 = if_else(
+      .home_prev_win2==1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+    team_prevWin_and_prevprevWin_predWin_away_pm1 = if_else(
+      .away_prev_win2==1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    ),
+    team_prevWin_and_prevprevWin_predLoss_home_pm1 = if_else(
+      .home_prev_win2==1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+    team_prevWin_and_prevprevWin_predLoss_away_pm1 = if_else(
+      .away_prev_win2==1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    ),
+
+    # prevLoss+prevprevLoss + predicted Win/Loss
+    team_prevLoss_and_prevprevLoss_predWin_home_pm1 = if_else(
+      .home_prev_loss2==1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+    team_prevLoss_and_prevprevLoss_predWin_away_pm1 = if_else(
+      .away_prev_loss2==1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    ),
+    team_prevLoss_and_prevprevLoss_predLoss_home_pm1 = if_else(
+      .home_prev_loss2==1L & !is.na(.pred_home_diff) & .pred_home_diff < 0,
+      if_else(posteam_type=="home",  1L, -1L), 0L
+    ),
+    team_prevLoss_and_prevprevLoss_predLoss_away_pm1 = if_else(
+      .away_prev_loss2==1L & !is.na(.pred_home_diff) & .pred_home_diff > 0,
+      if_else(posteam_type=="away",  1L, -1L), 0L
+    )
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-dplyr::any_of(c(".pred_diff",".pred_home_diff",
+                                 ".home_prev_win2",".away_prev_win2",
+                                 ".home_prev_loss2",".away_prev_loss2")))
+
+```
+
+
+```{r}
+# 1) Domain checks (must be in {-1,0,1})
+vars <- c(
+  "team_prevWin_and_prevprevWin_predWin_home_pm1",
+  "team_prevWin_and_prevprevWin_predWin_away_pm1",
+  "team_prevLoss_and_prevprevLoss_predWin_home_pm1",
+  "team_prevLoss_and_prevprevLoss_predWin_away_pm1",
+  "team_prevWin_and_prevprevWin_predLoss_home_pm1",
+  "team_prevWin_and_prevprevWin_predLoss_away_pm1",
+  "team_prevLoss_and_prevprevLoss_predLoss_home_pm1",
+  "team_prevLoss_and_prevprevLoss_predLoss_away_pm1"
+)
+stopifnot(all(sapply(vars, \(v) all(data[[v]] %in% c(-1L,0L,1L), na.rm=TRUE))))
+
+# 2) Sum-to-zero per game (expect only s=0)
+for (v in vars) {
+  cat("\nSum-to-zero for", v, ":\n")
+  print(
+    data %>% group_by(game_id) %>%
+      summarise(s = sum(.data[[v]]), .groups="drop") %>%
+      count(s)
+  )
+}
+
+# 3) Pair distributions (expect only '1|-1', '-1|1', and '0|0')
+pair_counts <- function(col) {
+  data %>% group_by(game_id) %>%
+    summarise(
+      h = first(.data[[col]][posteam_type=="home"]),
+      a = first(.data[[col]][posteam_type=="away"]),
+      .groups="drop"
+    ) %>%
+    count(pair = paste0(h,"|",a))
+}
+pc_out <- lapply(vars, function(v) { cat("\nPairs for", v, ":\n"); print(pair_counts(v)) })
+
+# 4) By-side cross-tabs (optional quick glance)
+for (v in vars) {
+  cat("\nBy-side table for", v, ":\n")
+  print(table(data$posteam_type, data[[v]], useNA="ifany"))
+}
+
+```
+
+
+
+#########################################################################################
+#########################################################################################
+
+
+
+
+```{r}
+# --- deps
+library(dplyr)
+library(readr)
+library(stringr)
+
+# --- helper: pick the first column that exists
+pick_col <- function(df, candidates, label) {
+  hit <- intersect(names(df), candidates)[1]
+  if (is.na(hit)) stop(
+    sprintf("Could not find a %s column. Looked for: %s. Available: %s.",
+            label, paste(candidates, collapse=", "), paste(names(df), collapse=", ")),
+    call. = FALSE
+  )
+  hit
+}
+
+# --- helper: find the file path (tries ../data, then data, then current dir)
+find_path <- function(fname) {
+  paths <- c(file.path("..","data",fname), file.path("data",fname), fname)
+  hit <- paths[file.exists(paths)][1]
+  if (is.na(hit)) stop(sprintf("Could not find %s in ../data, data, or current dir.", fname), call. = FALSE)
+  hit
+}
+
+# --- helper: normalize surface to Grass / Turf (binary)
+norm_surface <- function(x) {
+  x0 <- tolower(trimws(as.character(x)))
+  case_when(
+    str_detect(x0, "grass") ~ "Grass",
+    str_detect(x0, "turf|artificial") ~ "Turf",
+    TRUE ~ NA_character_
+  )
+}
+
+# ---- load team -> surface lookup (PostName, surface)
+surf_path <- find_path("Team.Stadium.Surface.csv")
+team_surf <- readr::read_csv(surf_path, show_col_types = FALSE)
+
+team_col   <- pick_col(team_surf, c("PostName","team","team_name","team_abbr","posteam","club_code","abbr"), "team")
+surface_col<- pick_col(team_surf, c("surface","turf_group","field_type","turf","playing_surface"), "surface")
+
+team_surf <- team_surf %>%
+  dplyr::rename(team_raw = !!team_col, team_surface_raw = !!surface_col) %>%
+  dplyr::mutate(
+    team_join_key = toupper(trimws(team_raw)),
+    team_surface_std = norm_surface(team_surface_raw),
+    away_is_grass_from_lookup = as.integer(team_surface_std == "Grass")
+  ) %>%
+  dplyr::select(team_join_key, team_surface_std, away_is_grass_from_lookup)
+
+# ---- identify away team column and game surface column in `data`
+away_col <- pick_col(
+  data,
+  c("away_team","away_team_name","away","away_abbr","away_team_abbr","away_posteam"),
+  "away team"
+)
+game_surf_col <- pick_col(
+  data,
+  c("turf_group","surface","field_type","playing_surface"),
+  "game surface"
+)
+
+# ---- attach away team's home-surface, compare to game surface, create indicators
+data <- data %>%
+  dplyr::mutate(
+    away_join_key   = toupper(trimws(.data[[away_col]])),
+    game_surface_std= norm_surface(.data[[game_surf_col]]),
+    game_is_grass   = as.integer(game_surface_std == "Grass")
+  ) %>%
+  dplyr::left_join(team_surf, by = c("away_join_key" = "team_join_key")) %>%
+  dplyr::mutate(
+    # 1 if away team's home surface matches current field (Grass vs Turf), else 0
+    TurfSame       = ifelse(!is.na(game_is_grass) & !is.na(away_is_grass_from_lookup) &
+                              game_is_grass == away_is_grass_from_lookup, 1L, 0L),
+    # 1 if away team's home surface differs from current field (Grass vs Turf), else 0
+    TurfOpposites  = ifelse(!is.na(game_is_grass) & !is.na(away_is_grass_from_lookup) &
+                              game_is_grass != away_is_grass_from_lookup, 1L, 0L)
+  )
+
+
+```
+
+
+
+```{r}
+# assumes you already have:
+#   data$away_is_grass_from_lookup  (1 if away team’s home surface is Grass; 0 if Turf)
+#   data$game_is_grass              (1 if current game’s field is Grass; 0 if Turf)
+
+data <- data %>%
+  dplyr::mutate(
+    away_grass_on_grass = as.integer(
+      !is.na(away_is_grass_from_lookup) & !is.na(game_is_grass) &
+        away_is_grass_from_lookup == 1 & game_is_grass == 1
+    ),
+    away_grass_on_turf = as.integer(
+      !is.na(away_is_grass_from_lookup) & !is.na(game_is_grass) &
+        away_is_grass_from_lookup == 1 & game_is_grass == 0
+    ),
+    away_turf_on_grass = as.integer(
+      !is.na(away_is_grass_from_lookup) & !is.na(game_is_grass) &
+        away_is_grass_from_lookup == 0 & game_is_grass == 1
+    ),
+    away_turf_on_turf = as.integer(
+      !is.na(away_is_grass_from_lookup) & !is.na(game_is_grass) &
+        away_is_grass_from_lookup == 0 & game_is_grass == 0
+    )
+  )
+
+```
+
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+vars6 <- c(
+  "TurfSame", "TurfOpposites",
+  "away_grass_on_grass", "away_grass_on_turf",
+  "away_turf_on_grass", "away_turf_on_turf"
+)
+
+# sanity: make sure they exist
+missing <- setdiff(vars6, names(data))
+if (length(missing)) stop("Missing expected columns: ", paste(missing, collapse = ", "))
+
+# summary() by posteam_type (home/away)
+for (v in vars6) {
+  cat("\n", v, " — summary by posteam_type\n", sep = "")
+  out <- data %>%
+    dplyr::group_by(posteam_type) %>%
+    dplyr::summarise(stats = list(summary(.data[[v]])), .groups = "drop") %>%
+    tidyr::unnest_wider(stats)
+  print(out)
+}
+
+# Optional: counts by home/away (0/1)
+for (v in vars6) {
+  cat("\n", v, " — counts by posteam_type (0/1)\n", sep = "")
+  print(addmargins(table(posteam_type = data$posteam_type,
+                         value = data[[v]], useNA = "ifany")))
+}
+
+```
+
+
+
+
+```{r}
+# --- prerequisites
+stopifnot(all(c("game_id","posteam","posteam_type") %in% names(data)))
+
+# ---------- 1) OffBye / BeforeBye (no OTLW anywhere)
+# choose an ordering for “previous/next game”
+ord_cols <- intersect(c("season","season_year","week","game_date","game_id"), names(data))
+if (length(ord_cols) == 0) ord_cols <- "game_id"
+
+data <- data %>%
+  dplyr::group_by(posteam) %>%
+  dplyr::arrange(dplyr::across(dplyr::all_of(ord_cols)), .by_group = TRUE) %>%
+  dplyr::mutate(
+    OffBye = as.integer(ifelse(is.na(days_since_last_game), FALSE,
+                               days_since_last_game > 12)),
+    BeforeBye = as.integer(dplyr::lead(days_since_last_game, default = NA) > 12)
+  ) %>%
+  dplyr::ungroup()
+
+# ---------- 2) Surfaces: TurfSame/TurfOpposites & away_* combos
+# Load away team HOME surface from mapping file (PostName, surface)
+teams_surf <- tryCatch(
+  read.csv("../data/Team.Stadium.Surface.csv", stringsAsFactors = FALSE),
+  error = function(e) NULL
+)
+
+if (!is.null(teams_surf)) {
+  # normalize names
+  if (!"PostName" %in% names(teams_surf)) {
+    nm <- intersect(c("posteam","post_name","team","Team","team_abbr","Club","ClubCode"), names(teams_surf))[1]
+    if (!is.na(nm)) names(teams_surf)[names(teams_surf) == nm] <- "PostName"
+  }
+  if (!"surface" %in% names(teams_surf)) {
+    nm <- intersect(c("turf_group","surface_type","field_type","turf"), names(teams_surf))[1]
+    if (!is.na(nm)) names(teams_surf)[names(teams_surf) == nm] <- "surface"
+  }
+
+  # simple GRASS/TURF reduction
+  teams_surf <- teams_surf %>%
+    dplyr::transmute(
+      PostName = as.character(PostName),
+      away_home_surface_type = ifelse(grepl("grass", surface, ignore.case = TRUE), "GRASS", "TURF")
+    )
+
+  # get the away team name for BOTH rows of each game
+  data <- data %>%
+    dplyr::group_by(game_id) %>%
+    dplyr::mutate(away_team = posteam[posteam_type == "away"][1]) %>%
+    dplyr::ungroup() %>%
+    dplyr::left_join(teams_surf, by = c("away_team" = "PostName"))
+
+  # current game surface from data$turf_group
+  data <- data %>%
+    dplyr::mutate(
+      game_surface_type = ifelse(grepl("^grass$", turf_group, ignore.case = TRUE), "GRASS", "TURF"),
+
+      # core comparisons
+      TurfSame       = as.integer(away_home_surface_type == game_surface_type),
+      TurfOpposites  = as.integer(away_home_surface_type != game_surface_type),
+
+      # requested 4 splits
+      away_grass_on_grass = as.integer(away_home_surface_type == "GRASS" & game_surface_type == "GRASS"),
+      away_grass_on_turf  = as.integer(away_home_surface_type == "GRASS" & game_surface_type == "TURF"),
+      away_turf_on_grass  = as.integer(away_home_surface_type == "TURF"  & game_surface_type == "GRASS"),
+      away_turf_on_turf   = as.integer(away_home_surface_type == "TURF"  & game_surface_type == "TURF")
+    )
+} else {
+  message("Surface mapping file not found at ../data/Team.Stadium.Surface.csv; Turf* vars will remain missing.")
+  for (v in c("TurfSame","TurfOpposites","away_grass_on_grass","away_grass_on_turf","away_turf_on_grass","away_turf_on_turf"))
+    if (!v %in% names(data)) data[[v]] <- NA_integer_
+}
+
+# ---------- 3) Build *_pm1 with correct ±1 propagation across both rows (no OTLW)
+pm1_from_away_flag <- function(flag, posteam_type) {
+  ifelse(flag == 1 & posteam_type == "away",  1L,
+  ifelse(flag == 1 & posteam_type == "home", -1L, 0L))
+}
+
+data <- data %>%
+  dplyr::group_by(game_id) %>%
+  dplyr::mutate(
+    # OffBye: +1 for the team itself, -1 for opponent if that team is OffBye
+    home_flag_OffBye = max(as.integer(posteam_type == "home" & OffBye == 1), na.rm = TRUE),
+    away_flag_OffBye = max(as.integer(posteam_type == "away" & OffBye == 1), na.rm = TRUE),
+    home_OffBye_pm1  = ifelse(home_flag_OffBye == 1, ifelse(posteam_type == "home",  1L, -1L), 0L),
+    away_OffBye_pm1  = ifelse(away_flag_OffBye == 1, ifelse(posteam_type == "away",  1L, -1L), 0L)
+  ) %>%
+  dplyr::ungroup() %>%
+  # away-owned flags (same on both rows pre-sign; sign with pm1_from_away_flag)
+  dplyr::mutate(
+    away_TurfSame_pm1        = pm1_from_away_flag(TurfSame, posteam_type),
+    away_TurfOpposites_pm1   = pm1_from_away_flag(TurfOpposites, posteam_type),
+    away_grass_on_grass_pm1  = pm1_from_away_flag(away_grass_on_grass, posteam_type),
+    away_grass_on_turf_pm1   = pm1_from_away_flag(away_grass_on_turf, posteam_type),
+    away_turf_on_grass_pm1   = pm1_from_away_flag(away_turf_on_grass, posteam_type),
+    away_turf_on_turf_pm1    = pm1_from_away_flag(away_turf_on_turf, posteam_type)
+  )
+
+# (no OTLW prints)
+
+```
+
+
+
+```{r}
+# ---- summary-by-home-away for *_pm1 flags ----
+stopifnot("posteam_type" %in% names(data))
+
+pm1_vars <- c(
+  "home_OTLW_pm1","away_OTLW_pm1",
+  "home_OffBye_pm1","away_OffBye_pm1",
+  "away_TurfSame_pm1","away_TurfOpposites_pm1",
+  "away_grass_on_grass_pm1","away_grass_on_turf_pm1",
+  "away_turf_on_grass_pm1","away_turf_on_turf_pm1"
+)
+
+check_pm1_vars <- function(df, vars) {
+  for (v in vars) {
+    if (!v %in% names(df)) {
+      cat("\n", v, "— MISSING in data\n", sep = "")
+      next
+    }
+    cat("\n", v, " — summary by home/away\n", sep = "")
+    split_list <- split(df[[v]], df$posteam_type)
+    for (lvl in names(split_list)) {
+      cat("type:", lvl, "\n")
+      print(summary(split_list[[lvl]]))
+      cat(paste(rep("-", 97), collapse = ""), "\n")
+    }
+    cat("\n", v, " — counts by home/away (-1/0/1)\n", sep = "")
+    print(addmargins(table(posteam_type = df$posteam_type,
+                           value = df[[v]], useNA = "ifany")))
+  }
+}
+
+# run it
+check_pm1_vars(data, pm1_vars)
+
+```
+
+```{r}
+table(data$posteam_type, data$away_TurfOpposites_pm1)
+```
+
+
+
+```{r}
+# --- deps
+library(dplyr)
+library(readr)
+library(stringr)
+
+# --- helper: pick the first column that exists
+pick_col <- function(df, candidates, label) {
+  hit <- intersect(names(df), candidates)[1]
+  if (is.na(hit)) stop(
+    sprintf("Could not find a %s column. Looked for: %s. Available: %s.",
+            label, paste(candidates, collapse = ", "), paste(names(df), collapse = ", ")),
+    call. = FALSE
+  )
+  hit
+}
+
+# --- helper: find the file path (tries ../data, then data, then current dir)
+find_path <- function(fname) {
+  paths <- c(file.path("..","data",fname), file.path("data",fname), fname)
+  hit <- paths[file.exists(paths)][1]
+  if (is.na(hit)) stop(sprintf("Could not find %s in ../data, data, or current dir.", fname), call. = FALSE)
+  hit
+}
+
+# --- helper: normalize stadium/roof to Dome / Outdoor
+norm_roof <- function(x) {
+  x0 <- tolower(trimws(as.character(x)))
+  case_when(
+    str_detect(x0, "dome|indoor|closed") ~ "Dome",
+    str_detect(x0, "outdoor|open")       ~ "Outdoor",
+    TRUE ~ NA_character_
+  )
+}
+
+# ---- load team -> stadium/roof lookup (PostName, stadium/roof)
+surf_path  <- find_path("Team.Stadium.Surface.csv")
+team_surf  <- readr::read_csv(surf_path, show_col_types = FALSE)
+
+team_col    <- pick_col(team_surf, c("PostName","team","team_name","team_abbr",
+                                     "posteam","club_code","abbr"), "team")
+stadium_col <- pick_col(team_surf, c("stadium","roof","roof_type","roof_group"),
+                        "stadium/roof")
+
+team_surf <- team_surf %>%
+  dplyr::rename(
+    team_raw         = !!team_col,
+    team_stadium_raw = !!stadium_col
+  ) %>%
+  dplyr::mutate(
+    team_join_key            = toupper(trimws(team_raw)),
+    team_roof_std            = norm_roof(team_stadium_raw),
+    away_is_dome_from_lookup = as.integer(team_roof_std == "Dome")
+  ) %>%
+  dplyr::select(
+    team_join_key,
+    team_roof_std,
+    away_is_dome_from_lookup
+  )
+
+# ---- identify away team column in `data`
+away_col <- pick_col(
+  data,
+  c("away_team","away_team_name","away","away_abbr","away_team_abbr","away_posteam"),
+  "away team"
+)
+
+# ---- attach away team's home-stadium type, create PM1 indicators
+data <- data %>%
+  dplyr::mutate(
+    away_join_key   = toupper(trimws(.data[[away_col]])),
+    # assuming these already exist and are 0/1 for where the game is played:
+    #   dome_binary, outdoors_binary
+    game_is_dome    = as.integer(dome_binary     == 1L),
+    game_is_outdoor = as.integer(outdoors_binary == 1L)
+  ) %>%
+  dplyr::left_join(team_surf, by = c("away_join_key" = "team_join_key")) %>%
+  # --- step 1: row-level conditions, only for the AWAY team ---
+  dplyr::mutate(
+    cond_away_dome_outdoor = posteam_type == "away" &
+                             Neutral == 0L &
+                             !is.na(away_is_dome_from_lookup) &
+                             away_is_dome_from_lookup == 1L &
+                             game_is_outdoor == 1L,
+
+    cond_away_outdoor_dome = posteam_type == "away" &
+                             Neutral == 0L &
+                             !is.na(away_is_dome_from_lookup) &
+                             away_is_dome_from_lookup == 0L &
+                             game_is_dome == 1L,
+
+    cond_away_dome_outdoor = if_else(is.na(cond_away_dome_outdoor), FALSE, cond_away_dome_outdoor),
+    cond_away_outdoor_dome = if_else(is.na(cond_away_outdoor_dome), FALSE, cond_away_outdoor_dome)
+  ) %>%
+  # --- step 2: turn those into proper PM1s (sum-to-zero per game) ---
+  dplyr::group_by(game_id) %>%
+  dplyr::mutate(
+    # game-level flags (did the away team have each type of mismatch?)
+    .away_dome_outdoor_flag = any(cond_away_dome_outdoor, na.rm = TRUE),
+    .away_outdoor_dome_flag = any(cond_away_outdoor_dome, na.rm = TRUE),
+
+    # PM1: +1 away / -1 home for dome-team→outdoor games, else 0
+    away_dome_outdoor_pm1 = dplyr::case_when(
+      Neutral == 1L ~ 0L,
+      .away_dome_outdoor_flag & posteam_type == "away" ~  1L,
+      .away_dome_outdoor_flag & posteam_type == "home" ~ -1L,
+      TRUE ~ 0L
+    ),
+
+    # PM1: +1 away / -1 home for outdoor-team→dome games, else 0
+    away_outdoor_dome_pm1 = dplyr::case_when(
+      Neutral == 1L ~ 0L,
+      .away_outdoor_dome_flag & posteam_type == "away" ~  1L,
+      .away_outdoor_dome_flag & posteam_type == "home" ~ -1L,
+      TRUE ~ 0L
+    )
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(
+    -cond_away_dome_outdoor,
+    -cond_away_outdoor_dome,
+    -.away_dome_outdoor_flag,
+    -.away_outdoor_dome_flag
+  )
+
+# optional sanity checks:
+# table(data$posteam_type, data$away_dome_outdoor_pm1)
+# table(data$posteam_type, data$away_outdoor_dome_pm1)
+# data %>% group_by(game_id) %>% summarise(s1 = sum(away_dome_outdoor_pm1),
+#                                          s2 = sum(away_outdoor_dome_pm1),
+#                                          .groups = "drop") %>% count(s1, s2)
+
+
+
+```
+
+
+```{r}
+# optional sanity checks:
+table(data$posteam_type, data$away_dome_outdoor_pm1)
+table(data$posteam_type, data$away_outdoor_dome_pm1)
+data %>% group_by(game_id) %>% summarise(s1 = sum(away_dome_outdoor_pm1),
+                                          s2 = sum(away_outdoor_dome_pm1),
+                                          .groups = "drop") %>% count(s1, s2)
+```
+
+
+```{r}
+write.csv(data, "data.csv")
+```
+
+
+```{r}
+pm1_cols <- grep("pm1", names(data), value = TRUE, ignore.case = TRUE)
+pm1_cols
+
+```
+
+
+
+
+#########################################################################################
+
+
+
+
+## Partition into train and test sets
+```{r}
+library(caret)
+
+val <- data[data$season == active_season, ]
+test <- data[data$season == 2024, ]
+
+#val <- val[val$week <= 11, ]
+train <- data[
+  data$season < active_season &
+    data$week >= 4 &
+    is.finite(data$Score_target) &
+    is.finite(data$ScoreTotal_target) &
+    is.finite(data$ScoreDiff_target),
+]
+message("Step 9 score-difference completed-row training seasons: ",
+        paste(sort(unique(train$season)), collapse = ", "),
+        "; rows = ", nrow(train), ".")
+
+
+
+#partition <- createDataPartition(data$season, list = FALSE, p = .80)
+#train <- data[partition, ]
+#test <- data[-partition, ]
+
+#test <- data[data$season == 2023, ]
+
+#partition2 <- createDataPartition(test$HomeOrAway, list = FALSE, p = .9)
+#test <- test[-partition2, ]
+#val <- test[-partition2, ]
+
+# Summary of train and test stats
+print("TRAIN")
+mean(train$Score_target)
+
+print("TEST")
+mean(test$Score_target)
+
+print("VAL")
+mean(val$Score_target)
+```
+
+
+
+#######################################################################
+#######################################################################
+#######################################################################
+
+
+```{r}
+# Force coefficient on ScoreDiff_avg to be exactly 1.0
+ScoreDiff_final <- glm(
+  formula = ScoreDiff_target ~ 
+    away_dome_outdoor_pm1 + away_outdoor_dome_pm1 +
+    #away_TurfOpposites_pm1 + away_TurfSame_pm1 + 
+   offset(ScoreDiff_avg) - 1
+
+,              # <- fixed at 1.0
+  family = gaussian(link = "identity"),
+  data   = train
+)
+
+summary(ScoreDiff_final)
+
+# predict.glm will include the offset automatically as long as the newdata
+# has a column named ScoreDiff_avg
+glm.predict0 <- predict(ScoreDiff_final, newdata = train, type = "response")
+glm.predict1 <- predict(ScoreDiff_final, newdata = test,  type = "response")
+glm.predict2 <- predict(ScoreDiff_final, newdata = val,   type = "response")
+
+train$ScoreDiff_final <- glm.predict0
+test$ScoreDiff_final  <- glm.predict1
+val$ScoreDiff_final   <- glm.predict2
+data$ScoreDiff_final   <-  predict(ScoreDiff_final, newdata = data,   type = "response")
+
+train$Billy <- train$ScoreDiff_final - train$ScoreDiff_avg
+test$Billy  <- test$ScoreDiff_final - test$ScoreDiff_avg
+val$Billy  <- val$ScoreDiff_final - val$ScoreDiff_avg
+data$Billy  <- data$ScoreDiff_final - data$ScoreDiff_avg
+ 
+cat("loglikelihood\n"); LLfunction(test$ScoreDiff_target, glm.predict1)
+cat("correlation\n");   print(cor(train$ScoreDiff_target, glm.predict0))
+print(RMSE(train$ScoreDiff_target, glm.predict0))
+print(cor(test$ScoreDiff_target,  glm.predict1))
+print(RMSE(test$ScoreDiff_target,  glm.predict1))
+summary(glm.predict1)
+
+# Cover flags (unchanged)
+train$Cover_ScoreDiff_final <- ifelse(train$ScoreDiff_final >= train$favored_by, 1, 0)
+error <- mean(train$ScoreDiff_target_cover != train$Cover_ScoreDiff_final)
+print(paste('Tree Training Model Accuracy', 1 - error))
+
+test$Cover_ScoreDiff_final <- ifelse(test$ScoreDiff_final >= test$favored_by, 1, 0)
+error <- mean(test$ScoreDiff_target_cover != test$Cover_ScoreDiff_final)
+print(paste('Tree Test Model Accuracy', 1 - error))
+
+val$Cover_ScoreDiff_final <- ifelse(val$ScoreDiff_final >= val$favored_by, 1, 0)
+error <- mean(val$ScoreDiff_target_cover != val$Cover_ScoreDiff_final)
+print(paste('Tree val Model Accuracy', 1 - error))
+
+```
+
+
+
+```{r}
+# Force coefficient on ScoreDiff_avg to be exactly 1.0
+ScoreDiff_final <- glm(
+  formula = ScoreDiff_target ~ 
+
+Distance_traveled_diff + days_since_last_game_diff +
+GeoLat_game_diff + GeoLong_game_diff  + GeoLat_home_diff +                
+GeoLong_home_diff  +  GeoLat_away_diff + GeoLong_away_diff +        
+
+home_away_pm1 +
+prevH2H_pm1_home +
+prevH2H_pm1_away +
+prevH2H_pm1 +
+home_east_team_night_pm1 +
+away_east_team_night_pm1 +
+home_west_team_night_pm1 +
+away_west_team_night_pm1 +
+home_OffBye_pm1 +
+away_OffBye_pm1 +
+home_BeforeBye_pm1 +
+away_BeforeBye_pm1 +
+home_div_game_pm1 +
+away_div_game_pm1 +
+OTLW_pm1 +
+home_OTLW_pm1 +
+away_OTLW_pm1 +
+home_night_pm1 +
+away_night_pm1 +
+home_thursday_night_pm1 +
+home_sunday_night_pm1 +
+home_monday_night_pm1 +
+home_off_MNF_prevHome_pm1 +
+home_off_MNF_prevAway_pm1 +
+away_off_MNF_prevHome_pm1 +
+away_off_MNF_prevAway_pm1 +
+home_off_TNF_prevHome_pm1 +
+home_off_TNF_prevAway_pm1 +
+away_off_TNF_prevHome_pm1 +
+away_off_TNF_prevAway_pm1 +
+home_vs_away_travel_2000plus_only_away_pm1 +
+away_travel_3000plus_last3w_pm1 +
+home_prevAway_and_3000mi_3w_pm1 +
+home_opponent_away_3in4_pm1 +
+home_extra_days_rest_pm1 +
+away_extra_days_rest_pm1 +
+extra_days_rest_pm1 +
+
+team_prevWin_and_predWin_home_pm1 +
+team_prevWin_and_predWin_away_pm1 +
+team_prevWin_and_predWin_combined_pm1 +
+days8_oppPrevLoss_expdog_pm1 +
+days8_oppPrevLoss_awayPOV_pm1 +
+sandwich_pm1 +
+sandwich_awayPOV_pm1 +
+
+team_prev2L_offBye_pm1 +
+team_prevLoss_and_predWin_home_pm1 +
+team_prevLoss_and_predWin_away_pm1 +
+team_prevLoss_and_predWin_combined_pm1 +
+team_prevWin_and_predLoss_home_pm1 +
+team_prevWin_and_predLoss_away_pm1 +
+team_prevLoss_and_predLoss_home_pm1 +
+team_prevLoss_and_predLoss_away_pm1 +
+team_prevWin_and_prevprevWin_predWin_home_pm1 +
+team_prevWin_and_prevprevWin_predWin_away_pm1 +
+team_prevWin_and_prevprevWin_predLoss_home_pm1 +
+team_prevWin_and_prevprevWin_predLoss_away_pm1 +
+team_prevLoss_and_prevprevLoss_predWin_home_pm1 +
+team_prevLoss_and_prevprevLoss_predWin_away_pm1 +
+team_prevLoss_and_prevprevLoss_predLoss_home_pm1 +
+team_prevLoss_and_prevprevLoss_predLoss_away_pm1 +
+#away_TurfSame_pm1 +
+#away_TurfOpposites_pm1 +
+#away_grass_on_grass_pm1 +
+#away_grass_on_turf_pm1 +
+#away_turf_on_grass_pm1 +
+#away_turf_on_turf_pm1 +
+away_dome_outdoor_pm1 +
+away_outdoor_dome_pm1 +
+#outdoorStadiumOpposite_pm1 +
+
+
+    offset(ScoreDiff_avg) - 1
+
+,              # <- fixed at 1.0
+  family = gaussian(link = "identity"),
+  data   = train
+)
+
+summary(ScoreDiff_final)
+
+# predict.glm will include the offset automatically as long as the newdata
+# has a column named ScoreDiff_avg
+glm.predict0 <- predict(ScoreDiff_final, newdata = train, type = "response")
+glm.predict1 <- predict(ScoreDiff_final, newdata = test,  type = "response")
+glm.predict2 <- predict(ScoreDiff_final, newdata = val,   type = "response")
+
+train$ScoreDiff_final <- glm.predict0
+test$ScoreDiff_final  <- glm.predict1
+val$ScoreDiff_final   <- glm.predict2
+
+train$Billy <- train$ScoreDiff_final - train$ScoreDiff_avg
+test$Billy  <- test$ScoreDiff_final - test$ScoreDiff_avg
+val$Billy  <- val$ScoreDiff_final - val$ScoreDiff_avg
+
+
+cat("loglikelihood\n"); LLfunction(test$ScoreDiff_target, glm.predict1)
+cat("correlation\n");   print(cor(train$ScoreDiff_target, glm.predict0))
+print(RMSE(train$ScoreDiff_target, glm.predict0))
+print(cor(test$ScoreDiff_target,  glm.predict1))
+print(RMSE(test$ScoreDiff_target,  glm.predict1))
+summary(glm.predict1)
+
+# Cover flags (unchanged)
+train$Cover_ScoreDiff_final <- ifelse(train$ScoreDiff_final >= train$favored_by, 1, 0)
+error <- mean(train$ScoreDiff_target_cover != train$Cover_ScoreDiff_final)
+print(paste('Tree Training Model Accuracy', 1 - error))
+
+test$Cover_ScoreDiff_final <- ifelse(test$ScoreDiff_final >= test$favored_by, 1, 0)
+error <- mean(test$ScoreDiff_target_cover != test$Cover_ScoreDiff_final)
+print(paste('Tree Test Model Accuracy', 1 - error))
+
+val$Cover_ScoreDiff_final <- ifelse(val$ScoreDiff_final >= val$favored_by, 1, 0)
+error <- mean(val$ScoreDiff_target_cover != val$Cover_ScoreDiff_final)
+print(paste('Tree val Model Accuracy', 1 - error))
+
+```
+
+
+ 
+```{r}
+library(MASS)
+k <- log(nrow(train))
+
+#GLM_1 <- stepAIC(ScoreDiff_final, k=k/2)
+
+#summary(GLM_1)
+
+```
+
+
+
+######################################################################
+
+  
+```{r}
+# Force coefficient on ScoreDiff_avg to be exactly 1.0
+ScoreDiff_final <- glm(
+  formula = ScoreDiff_target ~ 
+    
+home_div_game_pm1 + home_off_MNF_prevHome_pm1 + 
+    home_off_MNF_prevAway_pm1 + home_off_TNF_prevHome_pm1 + home_vs_away_travel_2000plus_only_away_pm1 + 
+    team_prevWin_and_predWin_away_pm1 + team_prevLoss_and_prevprevLoss_predLoss_away_pm1 + 
+    offset(ScoreDiff_avg) - 1
+
+,              # <- fixed at 1.0
+  family = gaussian(link = "identity"),
+  data   = train
+)
+
+summary(ScoreDiff_final)
+
+# predict.glm will include the offset automatically as long as the newdata
+# has a column named ScoreDiff_avg
+glm.predict0 <- predict(ScoreDiff_final, newdata = train, type = "response")
+glm.predict1 <- predict(ScoreDiff_final, newdata = test,  type = "response")
+glm.predict2 <- predict(ScoreDiff_final, newdata = val,   type = "response")
+
+train$ScoreDiff_final <- glm.predict0
+test$ScoreDiff_final  <- glm.predict1
+val$ScoreDiff_final   <- glm.predict2
+data$ScoreDiff_final   <-  predict(ScoreDiff_final, newdata = data,   type = "response")
+
+train$Billy <- train$ScoreDiff_final - train$ScoreDiff_avg
+test$Billy  <- test$ScoreDiff_final - test$ScoreDiff_avg
+val$Billy  <- val$ScoreDiff_final - val$ScoreDiff_avg
+data$Billy  <- data$ScoreDiff_final - data$ScoreDiff_avg
+ 
+cat("loglikelihood\n"); LLfunction(test$ScoreDiff_target, glm.predict1)
+cat("correlation\n");   print(cor(train$ScoreDiff_target, glm.predict0))
+print(RMSE(train$ScoreDiff_target, glm.predict0))
+print(cor(test$ScoreDiff_target,  glm.predict1))
+print(RMSE(test$ScoreDiff_target,  glm.predict1))
+summary(glm.predict1)
+
+# Cover flags (unchanged)
+train$Cover_ScoreDiff_final <- ifelse(train$ScoreDiff_final >= train$favored_by, 1, 0)
+error <- mean(train$ScoreDiff_target_cover != train$Cover_ScoreDiff_final)
+print(paste('Tree Training Model Accuracy', 1 - error))
+
+test$Cover_ScoreDiff_final <- ifelse(test$ScoreDiff_final >= test$favored_by, 1, 0)
+error <- mean(test$ScoreDiff_target_cover != test$Cover_ScoreDiff_final)
+print(paste('Tree Test Model Accuracy', 1 - error))
+
+val$Cover_ScoreDiff_final <- ifelse(val$ScoreDiff_final >= val$favored_by, 1, 0)
+error <- mean(val$ScoreDiff_target_cover != val$Cover_ScoreDiff_final)
+print(paste('Tree val Model Accuracy', 1 - error))
+
+```
+
+
+
+
+
+```{r}
+
+
+
+
+val_home <- val %>%
+  filter(posteam_type == "home")
+  
+write.csv(val_home, "../output/2026_Billy_home.csv")
+
+
+val_away <- val %>%
+  filter(posteam_type == "away")
+  
+write.csv(val_away, "../output/2026_Billy_away.csv")
+
+#data_scorediff <- data
+#save(data_scorediff, file = "../output/Billy_ScoreDiff_2025.RData")
+
+ 
+```
+

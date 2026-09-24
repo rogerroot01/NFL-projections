@@ -1,0 +1,1838 @@
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+```{r message=FALSE}
+library(dplyr)
+library(expss)
+library(xgboost)
+library(ggplot2)
+
+library(gridExtra)
+library(reshape)
+library(rpart)
+library(MASS)
+library(glmnet)
+getwd()
+setwd('..')
+   #load splines package
+    library(splines)
+```
+
+
+> The relevel function was included to allow candidates to easily follow the best practice, for GLMs, to make the largest category the baseline for a factor variable, as noted below. Candidates only sometimes took the hint, which was included to help candidates deal with some difficulties in this particular GLM.
+
+The second is how to change the order of the levels for a factor (categorical variable). This can make a difference for GLM results as the first level becomes the baseline and all but the first level become additional predictive variables. In general, for GLMs it is good set the base (reference) level to the one that has the most observations.
+
+```{r}
+# levels(data.frame$CATEGORICAL)
+# data.frame$CATEGORICAL <- relevel(data.frame$CATEGORICAL, ref = "Level Name")
+# levels(data.frame$CATEGORICAL)
+# the levels function might help you see the effect of the change
+# replace "data.frame" with the name of your dataframe (2 times)
+# replace "CATEGORICAL" with the name of a variable that is a factor (categorical variable) (2 times)
+# replace "Level Name" with the name of the level that should become the first level
+```
+
+> The Poisson loglikelihood was included both here and in Beryl's work below because it is highly appropriate for this problem and yet candidates did not need to be spending their time deriving this and figuring out how to make it work with the offset. Most candidates took this up as the validation measure as intended, though some also checked other measures like RMSE.
+
+The third is a function that measures the quality of fit of predicted versus actual outcomes. It is the loglikelihood function for a Poisson model (up to a constant) and can be used to assess fit against the data used to build the model or against a test set. I will mention the Poisson model later on in this file. As with any loglikelihood function, less negative or more positive values indicate a better fit.
+
+There are some special considerations taken care of by this function. At times when using trees, the predicticted value is slightly negative (a computer issue) when it should be zero. In addition, when the predicted value is zero, the log cannot be taken. If the target is zero, evaluating the loglikehood to zero makes sense. If not, a small value such as 0.000001 can be used. These adjustments are made in the function.
+
+>This one needs to be left uncommented and then run so that the function can be used later.
+
+```{r}
+LLfunction <- function(targets, predicted_values){
+  p_v_zero <- ifelse(predicted_values <= 0, 0, predicted_values)
+  p_v_pos <- ifelse(predicted_values <= 0, 0.000001 ,predicted_values)
+  return(sum(targets*log(p_v_pos)) - sum(p_v_zero))
+}
+# "targets" is a vector containing the actual values for the target variable
+# "predicted_values" is a vector containing the predicted values for the target variable
+```
+
+
+```{r}
+
+RMSE <- function(actual, predicted){
+  return(sqrt(mean((actual - predicted)^2)))
+}
+
+```
+
+
+
+```{r}
+
+MSE <- function(actual, predicted){
+  return(mean((actual - predicted)^2))
+}
+
+```
+
+
+
+> Candidates varied in how they used Beryl's initial code. Some started their work after the template, while others put their own code in the midst of the template. Either approach works--the best candidates had code that flowed in a logical order and was annotated to some extent. Occasionally candidates ignored the entire template and started from scratch, with inferior results.
+
+
+# Load data
+```{r}
+load(file = "../output/dataV11.RData")
+#data <- data[data$season != 2025, ]
+```
+
+
+
+```{r}
+# Method 3: Show counts of NAs per column
+na_counts <- colSums(is.na(data))
+na_counts[na_counts > 0]
+
+```
+
+
+
+```{r}
+data$home_implied <- data$total_line / 2 + data$spread_line / 2
+data$away_implied <- data$total_line / 2 - data$spread_line / 2
+
+data$posteam_implied <- ifelse(data$posteam == data$home_team, data$home_implied, data$away_implied)
+data$defteam_implied <- ifelse(data$posteam == data$home_team, data$away_implied, data$home_implied)
+
+data$Score_target <- ifelse(data$posteam == data$home_team, data$home_score, data$away_score)
+data$Score_target_cover <- ifelse(data$Score_target  > data$posteam_implied, 1, 0)
+
+data$OppScore_target <- ifelse(data$posteam == data$home_team, data$away_score, data$home_score)
+data$OppScore_target_cover <- ifelse(data$OppScore_target  > data$defteam_implied, 1, 0)
+
+
+data$favored_by <- ifelse(data$posteam == data$home_team, data$spread_line, -data$spread_line)
+
+data$ScoreAllowed_target <- ifelse(data$posteam == data$home_team, data$away_score, data$home_score)
+data$ScoreAllowed_target_cover <- ifelse(data$ScoreAllowed_target  > data$defteam_implied, 1, 0)
+
+data$Win_target <- ifelse(data$Score_target > data$ScoreAllowed_target, 1, 0)
+
+data$ScoreDiff_target <- ifelse(data$posteam == data$home_team, data$home_score-data$away_score, data$away_score-data$home_score)
+data$ScoreDiff_target_cover <- ifelse(data$ScoreDiff_target  > data$favored_by, 1, 0)
+
+data$ScoreTotal_target <- data$home_score+data$away_score
+data$ScoreTotal_target_cover <- ifelse(data$ScoreTotal_target  > data$total_line, 1, 0)
+
+
+```
+
+
+
+```{r}
+# Actual total score vs Avg Scoing 
+print("Actual total score vs Avg Scoing")
+LLfunction(data$ScoreTotal_target, (data$posteam_score+data$defteam_score))
+RMSE(data$ScoreTotal_target, (data$posteam_score+data$defteam_score))
+cor(data$ScoreTotal_target, (data$posteam_score+data$defteam_score))
+
+# Over/Under vs Avg Scoing 
+print("Over/Under vs Avg Scoing")
+LLfunction(data$total_line, (data$posteam_score+data$defteam_score))
+RMSE(data$total_line, (data$posteam_score+data$defteam_score))
+cor(data$total_line, (data$posteam_score+data$defteam_score))
+
+# Over/Under vs Actual Total
+print("Over/Under vs Actual Total")
+LLfunction(data$total_line, (data$home_score+data$away_score))
+RMSE(data$total_line, (data$home_score+data$away_score))
+cor(data$total_line, (data$home_score+data$away_score))
+```
+
+
+
+```{r}
+# Actual score vs Avg Scoing 
+print("Actual score vs Avg Scoing")
+LLfunction(data$Score_target, data$posteam_score)
+RMSE(data$Score_target, data$posteam_score)
+cor(data$Score_target, data$posteam_score)
+
+# Implied Team Total vs Avg Scoing 
+print("Implied Team vs Avg Scoing")
+LLfunction(data$posteam_implied, data$posteam_score)
+RMSE(data$posteam_implied, data$posteam_score)
+cor(data$posteam_implied, data$posteam_score)
+
+# Implied Team Total vs Actual Score
+print("Implied Team vs Actual Score")
+LLfunction(data$posteam_implied, data$Score_target)
+RMSE(data$posteam_implied, data$Score_target)
+cor(data$posteam_implied, data$Score_target)
+```
+
+
+
+
+```{r}
+# Actual spread vs Avg Scoring 
+print("Actual spread vs Avg Scoing")
+LLfunction(data$ScoreDiff_target, (data$posteam_score-data$defteam_score))
+RMSE(data$ScoreDiff_target, (data$posteam_score-data$defteam_score))
+cor(data$ScoreDiff_target, (data$posteam_score-data$defteam_score))
+
+# Spread Line vs Avg Scoing 
+print(" Spread Line vs Avg Scoing")
+LLfunction(data$favored_by, (data$posteam_score-data$defteam_score))
+RMSE(data$favored_by, (data$posteam_score-data$defteam_score))
+cor(data$favored_by, (data$posteam_score-data$defteam_score))
+
+# Spread Line vs Actual Spread
+print("Spread Line vs Actual Spread")
+LLfunction(data$favored_by, data$ScoreDiff_target)
+RMSE(data$favored_by, data$ScoreDiff_target)
+cor(data$favored_by, data$ScoreDiff_target)
+```
+
+
+
+
+```{r}
+data$turnover_target <- NULL
+data$drive_summary_target <- NULL
+
+data$drive_summary_target_sum <- NULL
+data$drive_summary_target_diff <- NULL
+data$drive_summary_target_opp <- NULL
+data$drive_summary_target_x_opp  <- NULL
+data$turnover_target_sum <- NULL
+data$turnover_target_diff <- NULL
+data$turnover_target_opp <- NULL
+data$turnover_target_x_opp  <- NULL
+
+data$drive_summary_target_sum <- NULL
+data$drive_summary_target_diff <- NULL
+data$drive_summary_target_opp <- NULL
+data$drive_summary_target_x_opp  <- NULL
+
+data$roof_sum <- NULL
+data$surface_sum <- NULL	
+data$away_score_sum <- NULL	
+data$home_score_sum <- NULL
+data$spread_line_sum <- NULL
+data$total_line_sum <- NULL
+data$div_game_sum <- NULL
+data$Neutral_sum <- NULL
+
+data$roof_diff <- NULL
+data$surface_diff <- NULL	
+data$away_score_diff <- NULL	
+data$home_score_diff <- NULL
+data$spread_line_diff <- NULL
+data$total_line_diff <- NULL
+data$div_game_diff <- NULL
+data$Neutral_diff <- NULL
+	
+```
+
+
+
+
+
+#############################################
+
+
+```{r}
+data$turnover_target <- NULL
+data$drive_summary_target <- NULL
+
+data$drive_summary_target_sum <- NULL
+data$drive_summary_target_diff <- NULL
+data$drive_summary_target_opp <- NULL
+data$drive_summary_target_x_opp  <- NULL
+data$turnover_target_sum <- NULL
+data$turnover_target_diff <- NULL
+data$turnover_target_opp <- NULL
+data$turnover_target_x_opp  <- NULL
+
+data$drive_summary_target_sum <- NULL
+data$drive_summary_target_diff <- NULL
+data$drive_summary_target_opp <- NULL
+data$drive_summary_target_x_opp  <- NULL
+
+data$roof_sum <- NULL
+data$surface_sum <- NULL	
+data$away_score_sum <- NULL	
+data$home_score_sum <- NULL
+data$spread_line_sum <- NULL
+data$total_line_sum <- NULL
+data$div_game_sum <- NULL
+data$Neutral_sum <- NULL
+
+data$roof_diff <- NULL
+data$surface_diff <- NULL	
+data$away_score_diff <- NULL	
+data$home_score_diff <- NULL
+data$spread_line_diff <- NULL
+data$total_line_diff <- NULL
+data$div_game_diff <- NULL
+data$Neutral_diff <- NULL
+	
+```
+
+
+
+
+## Partition into train and test sets
+```{r}
+library(caret)
+
+val <- data[data$season == active_season, ]
+#val <- val[val$week <= 9, ]
+test <- data[data$season == 2024, ]
+train <- data[
+  data$season < active_season &
+    data$week >= 9 &
+    data$season != 2020 &
+    is.finite(data$Score_target) &
+    is.finite(data$ScoreTotal_target) &
+    is.finite(data$ScoreDiff_target),
+]
+message("Step 8 completed-row training seasons: ",
+        paste(sort(unique(train$season)), collapse = ", "),
+        "; rows = ", nrow(train), ".")
+
+#partition <- createDataPartition(data$season, list = FALSE, p = .80)
+#train <- data[partition, ]
+#test <- data[-partition, ]
+
+#test <- data[data$season == 2023, ]
+
+#partition2 <- createDataPartition(test$HomeOrAway, list = FALSE, p = .9)
+#test <- test[-partition2, ]
+#val <- test[-partition2, ]
+
+# Summary of train and test stats
+print("TRAIN")
+mean(train$Score_target)
+
+print("TEST")
+mean(test$Score_target)
+
+print("VAL")
+mean(val$Score_target)
+```
+
+ 
+
+###########################################################################################
+###########################################################################################
+
+
+ 
+## Stepwise for Total Normal
+```{r warning=FALSE}
+GLM_total <-glm(formula = ScoreTotal_target ~ 
+Neutral +
+I(points_per_drive_sum * drive_summary_sum) +   
+I(points_for_per_play_sum * play_sum) +  
+rush_RB_sum +
+rushing_yards_excl_qb_kneel_sum +
+rushing_yards_excl_qb_scramble_sum +
+rushing_yards_qb_scramble_sum +
+first_down_plays_sum +
+second_down_plays_sum +
+third_down_plays_sum +
+fourth_down_plays_sum +
+field_goal_attempts_sum +
+punt_attempt_sum +
+play_sum +
+rush_attempt_sum +
+rush_sum +
+pass_attempt_sum +
+pass_sum +
+qb_kneel_sum +
+qb_spike_sum +
+qb_scramble_sum +
+qb_dropback_sum +
+penalty_sum +
+penalty_yards_sum +
+first_down_sum +
+first_down_rush_sum +
+first_down_pass_sum +
+first_down_penalty_sum +
+yards_gained_sum +
+passing_yards_sum +
+receiving_yards_sum +
+rushing_yards_sum +
+return_yards_sum +
+complete_pass_sum +
+interception_sum +
+qb_hit_sum +
+sack_sum +
+tackled_for_loss_sum +
+safety_sum +
+fumble_sum +
+fumble_forced_sum +
+fumble_not_forced_sum +
+fumble_lost_sum +
+fumble_out_of_bounds_sum +
+touchdown_sum +
+pass_touchdown_sum +
+rush_touchdown_sum +
+return_touchdown_sum +
+epa_sum +
+wpa_sum +
+air_yards_sum +
+air_epa_sum +
+comp_air_epa_sum +
+yards_after_catch_sum +
+yac_epa_sum +
+comp_yac_epa_sum +
+qb_epa_sum +
+xyac_epa_sum +
+xyac_success_sum +
+air_wpa_sum +
+yac_wpa_sum +
+comp_air_wpa_sum +
+comp_yac_wpa_sum +
+pass_def_sum +
+kick_distance_mean_sum +
+drive_summary_sum +
+drive_inside20_sum +
+drive_ended_with_score_sum +
+posteam_score_sum +
+defteam_score_sum +
+drive_ended_with_punt_sum +
+drive_ended_with_turnover_sum +
+drive_three_and_out_sum +
+drive_ended_with_missedFG_sum +
+drive_ended_with_safety_sum +
+drive_ended_with_kneel_sum +
+drive_ended_with_half_sum +
+SuccOff_earlydown_sum +
+SuccOff_latedown_sum +
+SuccOff_earlydown_rush_sum +
+SuccOff_earlydown_pass_sum +
+SuccOff_latedown_rush_sum +
+SuccOff_latedown_pass_sum +
+AvgYdsToGo_Off_sum +
+Ints_Off_Inside20_sum +
+RZ_YAC_Off_sum +
+explosive_plays_sum +
+yds_per_play_sum +
+yds_per_rush_sum +
+yds_per_pass_att_sum +
+comp_pct_sum +
+sack_rate_sum +
+int_rate_sum +
+pass_td_rate_sum +
+rush_td_rate_sum +
+scoring_drive_pct_sum +
+turnover_drive_pct_sum +
+three_and_out_rate_sum +
+punt_rate_sum +
+missed_fg_drive_pct_sum +
+first_down_conv_rate_sum +
+run_pass_ratio_sum +
+first_down_rush_share_sum +
+first_down_pass_share_sum +
+first_down_pen_share_sum +
+yac_per_comp_sum +
+air_yds_per_att_sum +
+air_to_yac_ratio_sum +
+epa_per_dropback_sum +
+qb_hit_rate_sum +
+wpa_per_play_sum +
+qb_epa_per_dropback_sum +
+air_epa_per_att_sum +
+yac_epa_per_comp_sum +
+pen_yds_per_play_sum +
+fumble_rate_sum +
+fumble_lost_rate_sum +
+forced_fumble_share_sum +
+rz_trips_sum +
+rz_td_sum +
+rz_td_rate_sum +
+rz_int_rate_sum +
+points_for_per_play_sum +
+points_allowed_per_play_sum +
+cover_margin_sum +
+total_margin_sum +
+rush_share_sum +
+pass_share_sum +
+rush_vs_pass_ratio_sum +
+tfl_rate_sum +
+sack_tfl_rate_sum +
+third_down_conv_rate_sum +
+early_vs_late_split_sum +
+rz_td_to_int_ratio_sum +
+points_per_rz_trip_sum +
+points_per_drive_sum +
+points_per_100_yards_sum +
+air_vs_yac_dominance_sum +
+turnover_worthy_play_rate_sum +
+negative_play_rate_sum +
+pressure_to_sack_conv_sum +
+score_diff_sum +
+spread_adjusted_perf_sum +
+total_adjusted_scoring_sum +
+rush_eff_x_share_sum +
+pass_epa_x_share_sum +
+fd_conv_x_score_drive_sum +
+rush_eff_weighted_sum +
+pass_eff_weighted_sum +
+neg_play_rate_sum +
+turnover_play_rate_sum +
+explosive_play_rate_sum +
+balance_tilt_sum +
+eff_weight_gap_sum +
+finishing_vs_yards_sum +
+explosive_finishing_sum +
+sustain_vs_explosive_sum +
+early_late_synergy_sum +
+ball_security_risk_sum +
+pressure_turnover_couple_sum +
+pressure_damage_sum +
+clutch_factor_sum +
+spread_signal_weighted_sum +
+over_signal_sum +
+third_down_logit_sum +
+explosive_logit_sum +
+p2s_logit_sum +
+air_vs_yac_logit_sum +
+ln_points_per_rz_trip_sum +
+ln_points_per_drive_sum +
+td_rate_rz_sum +
+int_rate_rz_sum +
+eps_rate_sum +
+rz_td_to_int_ratio_eps_sum +
+red_zone_leverage_sum 
+- 1
+,       
+   gaussian(link = "identity"), 
+    data = train)
+
+summary(GLM_total)
+
+
+```
+ 
+
+
+## Stepwise for Total Normal
+ 
+```{r warning=FALSE}
+Total_stepwise <-glm(formula = ScoreTotal_target ~ 
+pass_attempt_sum + yards_gained_sum + 
+    passing_yards_sum + fumble_sum + fumble_forced_sum + xyac_success_sum + 
+    air_wpa_sum + SuccOff_earlydown_rush_sum + turnover_drive_pct_sum + 
+    fumble_lost_rate_sum + forced_fumble_share_sum + negative_play_rate_sum + 
+    rush_eff_weighted_sum + early_late_synergy_sum + ball_security_risk_sum + 
+    over_signal_sum
+
+#+ I(Distance_traveled_away + Distance_traveled_home)
+#GeoLat_game + GeoLong_game 
+#+ wind + snow_or_rain
+
+,
+     gaussian(link = "identity"),
+    data = train)
+
+summary(Total_stepwise)
+
+glm.predict0 <- predict(Total_stepwise, newdata = train, type = "response")
+glm.predict1 <- predict(Total_stepwise, newdata = test, type = "response")
+glm.predict2 <- predict(Total_stepwise, newdata = val, type = "response")
+
+train$ScoreTotal_stepwise  <-glm.predict0
+test$ScoreTotal_stepwise  <-glm.predict1
+val$ScoreTotal_stepwise  <-glm.predict2
+data$ScoreTotal_stepwise <- predict(Total_stepwise, newdata = data, type = "response")
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$ScoreTotal_target,glm.predict1)
+print("correlation")
+cor(train$ScoreTotal_target,glm.predict0)
+RMSE(train$ScoreTotal_target,glm.predict0)
+cor(test$ScoreTotal_target,glm.predict1)
+RMSE(test$ScoreTotal_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_ScoreTotal_stepwise <- ifelse(train$ScoreTotal_stepwise  >= train$total_line, 1, 0)
+error = mean(train$ScoreTotal_target_cover != train$Cover_ScoreTotal_stepwise)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ScoreTotal_stepwise <-  ifelse(test$ScoreTotal_stepwise  >= test$total_line, 1, 0)
+error = mean(test$ScoreTotal_target_cover != test$Cover_ScoreTotal_stepwise)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_ScoreTotal_stepwise <-  ifelse(val$ScoreTotal_stepwise  >= val$total_line, 1, 0)
+error = mean(val$ScoreTotal_target_cover != val$Cover_ScoreTotal_stepwise)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+
+
+```{r warning=FALSE}
+Total2_stepwise <-glm(formula = ScoreTotal_target ~ 
+passing_yards_sum + fumble_sum + 
+    fumble_forced_sum + touchdown_sum + air_wpa_sum + drive_summary_sum + 
+    drive_three_and_out_sum + int_rate_sum + rush_td_rate_sum + 
+    turnover_drive_pct_sum + fumble_rate_sum + fumble_lost_rate_sum + 
+    forced_fumble_share_sum + tfl_rate_sum + turnover_worthy_play_rate_sum + 
+    negative_play_rate_sum + pressure_to_sack_conv_sum + total_adjusted_scoring_sum + 
+    rush_eff_weighted_sum + explosive_play_rate_sum + finishing_vs_yards_sum + 
+    ball_security_risk_sum + over_signal_sum - 1
+
+#+ I(Distance_traveled_away + Distance_traveled_home)
+#GeoLat_game + GeoLong_game 
+#+ wind + snow_or_rain
+
+,
+     gaussian(link = "identity"),
+    data = train)
+
+summary(Total2_stepwise)
+
+glm.predict0 <- predict(Total2_stepwise, newdata = train, type = "response")
+glm.predict1 <- predict(Total2_stepwise, newdata = test, type = "response")
+glm.predict2 <- predict(Total2_stepwise, newdata = val, type = "response")
+
+train$ScoreTotal2_stepwise  <-glm.predict0
+test$ScoreTotal2_stepwise  <-glm.predict1
+val$ScoreTotal2_stepwise  <-glm.predict2
+data$ScoreTotal2_stepwise <- predict(Total2_stepwise, newdata = data, type = "response")
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$ScoreTotal_target,glm.predict1)
+print("correlation")
+cor(train$ScoreTotal_target,glm.predict0)
+RMSE(train$ScoreTotal_target,glm.predict0)
+cor(test$ScoreTotal_target,glm.predict1)
+RMSE(test$ScoreTotal_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_ScoreTotal2_stepwise <- ifelse(train$ScoreTotal2_stepwise  >= train$total_line, 1, 0)
+error = mean(train$ScoreTotal_target_cover != train$Cover_ScoreTotal2_stepwise)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ScoreTotal2_stepwise <-  ifelse(test$ScoreTotal2_stepwise  >= test$total_line, 1, 0)
+error = mean(test$ScoreTotal_target_cover != test$Cover_ScoreTotal2_stepwise)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_ScoreTotal2_stepwise <-  ifelse(val$ScoreTotal2_stepwise  >= val$total_line, 1, 0)
+error = mean(val$ScoreTotal_target_cover != val$Cover_ScoreTotal2_stepwise)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+
+
+```{r warning=FALSE}
+Total_forward <-glm(formula = ScoreTotal_target ~ 
+yards_gained_sum + passing_yards_sum + 
+    fumble_sum + fumble_forced_sum + touchdown_sum + rush_touchdown_sum + 
+    return_touchdown_sum + air_wpa_sum + drive_ended_with_turnover_sum + 
+    drive_three_and_out_sum + SuccOff_latedown_sum + yds_per_play_sum + 
+    int_rate_sum + first_down_rush_share_sum + first_down_pass_share_sum + 
+    fumble_rate_sum + fumble_lost_rate_sum + forced_fumble_share_sum + 
+    turnover_worthy_play_rate_sum + negative_play_rate_sum + 
+    rush_eff_weighted_sum + explosive_play_rate_sum + finishing_vs_yards_sum + 
+    ball_security_risk_sum
+
+,
+     gaussian(link = "identity"),
+    data = train)
+
+summary(Total_forward)
+
+glm.predict0 <- predict(Total_forward, newdata = train, type = "response")
+glm.predict1 <- predict(Total_forward, newdata = test, type = "response")
+glm.predict2 <- predict(Total_forward, newdata = val, type = "response")
+
+train$ScoreTotal_forward  <-glm.predict0
+test$ScoreTotal_forward  <-glm.predict1
+val$ScoreTotal_forward  <-glm.predict2
+data$ScoreTotal_forward <- predict(Total_forward, newdata = data, type = "response")
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$ScoreTotal_target,glm.predict1)
+print("correlation")
+cor(train$ScoreTotal_target,glm.predict0)
+RMSE(train$ScoreTotal_target,glm.predict0)
+cor(test$ScoreTotal_target,glm.predict1)
+RMSE(test$ScoreTotal_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_ScoreTotal_forward <- ifelse(train$ScoreTotal_forward  >= train$total_line, 1, 0)
+error = mean(train$ScoreTotal_target_cover != train$Cover_ScoreTotal_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ScoreTotal_forward <-  ifelse(test$ScoreTotal_forward  >= test$total_line, 1, 0)
+error = mean(test$ScoreTotal_target_cover != test$Cover_ScoreTotal_forward)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_ScoreTotal_forward <-  ifelse(val$ScoreTotal_forward  >= val$total_line, 1, 0)
+error = mean(val$ScoreTotal_target_cover != val$Cover_ScoreTotal_forward)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+
+
+```{r warning=FALSE}
+Total2_forward <-glm(formula = ScoreTotal_target ~ 
+                       
+pass_attempt_sum + yards_gained_sum + 
+    passing_yards_sum + fumble_sum + fumble_forced_sum + xyac_success_sum + 
+    air_wpa_sum + SuccOff_earlydown_rush_sum + turnover_drive_pct_sum + 
+    fumble_lost_rate_sum + forced_fumble_share_sum + negative_play_rate_sum + 
+    rush_eff_weighted_sum + early_late_synergy_sum + ball_security_risk_sum + 
+    over_signal_sum - 1
+
+,
+     gaussian(link = "identity"),
+    data = train)
+
+summary(Total2_forward)
+
+glm.predict0 <- predict(Total2_forward, newdata = train, type = "response")
+glm.predict1 <- predict(Total2_forward, newdata = test, type = "response")
+glm.predict2 <- predict(Total2_forward, newdata = val, type = "response")
+
+train$ScoreTotal2_forward  <-glm.predict0
+test$ScoreTotal2_forward  <-glm.predict1
+val$ScoreTotal2_forward  <-glm.predict2
+data$ScoreTotal2_forward <- predict(Total2_forward, newdata = data, type = "response")
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$ScoreTotal_target,glm.predict1)
+print("correlation")
+cor(train$ScoreTotal_target,glm.predict0)
+RMSE(train$ScoreTotal_target,glm.predict0)
+cor(test$ScoreTotal_target,glm.predict1)
+RMSE(test$ScoreTotal_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_ScoreTotal2_forward <- ifelse(train$ScoreTotal2_forward  >= train$total_line, 1, 0)
+error = mean(train$ScoreTotal_target_cover != train$Cover_ScoreTotal2_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ScoreTotal2_forward <-  ifelse(test$ScoreTotal2_forward  >= test$total_line, 1, 0)
+error = mean(test$ScoreTotal_target_cover != test$Cover_ScoreTotal2_forward)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_ScoreTotal2_forward <-  ifelse(val$ScoreTotal2_forward  >= val$total_line, 1, 0)
+error = mean(val$ScoreTotal_target_cover != val$Cover_ScoreTotal2_forward)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+
+
+
+    
+    
+    
+
+###################################################################################
+###################################################################################
+ 
+
+
+
+## Stepwise for Team Score
+```{r warning=FALSE}
+GLM_score <-glm(formula = Score_target ~ 
+ home_away_pm1 +
+I(points_per_drive * drive_summary) +   
+I(points_for_per_play * play) +  
+home_binary + rush_RB + rushing_yards_excl_qb_kneel + rushing_yards_excl_qb_scramble + rushing_yards_qb_scramble + first_down_plays + second_down_plays + third_down_plays + fourth_down_plays + field_goal_attempts + punt_attempt + play + rush_attempt + rush + pass_attempt + pass + qb_kneel + qb_spike + qb_scramble + qb_dropback + penalty + penalty_yards + first_down + first_down_rush + first_down_pass + first_down_penalty + yards_gained + passing_yards + receiving_yards + rushing_yards + return_yards + complete_pass + interception + qb_hit + sack + tackled_for_loss + safety + fumble + fumble_forced + fumble_not_forced + fumble_lost + fumble_out_of_bounds + touchdown + pass_touchdown + rush_touchdown + return_touchdown + epa + wpa + air_yards + air_epa + comp_air_epa + yards_after_catch + yac_epa + comp_yac_epa + qb_epa + xyac_epa + xyac_success + air_wpa + yac_wpa + comp_air_wpa + comp_yac_wpa + pass_def + kick_distance_mean + drive_summary + drive_inside20 + drive_ended_with_score + posteam_score + defteam_score + drive_ended_with_punt + drive_ended_with_turnover + drive_three_and_out + drive_ended_with_missedFG + drive_ended_with_safety + drive_ended_with_kneel + drive_ended_with_half + SuccOff_earlydown + SuccOff_latedown + SuccOff_earlydown_rush + SuccOff_earlydown_pass + SuccOff_latedown_rush + SuccOff_latedown_pass + AvgYdsToGo_Off + Ints_Off_Inside20 + RZ_YAC_Off + explosive_plays + yds_per_play + yds_per_rush + yds_per_pass_att + comp_pct + sack_rate + int_rate + pass_td_rate + rush_td_rate + scoring_drive_pct + turnover_drive_pct + three_and_out_rate + punt_rate + missed_fg_drive_pct + first_down_conv_rate + run_pass_ratio + first_down_rush_share + first_down_pass_share + first_down_pen_share + yac_per_comp + air_yds_per_att + air_to_yac_ratio + epa_per_dropback + qb_hit_rate + wpa_per_play + qb_epa_per_dropback + air_epa_per_att + yac_epa_per_comp + pen_yds_per_play + fumble_rate + fumble_lost_rate + forced_fumble_share + rz_trips + rz_td + rz_td_rate + rz_int_rate + points_for_per_play + points_allowed_per_play + cover_margin + total_margin + rush_share + pass_share + rush_vs_pass_ratio + tfl_rate + sack_tfl_rate + third_down_conv_rate + early_vs_late_split + rz_td_to_int_ratio + points_per_rz_trip + points_per_drive + points_per_100_yards + air_vs_yac_dominance + turnover_worthy_play_rate + negative_play_rate + pressure_to_sack_conv + score_diff + spread_adjusted_perf + total_adjusted_scoring + rush_eff_x_share + pass_epa_x_share + fd_conv_x_score_drive + rush_eff_weighted + pass_eff_weighted + neg_play_rate + turnover_play_rate + explosive_play_rate + balance_tilt + eff_weight_gap + finishing_vs_yards + explosive_finishing + sustain_vs_explosive + early_late_synergy + ball_security_risk + pressure_turnover_couple + pressure_damage + clutch_factor + spread_signal_weighted + over_signal + third_down_logit + explosive_logit + p2s_logit + air_vs_yac_logit + ln_points_per_rz_trip + ln_points_per_drive + td_rate_rz + int_rate_rz + eps_rate + rz_td_to_int_ratio_eps + red_zone_leverage + rush_RB_opp + rushing_yards_excl_qb_kneel_opp + rushing_yards_excl_qb_scramble_opp + rushing_yards_qb_scramble_opp + first_down_plays_opp + second_down_plays_opp + third_down_plays_opp + fourth_down_plays_opp + field_goal_attempts_opp + punt_attempt_opp + play_opp + rush_attempt_opp + rush_opp + pass_attempt_opp + pass_opp + qb_kneel_opp + qb_spike_opp + qb_scramble_opp + qb_dropback_opp + penalty_opp + penalty_yards_opp + first_down_opp + first_down_rush_opp + first_down_pass_opp + first_down_penalty_opp + yards_gained_opp + passing_yards_opp + receiving_yards_opp + rushing_yards_opp + return_yards_opp + complete_pass_opp + interception_opp + qb_hit_opp + sack_opp + tackled_for_loss_opp + safety_opp + fumble_opp + fumble_forced_opp + fumble_not_forced_opp + fumble_lost_opp + fumble_out_of_bounds_opp + touchdown_opp + pass_touchdown_opp + rush_touchdown_opp + return_touchdown_opp + epa_opp + wpa_opp + air_yards_opp + air_epa_opp + comp_air_epa_opp + yards_after_catch_opp + yac_epa_opp + comp_yac_epa_opp + qb_epa_opp + xyac_epa_opp + xyac_success_opp + air_wpa_opp + yac_wpa_opp + comp_air_wpa_opp + comp_yac_wpa_opp + pass_def_opp + kick_distance_mean_opp + drive_summary_opp + drive_inside20_opp + drive_ended_with_score_opp + posteam_score_opp + defteam_score_opp + drive_ended_with_punt_opp + drive_ended_with_turnover_opp + drive_three_and_out_opp + drive_ended_with_missedFG_opp + drive_ended_with_safety_opp + drive_ended_with_kneel_opp + drive_ended_with_half_opp + SuccOff_earlydown_opp + SuccOff_latedown_opp + SuccOff_earlydown_rush_opp + SuccOff_earlydown_pass_opp + SuccOff_latedown_rush_opp + SuccOff_latedown_pass_opp + AvgYdsToGo_Off_opp + Ints_Off_Inside20_opp + RZ_YAC_Off_opp + explosive_plays_opp + yds_per_play_opp + yds_per_rush_opp + yds_per_pass_att_opp + comp_pct_opp + sack_rate_opp + int_rate_opp + pass_td_rate_opp + rush_td_rate_opp + scoring_drive_pct_opp + turnover_drive_pct_opp + three_and_out_rate_opp + punt_rate_opp + missed_fg_drive_pct_opp + first_down_conv_rate_opp + run_pass_ratio_opp + first_down_rush_share_opp + first_down_pass_share_opp + first_down_pen_share_opp + yac_per_comp_opp + air_yds_per_att_opp + air_to_yac_ratio_opp + epa_per_dropback_opp + qb_hit_rate_opp + wpa_per_play_opp + qb_epa_per_dropback_opp + air_epa_per_att_opp + yac_epa_per_comp_opp + pen_yds_per_play_opp + fumble_rate_opp + fumble_lost_rate_opp + forced_fumble_share_opp + rz_trips_opp + rz_td_opp + rz_td_rate_opp + rz_int_rate_opp + points_for_per_play_opp + points_allowed_per_play_opp + cover_margin_opp + total_margin_opp + rush_share_opp + pass_share_opp + rush_vs_pass_ratio_opp + tfl_rate_opp + sack_tfl_rate_opp + third_down_conv_rate_opp + early_vs_late_split_opp + rz_td_to_int_ratio_opp + points_per_rz_trip_opp + points_per_drive_opp + points_per_100_yards_opp + air_vs_yac_dominance_opp + turnover_worthy_play_rate_opp + negative_play_rate_opp + pressure_to_sack_conv_opp + score_diff_opp + spread_adjusted_perf_opp + total_adjusted_scoring_opp + rush_eff_x_share_opp + pass_epa_x_share_opp + fd_conv_x_score_drive_opp + rush_eff_weighted_opp + pass_eff_weighted_opp + neg_play_rate_opp + turnover_play_rate_opp + explosive_play_rate_opp + balance_tilt_opp + eff_weight_gap_opp + finishing_vs_yards_opp + explosive_finishing_opp + sustain_vs_explosive_opp + early_late_synergy_opp + ball_security_risk_opp + pressure_turnover_couple_opp + pressure_damage_opp + clutch_factor_opp + spread_signal_weighted_opp + over_signal_opp + third_down_logit_opp + explosive_logit_opp + p2s_logit_opp + air_vs_yac_logit_opp + ln_points_per_rz_trip_opp + ln_points_per_drive_opp + td_rate_rz_opp + int_rate_rz_opp + eps_rate_opp + rz_td_to_int_ratio_eps_opp + red_zone_leverage_opp
+- 1
+,
+       
+      gaussian(link = "identity"),
+    data = train)
+
+summary(GLM_score)
+
+
+```
+ 
+ 
+ 
+
+###################################################################################
+
+
+
+```{r warning=FALSE}
+Score_forward <-glm(formula = Score_target ~ 
+                      
+home_away_pm1 + rush_RB + first_down_plays + 
+    qb_dropback + penalty_yards + passing_yards + fumble + fumble_forced + 
+    fumble_not_forced + fumble_lost + epa + air_wpa + comp_yac_wpa + 
+    drive_ended_with_score + drive_ended_with_kneel + SuccOff_earlydown_rush + 
+    Ints_Off_Inside20 + turnover_drive_pct + first_down_pass_share + 
+    epa_per_dropback + pen_yds_per_play + tfl_rate + sack_tfl_rate + 
+    points_per_rz_trip + air_vs_yac_dominance + fd_conv_x_score_drive + 
+    rush_eff_weighted + explosive_play_rate + finishing_vs_yards + 
+    ball_security_risk + spread_signal_weighted + ln_points_per_rz_trip + 
+    rz_td_to_int_ratio_eps + red_zone_leverage + field_goal_attempts_opp + 
+    play_opp + pass_opp + qb_hit_opp + wpa_opp + qb_epa_opp - 
+    1
+
+,
+     family = gaussian(link = "identity"),   
+    data = train)
+
+summary(Score_forward)
+
+glm.predict0 <- predict(Score_forward, newdata = train, type = "response")
+glm.predict1 <- predict(Score_forward, newdata = test, type = "response")
+glm.predict2 <- predict(Score_forward, newdata = val, type = "response")
+
+train$Score_forward  <-glm.predict0
+test$Score_forward  <-glm.predict1
+val$Score_forward  <-glm.predict2
+data$Score_forward <- predict(Score_forward , newdata = data, type = "response")
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$Score_target,glm.predict1)
+print("correlation")
+cor(train$Score_target,glm.predict0)
+RMSE(train$Score_target,glm.predict0)
+cor(test$Score_target,glm.predict1)
+RMSE(test$Score_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_Score_forward <- ifelse(train$Score_forward  >= train$posteam_implied, 1, 0)
+error = mean(train$Score_target_cover != train$Cover_Score_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Score_forward <-  ifelse(test$Score_forward  >= test$posteam_implied, 1, 0)
+error = mean(test$Score_target_cover != test$Cover_Score_forward)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_Score_forward <-  ifelse(val$Score_forward  >= val$posteam_implied, 1, 0)
+error = mean(val$Score_target_cover != val$Cover_Score_forward)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+
+
+
+
+```{r warning=FALSE}
+Score_stepwise <-glm(formula = Score_target ~ 
+
+over_signal + posteam_score + home_away_pm1 + 
+    points_allowed_per_play + turnover_drive_pct + int_rate + 
+    air_wpa + field_goal_attempts_opp + fumble_lost_rate + qb_kneel_opp
+
+,
+    #family = negative.binomial(theta = fnb$estimate[c(1)], link = "log"),
+      family = gaussian(link = "identity"),   
+    data = train)
+
+summary(Score_stepwise)
+
+glm.predict0 <- predict(Score_stepwise, newdata = train, type = "response")
+glm.predict1 <- predict(Score_stepwise, newdata = test, type = "response")
+glm.predict2 <- predict(Score_stepwise, newdata = val, type = "response")
+
+train$Score_stepwise  <-glm.predict0
+test$Score_stepwise  <-glm.predict1
+val$Score_stepwise  <-glm.predict2
+data$Score_stepwise <- predict(Score_stepwise, newdata = data, type = "response")
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$Score_target,glm.predict1)
+print("correlation")
+cor(train$Score_target,glm.predict0)
+RMSE(train$Score_target,glm.predict0)
+cor(test$Score_target,glm.predict1)
+RMSE(test$Score_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_Score_stepwise <- ifelse(train$Score_stepwise  >= train$posteam_implied, 1, 0)
+error = mean(train$Score_target_cover != train$Cover_Score_stepwise)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Score_stepwise <-  ifelse(test$Score_stepwise  >= test$posteam_implied, 1, 0)
+error = mean(test$Score_target_cover != test$Cover_Score_stepwise)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_Score_stepwise <-  ifelse(val$Score_stepwise  >= val$posteam_implied, 1, 0)
+error = mean(val$Score_target_cover != val$Cover_Score_stepwise)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+
+   
+
+######################################################################################
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+
+add_opp_scores <- function(df,
+                           game_col = "game_id",
+                           type_col = "posteam_type",
+                           forward_col = "Score_forward",
+                           stepwise_col = "Score_stepwise",
+                           out_forward = "OppScore_forward",
+                           out_stepwise = "OppScore_stepwise") {
+
+  game_sym     <- rlang::sym(game_col)
+  type_sym     <- rlang::sym(type_col)
+  forward_sym  <- rlang::sym(forward_col)
+  stepwise_sym <- rlang::sym(stepwise_col)
+
+  # Normalize side labels to "home"/"away"
+  df_norm <- df %>%
+    mutate(.side = tolower(as.character(!!type_sym)),
+           .side = dplyr::recode(.side, "h" = "home", "a" = "away"))
+
+  # Create per-game wide table for both score variants
+  wide <- df_norm %>%
+    transmute(!!game_sym, .side,
+              .fwd = !!forward_sym,
+              .stp = !!stepwise_sym) %>%
+    distinct() %>%
+    tidyr::pivot_wider(
+      names_from = .side,
+      values_from = c(.fwd, .stp),
+      values_fn = dplyr::first
+    )
+  # wide has: .fwd_home, .fwd_away, .stp_home, .stp_away
+
+  df_norm %>%
+    left_join(wide, by = rlang::as_name(game_sym)) %>%
+    mutate(
+      !!out_forward  := dplyr::if_else(.side == "home", .fwd_away, .fwd_home),
+      !!out_stepwise := dplyr::if_else(.side == "home", .stp_away, .stp_home)
+    ) %>%
+    dplyr::select(-.side, -starts_with(".fwd_"), -starts_with(".stp_"))
+}
+
+# Apply to each data frame
+data  <- add_opp_scores(data)
+train <- add_opp_scores(train)
+test  <- add_opp_scores(test)
+val   <- add_opp_scores(val)
+
+# (Optional) If you also want a single blended opponent score:
+# train <- train %>% mutate(OppScore_avg = rowMeans(cbind(OppScore_forward, OppScore_stepwise), na.rm = TRUE))
+
+
+```
+
+
+
+######################################################################################
+
+
+## Stepwise for Score Difference
+```{r warning=FALSE}
+GLM_diff <-glm(formula = ScoreDiff_target ~ 
+home_away_pm1 +
+score_diff +
+GeoLat_game_diff	+
+GeoLong_game_diff	+
+GeoLat_home_diff	+
+GeoLong_home_diff	+
+GeoLat_away_diff	+
+GeoLong_away_diff	+
+days_since_last_game_diff	+
+Distance_traveled_diff	+ home_binary +
+rush_RB_diff	+
+rushing_yards_excl_qb_kneel_diff	+
+rushing_yards_excl_qb_scramble_diff	+
+rushing_yards_qb_scramble_diff	+
+first_down_plays_diff	+
+second_down_plays_diff	+
+third_down_plays_diff	+
+fourth_down_plays_diff	+
+field_goal_attempts_diff	+
+punt_attempt_diff	+
+play_diff	+
+rush_attempt_diff	+
+rush_diff	+
+pass_attempt_diff	+
+pass_diff	+
+qb_kneel_diff	+
+qb_spike_diff	+
+qb_scramble_diff	+
+qb_dropback_diff	+
+penalty_diff	+
+penalty_yards_diff	+
+first_down_diff	+
+first_down_rush_diff	+
+first_down_pass_diff	+
+first_down_penalty_diff	+
+yards_gained_diff	+
+passing_yards_diff	+
+receiving_yards_diff	+
+rushing_yards_diff	+
+return_yards_diff	+
+complete_pass_diff	+
+interception_diff	+
+qb_hit_diff	+
+sack_diff	+
+tackled_for_loss_diff	+
+safety_diff	+
+fumble_diff	+
+fumble_forced_diff	+
+fumble_not_forced_diff	+
+fumble_lost_diff	+
+fumble_out_of_bounds_diff	+
+touchdown_diff	+
+pass_touchdown_diff	+
+rush_touchdown_diff	+
+return_touchdown_diff	+
+epa_diff	+
+wpa_diff	+
+air_yards_diff	+
+air_epa_diff	+
+comp_air_epa_diff	+
+yards_after_catch_diff	+
+yac_epa_diff	+
+comp_yac_epa_diff	+
+qb_epa_diff	+
+xyac_epa_diff	+
+xyac_success_diff	+
+air_wpa_diff	+
+yac_wpa_diff	+
+comp_air_wpa_diff	+
+comp_yac_wpa_diff	+
+pass_def_diff	+
+kick_distance_mean_diff	+
+drive_summary_diff	+
+drive_inside20_diff	+
+drive_ended_with_score_diff	+
+posteam_score_diff	+
+defteam_score_diff	+
+drive_ended_with_punt_diff	+
+drive_ended_with_turnover_diff	+
+drive_three_and_out_diff	+
+drive_ended_with_missedFG_diff	+
+drive_ended_with_safety_diff	+
+drive_ended_with_kneel_diff	+
+drive_ended_with_half_diff	+
+SuccOff_earlydown_diff	+
+SuccOff_latedown_diff	+
+SuccOff_earlydown_rush_diff	+
+SuccOff_earlydown_pass_diff	+
+SuccOff_latedown_rush_diff	+
+SuccOff_latedown_pass_diff	+
+AvgYdsToGo_Off_diff	+
+Ints_Off_Inside20_diff	+
+RZ_YAC_Off_diff	+
+explosive_plays_diff	+
+yds_per_play_diff	+
+yds_per_rush_diff	+
+yds_per_pass_att_diff	+
+comp_pct_diff	+
+sack_rate_diff	+
+int_rate_diff	+
+pass_td_rate_diff	+
+rush_td_rate_diff	+
+scoring_drive_pct_diff	+
+turnover_drive_pct_diff	+
+three_and_out_rate_diff	+
+punt_rate_diff	+
+missed_fg_drive_pct_diff	+
+first_down_conv_rate_diff	+
+run_pass_ratio_diff	+
+first_down_rush_share_diff	+
+first_down_pass_share_diff	+
+first_down_pen_share_diff	+
+yac_per_comp_diff	+
+air_yds_per_att_diff	+
+air_to_yac_ratio_diff	+
+epa_per_dropback_diff	+
+qb_hit_rate_diff	+
+wpa_per_play_diff	+
+qb_epa_per_dropback_diff	+
+air_epa_per_att_diff	+
+yac_epa_per_comp_diff	+
+pen_yds_per_play_diff	+
+fumble_rate_diff	+
+fumble_lost_rate_diff	+
+forced_fumble_share_diff	+
+rz_trips_diff	+
+rz_td_diff	+
+rz_td_rate_diff	+
+rz_int_rate_diff	+
+points_for_per_play_diff	+
+points_allowed_per_play_diff	+
+cover_margin_diff	+
+total_margin_diff	+
+rush_share_diff	+
+pass_share_diff	+
+rush_vs_pass_ratio_diff	+
+tfl_rate_diff	+
+sack_tfl_rate_diff	+
+third_down_conv_rate_diff	+
+early_vs_late_split_diff	+
+rz_td_to_int_ratio_diff	+
+points_per_rz_trip_diff	+
+points_per_drive_diff	+
+points_per_100_yards_diff	+
+air_vs_yac_dominance_diff	+
+turnover_worthy_play_rate_diff	+
+negative_play_rate_diff	+
+pressure_to_sack_conv_diff	+
+score_diff_diff	+
+spread_adjusted_perf_diff	+
+total_adjusted_scoring_diff	+
+rush_eff_x_share_diff	+
+pass_epa_x_share_diff	+
+fd_conv_x_score_drive_diff	+
+rush_eff_weighted_diff	+
+pass_eff_weighted_diff	+
+neg_play_rate_diff	+
+turnover_play_rate_diff	+
+explosive_play_rate_diff	+
+balance_tilt_diff	+
+eff_weight_gap_diff	+
+finishing_vs_yards_diff	+
+explosive_finishing_diff	+
+sustain_vs_explosive_diff	+
+early_late_synergy_diff	+
+ball_security_risk_diff	+
+pressure_turnover_couple_diff	+
+pressure_damage_diff	+
+clutch_factor_diff	+
+spread_signal_weighted_diff	+
+over_signal_diff	+
+third_down_logit_diff	+
+explosive_logit_diff	+
+p2s_logit_diff	+
+air_vs_yac_logit_diff	+
+ln_points_per_rz_trip_diff	+
+ln_points_per_drive_diff	+
+td_rate_rz_diff	+
+int_rate_rz_diff	+
+eps_rate_diff	+
+rz_td_to_int_ratio_eps_diff	+
+red_zone_leverage_diff	
+- 1	
+
+ ,
+       
+    gaussian(link = "identity"), 
+    data = train)
+
+summary(GLM_diff)
+
+
+```
+ 
+ 
+ 
+
+    
+```{r warning=FALSE}
+ScoreDiff_forward <-glm(formula = ScoreDiff_target ~ 
+
+home_away_pm1 + punt_attempt_diff + 
+    pass_diff + qb_kneel_diff + qb_dropback_diff + first_down_pass_diff + 
+    qb_hit_diff + sack_diff + fumble_diff + qb_epa_diff + comp_yac_wpa_diff + 
+    drive_ended_with_punt_diff + drive_three_and_out_diff + SuccOff_latedown_rush_diff + 
+    sack_rate_diff + qb_hit_rate_diff + rz_int_rate_diff + points_per_rz_trip_diff + 
+    explosive_finishing_diff + sustain_vs_explosive_diff + pressure_damage_diff + 
+    air_vs_yac_logit_diff + rz_td_to_int_ratio_eps_diff + red_zone_leverage_diff
+- 1
+,
+     #family = negative.binomial(theta = fnb$estimate[c(1)], link = "log"),
+      family = gaussian(link = "identity"),   
+data = train)
+
+summary(ScoreDiff_forward)
+
+glm.predict0 <- predict(ScoreDiff_forward, newdata = train, type = "response")
+glm.predict1 <- predict(ScoreDiff_forward, newdata = test, type = "response")
+glm.predict2 <- predict(ScoreDiff_forward, newdata = val, type = "response")
+
+train$ScoreDiff_forward  <-glm.predict0
+test$ScoreDiff_forward  <-glm.predict1
+val$ScoreDiff_forward  <-glm.predict2
+data$ScoreDiff_forward <- predict(ScoreDiff_forward, newdata = data, type = "response")
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$ScoreDiff_target,glm.predict1)
+print("correlation")
+cor(train$ScoreDiff_target,glm.predict0)
+RMSE(train$ScoreDiff_target,glm.predict0)
+cor(test$ScoreDiff_target,glm.predict1)
+RMSE(test$ScoreDiff_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_ScoreDiff_forward <- ifelse(train$ScoreDiff_forward  >= train$favored_by, 1, 0)
+error = mean(train$ScoreDiff_target_cover != train$Cover_ScoreDiff_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ScoreDiff_forward <-  ifelse(test$ScoreDiff_forward  >= test$favored_by, 1, 0)
+error = mean(test$ScoreDiff_target_cover != test$Cover_ScoreDiff_forward)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_ScoreDiff_forward <-  ifelse(val$ScoreDiff_forward  >= val$favored_by, 1, 0)
+error = mean(val$ScoreDiff_target_cover != val$Cover_ScoreDiff_forward)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+  
+  
+  
+  
+```{r warning=FALSE}
+ScoreDiff_stepwise <-glm(formula = ScoreDiff_target ~ 
+                           
+home_away_pm1 + punt_attempt_diff + 
+    first_down_diff + yards_gained_diff + passing_yards_diff + 
+    qb_hit_diff + sack_diff + epa_diff + qb_epa_diff + drive_ended_with_score_diff + 
+    posteam_score_diff + defteam_score_diff + drive_ended_with_punt_diff + 
+    drive_three_and_out_diff + SuccOff_latedown_rush_diff + Ints_Off_Inside20_diff + 
+    yds_per_play_diff + first_down_conv_rate_diff + first_down_rush_share_diff + 
+    first_down_pen_share_diff + rz_td_rate_diff + points_per_rz_trip_diff + 
+    total_adjusted_scoring_diff + fd_conv_x_score_drive_diff + 
+    explosive_finishing_diff + sustain_vs_explosive_diff + pressure_damage_diff + 
+    air_vs_yac_logit_diff + ln_points_per_rz_trip_diff + rz_td_to_int_ratio_eps_diff + 
+    red_zone_leverage_diff - 1
+,
+     #family = negative.binomial(theta = fnb$estimate[c(1)], link = "log"),
+      family = gaussian(link = "identity"),   
+data = train)
+
+summary(ScoreDiff_stepwise)
+
+glm.predict0 <- predict(ScoreDiff_stepwise, newdata = train, type = "response")
+glm.predict1 <- predict(ScoreDiff_stepwise, newdata = test, type = "response")
+glm.predict2 <- predict(ScoreDiff_stepwise, newdata = val, type = "response")
+
+train$ScoreDiff_stepwise  <-glm.predict0
+test$ScoreDiff_stepwise  <-glm.predict1
+val$ScoreDiff_stepwise  <-glm.predict2
+data$ScoreDiff_stepwise <- predict(ScoreDiff_stepwise, newdata = data, type = "response")
+
+
+# For GLM with an offset, this predict function includes the effect of the offset, producing the number of injuries.
+print("loglikelihood")
+LLfunction(test$ScoreDiff_target,glm.predict1)
+print("correlation")
+cor(train$ScoreDiff_target,glm.predict0)
+RMSE(train$ScoreDiff_target,glm.predict0)
+cor(test$ScoreDiff_target,glm.predict1)
+RMSE(test$ScoreDiff_target,glm.predict1)
+summary(glm.predict1)
+
+
+train$Cover_ScoreDiff_stepwise <- ifelse(train$ScoreDiff_stepwise  >= train$favored_by, 1, 0)
+error = mean(train$ScoreDiff_target_cover != train$Cover_ScoreDiff_stepwise)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ScoreDiff_stepwise <-  ifelse(test$ScoreDiff_stepwise  >= test$favored_by, 1, 0)
+error = mean(test$ScoreDiff_target_cover != test$Cover_ScoreDiff_stepwise)
+print(paste('Tree Test Model Accuracy', 1-error))
+
+val$Cover_ScoreDiff_stepwise <-  ifelse(val$ScoreDiff_stepwise  >= val$favored_by, 1, 0)
+error = mean(val$ScoreDiff_target_cover != val$Cover_ScoreDiff_stepwise)
+print(paste('Tree val Model Accuracy', 1-error))
+
+
+```
+
+
+
+
+
+
+
+###############################################################
+
+
+
+#Implied Spread using Forward Regression
+
+```{r}
+train$ImpliedScoreDiff_forward  <- train$Score_forward - train$OppScore_forward 
+
+test$ImpliedScoreDiff_forward  <- test$Score_forward - test$OppScore_forward 
+
+val$ImpliedScoreDiff_forward  <- val$Score_forward - val$OppScore_forward 
+
+data$ImpliedScoreDiff_forward  <- data$Score_forward - data$OppScore_forward 
+```
+
+
+```{r}
+train$Cover_ImpliedScoreDiff_forward <- ifelse(train$ImpliedScoreDiff_forward >= train$favored_by, 1, 0)
+error = mean(train$ScoreDiff_target_cover != train$Cover_ImpliedScoreDiff_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ImpliedScoreDiff_forward <- ifelse(test$ImpliedScoreDiff_forward  >= test$favored_by, 1, 0)
+error = mean(test$ScoreDiff_target_cover != test$Cover_ImpliedScoreDiff_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_ImpliedScoreDiff_forward <- ifelse(val$ImpliedScoreDiff_forward >= val$favored_by, 1, 0)
+error = mean(val$ScoreDiff_target_cover != val$Cover_ImpliedScoreDiff_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+
+
+#Implied Spread using Forward Regression
+
+```{r}
+train$ImpliedScoreDiff_stepwise  <- train$Score_stepwise - train$OppScore_stepwise 
+
+test$ImpliedScoreDiff_stepwise  <- test$Score_stepwise - test$OppScore_stepwise 
+
+val$ImpliedScoreDiff_stepwise  <- val$Score_stepwise - val$OppScore_stepwise 
+
+data$ImpliedScoreDiff_stepwise  <- data$Score_stepwise - data$OppScore_stepwise 
+```
+
+
+```{r}
+train$Cover_ImpliedScoreDiff_stepwise <- ifelse(train$ImpliedScoreDiff_stepwise >= train$favored_by, 1, 0)
+error = mean(train$ScoreDiff_target_cover != train$Cover_ImpliedScoreDiff_stepwise)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_ImpliedScoreDiff_stepwise <- ifelse(test$ImpliedScoreDiff_stepwise  >= test$favored_by, 1, 0)
+error = mean(test$ScoreDiff_target_cover != test$Cover_ImpliedScoreDiff_stepwise)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_ImpliedScoreDiff_stepwise <- ifelse(val$ImpliedScoreDiff_stepwise >= val$favored_by, 1, 0)
+error = mean(val$ScoreDiff_target_cover != val$Cover_ImpliedScoreDiff_stepwise)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+
+
+
+##############################################################################################
+
+#Imlplied Total using Regression Scores
+
+```{r}
+train$ImpliedTotal_forward  <- train$Score_forward + train$OppScore_forward 
+
+test$ImpliedTotal_forward  <- test$Score_forward + test$OppScore_forward 
+
+val$ImpliedTotal_forward  <- val$Score_forward + val$OppScore_forward 
+
+data$ImpliedTotal_forward  <- data$Score_forward + data$OppScore_forward 
+```
+
+
+```{r}
+train$Cover_Total_forward <- ifelse(train$ImpliedTotal_forward >= train$total_line, 1, 0)
+error = mean(train$Score_target_cover != train$Cover_Total_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Total_forward <- ifelse(test$ImpliedTotal_forward  >= test$total_line, 1, 0)
+error = mean(test$Score_target_cover != test$Cover_Total_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_Total_forward <- ifelse(val$ImpliedTotal_forward >= val$total_line, 1, 0)
+error = mean(val$Score_target_cover != val$Cover_Total_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+
+
+
+
+```{r}
+train$ImpliedTotal_stepwise  <- train$Score_stepwise + train$OppScore_stepwise 
+
+test$ImpliedTotal_stepwise  <- test$Score_stepwise + test$OppScore_stepwise 
+
+val$ImpliedTotal_stepwise  <- val$Score_stepwise + val$OppScore_stepwise 
+
+data$ImpliedTotal_stepwise  <- data$Score_stepwise + data$OppScore_stepwise 
+```
+
+
+```{r}
+train$Cover_Total_stepwise <- ifelse(train$ImpliedTotal_stepwise >= train$total_line, 1, 0)
+error = mean(train$Score_target_cover != train$Cover_Total_stepwise)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Total_stepwise <- ifelse(test$ImpliedTotal_stepwise  >= test$total_line, 1, 0)
+error = mean(test$Score_target_cover != test$Cover_Total_stepwise)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_Total_stepwise <- ifelse(val$ImpliedTotal_stepwise >= val$total_line, 1, 0)
+error = mean(val$Score_target_cover != val$Cover_Total_stepwise)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+####################################################################################
+
+#Implied Score from Forward
+
+```{r}
+train$ImpliedTeamScored_forward  <- train$ScoreTotal_forward / 2 + train$ScoreDiff_forward / 2
+test$ImpliedTeamScored_forward  <- test$ScoreTotal_forward / 2 + test$ScoreDiff_forward / 2
+val$ImpliedTeamScored_forward  <- val$ScoreTotal_forward / 2 + val$ScoreDiff_forward / 2
+data$ImpliedTeamScored_forward  <- data$ScoreTotal_forward / 2 + data$ScoreDiff_forward / 2
+
+train$ImpliedOppScored_forward  <- train$ScoreTotal_forward / 2 - train$ScoreDiff_forward / 2
+test$ImpliedOppScored_forward  <- test$ScoreTotal_forward / 2 - test$ScoreDiff_forward / 2
+val$ImpliedOppScored_forward  <- val$ScoreTotal_forward / 2 - val$ScoreDiff_forward / 2
+data$ImpliedOppScored_forward  <- data$ScoreTotal_forward / 2 - data$ScoreDiff_forward / 2
+```
+
+
+```{r}
+train$Cover_Team_ImpliedTotal_forward <- ifelse(train$ImpliedTeamScored_forward  >= train$posteam_implied, 1, 0)
+error = mean(train$Score_target_cover != train$Cover_Team_ImpliedTotal_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Team_ImpliedTotal_forward <- ifelse(test$ImpliedTeamScored_forward  >= test$posteam_implied, 1, 0)
+error = mean(test$Score_target_cover != test$Cover_Team_ImpliedTotal_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_Team_ImpliedTotal_forward <- ifelse(val$ImpliedTeamScored_forward >= val$posteam_implied, 1, 0)
+error = mean(val$Score_target_cover != val$Cover_Team_ImpliedTotal_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+
+
+```{r}
+train$Cover_Opp_ImpliedTotal_forward <- ifelse(train$ImpliedOppScored_forward  >= train$defteam_implied, 1, 0)
+error = mean(train$OppScore_target_cover != train$Cover_Opp_ImpliedTotal_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Opp_ImpliedTotal_forward <- ifelse(test$ImpliedOppScored_forward  >= test$defteam_implied, 1, 0)
+error = mean(test$OppScore_target_cover != test$Cover_Opp_ImpliedTotal_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_Opp_ImpliedTotal_forward <- ifelse(val$ImpliedOppScored_forward >= val$defteam_implied, 1, 0)
+error = mean(val$OppScore_target_cover != val$Cover_Opp_ImpliedTotal_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+
+#Implied Score from Stepwise
+
+
+```{r}
+train$ImpliedTeamScored_stepwise  <- train$ScoreTotal_stepwise / 2 + train$ScoreDiff_stepwise / 2
+test$ImpliedTeamScored_stepwise  <- test$ScoreTotal_stepwise / 2 + test$ScoreDiff_stepwise / 2
+val$ImpliedTeamScored_stepwise  <- val$ScoreTotal_stepwise / 2 + val$ScoreDiff_stepwise / 2
+data$ImpliedTeamScored_stepwise  <- data$ScoreTotal_stepwise / 2 + data$ScoreDiff_stepwise / 2
+
+train$ImpliedOppScored_stepwise  <- train$ScoreTotal_stepwise / 2 - train$ScoreDiff_stepwise / 2
+test$ImpliedOppScored_stepwise  <- test$ScoreTotal_stepwise / 2 - test$ScoreDiff_stepwise / 2
+val$ImpliedOppScored_stepwise  <- val$ScoreTotal_stepwise / 2 - val$ScoreDiff_stepwise / 2
+data$ImpliedOppScored_stepwise  <- data$ScoreTotal_stepwise / 2 - data$ScoreDiff_stepwise / 2
+```
+
+
+```{r}
+train$Cover_Team_ImpliedTotal_stepwise <- ifelse(train$ImpliedTeamScored_stepwise  >= train$posteam_implied, 1, 0)
+error = mean(train$Score_target_cover != train$Cover_Team_ImpliedTotal_stepwise)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Team_ImpliedTotal_stepwise <- ifelse(test$ImpliedTeamScored_stepwise  >= test$posteam_implied, 1, 0)
+error = mean(test$Score_target_cover != test$Cover_Team_ImpliedTotal_stepwise)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_Team_ImpliedTotal_stepwise <- ifelse(val$ImpliedTeamScored_stepwise >= val$posteam_implied, 1, 0)
+error = mean(val$Score_target_cover != val$Cover_Team_ImpliedTotal_stepwise)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+
+
+```{r}
+train$Cover_Opp_ImpliedTotal_forward <- ifelse(train$ImpliedOppScored_forward  >= train$defteam_implied, 1, 0)
+error = mean(train$OppScore_target_cover != train$Cover_Opp_ImpliedTotal_forward)
+print(paste('Tree Training Model Accuracy', 1-error))
+
+test$Cover_Opp_ImpliedTotal_forward <- ifelse(test$ImpliedOppScored_forward  >= test$defteam_implied, 1, 0)
+error = mean(test$OppScore_target_cover != test$Cover_Opp_ImpliedTotal_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+
+val$Cover_Opp_ImpliedTotal_forward <- ifelse(val$ImpliedOppScored_forward >= val$defteam_implied, 1, 0)
+error = mean(val$OppScore_target_cover != val$Cover_Opp_ImpliedTotal_forward)
+print(paste('Tree testing Model Accuracy', 1-error))
+```
+
+
+
+
+
+####################################################################################
+####################################################################################
+
+
+
+
+#Summary Table of Results
+
+```{r}
+library(dplyr)
+library(kableExtra)
+
+# =========================
+# 0) Helpers for averaging
+# =========================
+row_mean_or_na <- function(df, cols) {
+  if (length(cols) == 0) return(rep(NA_real_, nrow(df)))
+  m <- as.matrix(df[, cols, drop = FALSE])
+  out <- rowMeans(m, na.rm = TRUE)
+  out[!is.finite(out)] <- NA_real_
+  out
+}
+
+get_cols <- function(nms, patterns, drop_targets = TRUE) {
+  cols <- sort(unique(unlist(lapply(patterns, function(p)
+    grep(p, nms, value = TRUE, perl = TRUE)
+  ))))
+  if (drop_targets) {
+    cols <- cols[!grepl("(_target$|_target_cover$)", cols, perl = TRUE)]
+  }
+  cols
+}
+
+# =========================
+# A) Prep: ensure ImpliedTeamScored_* exists for common suffixes
+# =========================
+suffixes <- c("forward","stepwise","enet","randforest","xgb","all","avg","avgreg")
+
+for (dfname in c("train","test","val")) {
+  df <- get(dfname)
+
+  for (suf in suffixes) {
+    score_col   <- paste0("Score_", suf)
+    implied_col <- paste0("ImpliedTeamScored_", suf)
+    if (!(implied_col %in% names(df)) && (score_col %in% names(df))) {
+      df[[implied_col]] <- df[[score_col]]
+    }
+  }
+
+  assign(dfname, df, inherits = TRUE)
+}
+
+# =========================
+# B) NEW: Add averaged ensemble predictions to each split
+# =========================
+add_avg_preds <- function(df) {
+  nms <- names(df)
+
+  # Score (team) — include Score_* (excluding ScoreDiff_) and ImpliedTeamScored_*
+  score_cols <- get_cols(
+    nms,
+    patterns = c("^Score_(?!Diff_).+", "^ImpliedTeamScored_.+"),
+    drop_targets = TRUE
+  )
+
+  # Opponent Score
+  opp_cols <- get_cols(
+    nms,
+    patterns = c("^OppScore_.+", "^ImpliedOppScored_.+"),
+    drop_targets = TRUE
+  )
+
+  # Total — include all your total-style prefixes
+  total_cols <- get_cols(
+    nms,
+    patterns = c("^(ScoreTotal_|Total_|TotalScore_|ImpliedTotal_|ImpliedScoreTotal_).+"),
+    drop_targets = TRUE
+  )
+
+  # Score Difference
+  diff_cols <- get_cols(
+    nms,
+    patterns = c("^ScoreDiff_.+", "^ImpliedScoreDiff_.+"),
+    drop_targets = TRUE
+  )
+
+  df$Score_avg      <- row_mean_or_na(df, score_cols)
+  df$OppScore_avg   <- row_mean_or_na(df, opp_cols)
+  df$ScoreTotal_avg <- row_mean_or_na(df, total_cols)
+  df$ScoreDiff_avg  <- row_mean_or_na(df, diff_cols)
+
+  df
+}
+
+train <- add_avg_preds(train)
+test  <- add_avg_preds(test)
+val   <- add_avg_preds(val)
+data   <- add_avg_preds(data)
+
+# =========================
+# C) Map each predictor name to its targets / thresholds
+# =========================
+resolve_targets <- function(colname) {
+  base <- colname
+
+  if (grepl("^Team_ImpliedTotal_", base) || grepl("^ImpliedTeamScored_", base)) {
+    list(numeric_target = "Score_target",
+         cover_target   = "Score_target_cover",
+         threshold_col  = "posteam_implied")
+
+  } else if (grepl("^ImpliedOppScored_", base)) {
+    list(numeric_target = "OppScore_target",
+         cover_target   = "OppScore_target_cover",
+         threshold_col  = "defteam_implied")
+
+  } else if (grepl("^(ScoreTotal_|Total_|TotalScore_|ImpliedTotal_|ImpliedScoreTotal_)", base)) {
+    list(numeric_target = "ScoreTotal_target",
+         cover_target   = "ScoreTotal_target_cover",
+         threshold_col  = "total_line")
+
+  } else if (grepl("^OppScore_", base)) {
+    list(numeric_target = "OppScore_target",
+         cover_target   = "OppScore_target_cover",
+         threshold_col  = "defteam_implied")
+
+  } else if (grepl("^(ScoreDiff_|ImpliedScoreDiff_)", base)) {
+    list(numeric_target = "ScoreDiff_target",
+         cover_target   = "ScoreDiff_target_cover",
+         threshold_col  = "favored_by")
+
+  } else if (grepl("^Score_", base)) {
+    list(numeric_target = "Score_target",
+         cover_target   = "Score_target_cover",
+         threshold_col  = "posteam_implied")
+
+  } else {
+    list(numeric_target = NA_character_,
+         cover_target   = NA_character_,
+         threshold_col  = NA_character_)
+  }
+}
+
+# =========================
+# D) Collect variables to evaluate (EXCLUDES Cover_*)
+# =========================
+all_names <- unique(c(names(train), names(test), names(val)))
+
+pred_pattern <- paste0(
+  "^(",
+    "(ScoreTotal|Total|TotalScore|ImpliedTotal|ImpliedScoreTotal)",  # totals (new prefixes included)
+    "|Score|OppScore|ScoreDiff|ImpliedScoreDiff|ImpliedTeamScored|ImpliedOppScored|Team_ImpliedTotal",
+  ")_.+"
+)
+
+vars_to_check <- sort(all_names[grepl(pred_pattern, all_names)])
+vars_to_check <- vars_to_check[!grepl("(_target$|_target_cover$)", vars_to_check, perl = TRUE)]
+vars_to_check <- vars_to_check[!startsWith(vars_to_check, "Cover_")]  # safety
+
+# =========================
+# E) Evaluator (numeric RMSE/MSE/Corr + % Correct from thresholded numeric preds)
+# =========================
+eval_split <- function(df, split_label, variables) {
+  out <- lapply(variables, function(v) {
+    m <- resolve_targets(v)
+    nt <- m$numeric_target
+    ct <- m$cover_target
+    th <- m$threshold_col
+
+    row <- tibble(
+      Split          = split_label,
+      Variable       = v,
+      Numeric_Target = nt,
+      RMSE           = NA_real_,
+      MSE            = NA_real_,
+      Correlation    = NA_real_,
+      Pct_Correct    = NA_real_
+    )
+
+    # Numeric metrics vs numeric target (if present)
+    if (all(c(v, nt) %in% names(df))) {
+      yhat <- df[[v]]
+      y    <- df[[nt]]
+      ok   <- is.finite(yhat) & is.finite(y)
+      if (any(ok)) {
+        row$RMSE        <- sqrt(mean((yhat[ok] - y[ok])^2))
+        row$MSE         <- mean((yhat[ok] - y[ok])^2)
+        row$Correlation <- suppressWarnings(cor(y[ok], yhat[ok]))
+      }
+    }
+
+    # If a threshold + cover target exist, compute cover success from numeric predictor
+    if (all(c(v, th, ct) %in% names(df))) {
+      yhat <- df[[v]]
+      thr  <- df[[th]]
+      ycov <- df[[ct]]
+      ok   <- is.finite(yhat) & is.finite(thr) & is.finite(ycov)
+      if (any(ok)) {
+        pred_cover <- as.integer(yhat[ok] >= thr[ok])
+        row$Pct_Correct <- mean(pred_cover == as.integer(ycov[ok]))
+      }
+    }
+
+    row
+  })
+
+  dplyr::bind_rows(out)
+}
+
+# =========================
+# F) Build summary_tbl
+# =========================
+summary_tbl <- dplyr::bind_rows(
+  eval_split(train, "TRAIN", vars_to_check),
+  eval_split(test,  "TEST",  vars_to_check),
+  eval_split(val,   "VAL",   vars_to_check),
+  eval_split(data,   "DATA",   vars_to_check)
+) %>%
+  dplyr::mutate(Split = factor(Split, levels = c("TRAIN","TEST","VAL","DATA"))) %>%
+  dplyr::arrange(Split, Variable)
+
+# =========================
+# G) Display table (no Cover_*; shows Correlation)
+# =========================
+small_tbl <- summary_tbl %>%
+  dplyr::mutate(
+    Variable    = gsub("_", "_\u200b", Variable),
+    RMSE        = round(RMSE, 2),
+    MSE         = round(MSE, 2),
+    Correlation = round(Correlation, 3),
+    `% Correct` = ifelse(is.na(Pct_Correct), "", paste0(round(100 * Pct_Correct, 1), "%"))
+  ) %>%
+  dplyr::transmute(
+    Split, Variable, `Num Target` = Numeric_Target,
+    RMSE, MSE, Correlation, `% Correct`
+  )
+
+kable(small_tbl, format = "html", escape = FALSE) %>%
+  kable_styling(full_width = FALSE,
+                bootstrap_options = c("striped","condensed","hover"),
+                font_size = 12) %>%
+  column_spec(1, width = "6em")  %>%
+  column_spec(2, width = "20em") %>%
+  column_spec(3, width = "12em")
+
+```
+
+
+
+# Average Summary Table
+```{r}
+library(dplyr)
+library(kableExtra)
+
+cat_avgs <- summary_tbl %>%
+  mutate(
+    Category = case_when(
+      grepl("^(ScoreTotal_|Total_|TotalScore_|ImpliedTotal_|ImpliedScoreTotal_)", Variable) ~ "Total",
+      grepl("^OppScore_", Variable)                                                         ~ "OppScore",
+      grepl("^(ScoreDiff_|ImpliedScoreDiff_)", Variable)                                    ~ "ScoreDiff",
+      grepl("^Score_", Variable) & !grepl("^ScoreDiff_", Variable)                          ~ "Score",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(Category)) %>%
+  mutate(Split = factor(Split, levels = c("TRAIN","TEST","VAL","DATA"))) %>%
+  group_by(Split, Category) %>%
+  summarise(
+    Avg_RMSE = mean(RMSE, na.rm = TRUE),
+    Avg_MSE  = mean(MSE,  na.rm = TRUE),
+    Avg_Corr = mean(Correlation, na.rm = TRUE),
+    Avg_Pct  = mean(Pct_Correct, na.rm = TRUE),  # thresholded numeric preds only
+    .groups = "drop"
+  ) %>%
+  arrange(Split, Category)
+
+cat_avgs_disp <- cat_avgs %>%
+  transmute(
+    Split, Category,
+    RMSE = round(Avg_RMSE, 2),
+    MSE  = round(Avg_MSE, 2),
+    Corr = round(Avg_Corr, 3),
+    `% Correct` = ifelse(is.na(Avg_Pct), "", paste0(round(100 * Avg_Pct, 1), "%"))
+  )
+
+kable(cat_avgs_disp, format = "html", escape = FALSE) %>%
+  kable_styling(full_width = FALSE,
+                bootstrap_options = c("striped","condensed","hover"),
+                font_size = 14) %>%
+  column_spec(1, width = "6em") %>%
+  column_spec(2, width = "10em")
+
+```
+
+
+
+ 
+ 
+
+
+
+
+dataReg_home <- data %>%
+  filter(posteam_type == "home")
+  
+write.csv(dataReg_home, "../output/dataLateReg_home.csv")
+
+
+
+dataReg_away <- data %>%
+  filter(posteam_type == "away")
+  
+write.csv(dataReg_away, "../output/dataLateReg_away.csv")
+
+
+```{r}
+val_home <- val %>%
+  filter(posteam_type == "home")
+  
+write.csv(val_home, "../output/2026_ScoresLateReg_home.csv")
+
+
+
+val_away <- val %>%
+  filter(posteam_type == "away")
+  
+write.csv(val_away, "../output/2026_ScoresLateReg_away.csv")
+
+
+
+#save.image(file = "../output/ScoresLateRegression2025.RData")
+#save.image(file = "C:/Users/rroot/Documents/Football/2023/2023_2nd_Half_v3/2023_Model_Pred_Week1/data/Regression_Normal_total.RData")
+
+```
+ 
+
+
+
+
+ 
