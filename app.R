@@ -2165,7 +2165,7 @@ server <- function(input, output, session) {
   bind_nextgen_family("ng_gbm", "gbm_boosted_trees")
   bind_nextgen_family("ng_xgboost", "xgboost_regression")
 
-  historical_model_scores <- function(market) {
+  historical_model_scores <- function(market, cutoff_season = Inf) {
     score_market <- if (identical(market, "straight_up")) {
       "spread"
     } else if (market %in% c("home_implied", "away_implied")) {
@@ -2173,7 +2173,7 @@ server <- function(input, output, session) {
     } else {
       market
     }
-    selected <- inventory %>% filter(season %in% backtest_seasons)
+    selected <- inventory %>% filter(season %in% backtest_seasons, season < cutoff_season)
     rows <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
       detect_cover_summary(read_model_file(path)) %>%
         filter(!is.na(projection_col)) %>%
@@ -2205,7 +2205,7 @@ server <- function(input, output, session) {
     cols <- projection_columns_for_market(df, market)
     if (length(cols) == 0) return(tibble())
 
-    score_lookup <- detect_cover_summary(df)
+    score_season <- suppressWarnings(as.integer(meta$season %||% NA_integer_))
     score_market <- if (identical(market, "straight_up")) {
       "spread"
     } else if (market %in% c("home_implied", "away_implied")) {
@@ -2213,12 +2213,21 @@ server <- function(input, output, session) {
     } else {
       market
     }
-    if (!identical(score_market, "all")) score_lookup <- filter(score_lookup, market %in% score_market)
-    score_lookup <- score_lookup %>%
-      filter(!is.na(projection_col)) %>%
-      select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
+    # A 2026 row must not select/weight its model using outcomes from the
+    # same 2026 prediction file, even when the model fit itself is frozen.
+    if (is.finite(score_season) && score_season >= 2026L) {
+      score_lookup <- historical_model_scores(market, cutoff_season = if (is.finite(score_season)) score_season else Inf) %>%
+        filter(family == meta$family, split == meta$split) %>%
+        select(projection_col, model_result_col, model_picks, model_win_pct)
+    } else {
+      score_lookup <- detect_cover_summary(df)
+      if (!identical(score_market, "all")) score_lookup <- filter(score_lookup, market %in% score_market)
+      score_lookup <- score_lookup %>%
+        filter(!is.na(projection_col)) %>%
+        select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
+    }
     if (nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) {
-      score_lookup <- historical_model_scores(market) %>%
+      score_lookup <- historical_model_scores(market, cutoff_season = score_season) %>%
         filter(family == meta$family, split == meta$split) %>%
         select(projection_col, model_result_col, model_picks, model_win_pct)
     }
