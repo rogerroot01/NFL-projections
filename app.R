@@ -2206,6 +2206,20 @@ server <- function(input, output, session) {
     if (length(cols) == 0) return(tibble())
 
     score_season <- suppressWarnings(as.integer(meta$season %||% NA_integer_))
+    target_family <- meta$family[[1L]]
+    target_split <- meta$split[[1L]]
+    historical_score_lookup <- function(cutoff_season) {
+      scored <- historical_model_scores(market, cutoff_season = cutoff_season)
+      if (nrow(scored) == 0L) {
+        return(tibble(
+          projection_col = character(), model_result_col = character(),
+          model_picks = integer(), model_win_pct = double()
+        ))
+      }
+      scored %>%
+        filter(.data$family == .env$target_family, .data$split == .env$target_split) %>%
+        select(projection_col, model_result_col, model_picks, model_win_pct)
+    }
     score_market <- if (identical(market, "straight_up")) {
       "spread"
     } else if (market %in% c("home_implied", "away_implied")) {
@@ -2216,9 +2230,7 @@ server <- function(input, output, session) {
     # A 2026 row must not select/weight its model using outcomes from the
     # same 2026 prediction file, even when the model fit itself is frozen.
     if (is.finite(score_season) && score_season >= 2026L) {
-      score_lookup <- historical_model_scores(market, cutoff_season = if (is.finite(score_season)) score_season else Inf) %>%
-        filter(family == meta$family, split == meta$split) %>%
-        select(projection_col, model_result_col, model_picks, model_win_pct)
+      score_lookup <- historical_score_lookup(score_season)
     } else {
       score_lookup <- detect_cover_summary(df)
       if (!identical(score_market, "all")) score_lookup <- filter(score_lookup, market %in% score_market)
@@ -2227,9 +2239,7 @@ server <- function(input, output, session) {
         select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
     }
     if (nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) {
-      score_lookup <- historical_model_scores(market, cutoff_season = score_season) %>%
-        filter(family == meta$family, split == meta$split) %>%
-        select(projection_col, model_result_col, model_picks, model_win_pct)
+      score_lookup <- historical_score_lookup(if (is.finite(score_season)) score_season else Inf)
     }
 
     base <- df %>%

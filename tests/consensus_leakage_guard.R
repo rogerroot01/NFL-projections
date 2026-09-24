@@ -39,4 +39,17 @@ shiny::testServer(app_env$server, {
             all(is.finite(legacy_rows$avg_projection)),
             all(is.finite(legacy_rows$agree_pct)))
   cat("LEGACY_CONSENSUS_2026_ROWS_OK:", nrow(legacy_rows), "rows\n")
+
+  # The UI selects graded seasons as well as the future season by default.
+  # Early historical files can have no prior scored season for a model; the
+  # consensus must skip that model rather than throw from a missing lookup.
+  session$setInputs(
+    cons_seasons = app_env$backtest_seasons,
+    cons_future_seasons = app_env$future_seasons
+  )
+  default_rows <- build_consensus_rows()
+  stopifnot(nrow(default_rows) > 0L,
+            any(default_rows$season == 2026L),
+            all(is.finite(default_rows$avg_projection)))
+  cat("LEGACY_CONSENSUS_DEFAULT_SELECTION_OK:", nrow(default_rows), "rows\n")
 })
