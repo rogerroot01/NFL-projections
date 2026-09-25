@@ -2,7 +2,10 @@
 
 The Wrangler must grade the forecast that existed before each game, not a
 projection regenerated after game data arrived. `prepare_data_nextgen.R` and
-`prepare_data_legacy.R` use `pregame_projection_archive.R` to enforce this.
+the standalone Legacy `Step 12 Prepare small data.R` use
+`pregame_projection_archive.R` to enforce this. The converted pipeline's
+`prepare_data_legacy.R` is also guarded but is not the canonical Gmail Legacy
+export because its future forecasts differ from the standalone run.
 
 - The initial archive captures Weeks 1–3 from their saved pregame folders.
 - On later preparation runs, predictions for games dated **after today** and
@@ -18,6 +21,9 @@ projection regenerated after game data arrived. `prepare_data_nextgen.R` and
 - The Step 11 Billy-tree bridge pairs Step 10 home and away scores by
   `game_id`, not CSV row position. The 2026 files have different row orders;
   row-position pairing gives the wrong opponent score.
+- `audit_legacy_bundle_parity.R` compares the two Legacy production routes;
+  `audit_legacy_lines.R` reports when historical grading lines differ from
+  their original weekly snapshots. Both are diagnostics, not app inputs.
 
 The live standalone Wrangler is the existing Gmail-owned NFL Projections app
 at `https://connect.posit.cloud/rogerroot`; its Git source is

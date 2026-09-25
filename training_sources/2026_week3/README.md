@@ -13,6 +13,10 @@ deployment script does not bundle or execute these source copies.
   imputation. The existing Gmail Wrangler and the standalone Legacy Step 12
   restore archived pregame predictions for completed 2026 games.
 - The converted Step 11 bridge pairs home/away Step 10 scores by `game_id`.
+- The Gmail Wrangler's Legacy bundle is exported by the standalone Week 3
+  Legacy `Step 12 Prepare small data.R`. The converted Next Gen pipeline's
+  Legacy-equivalent forecasts differ materially and must not replace this
+  standalone bundle without a separate parity review.
 - The source copies in `pregame_replay/`, `nextgen_preprocessing/`, and
   `legacy/` document the exact corrected production code.
 
