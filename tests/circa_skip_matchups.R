@@ -30,6 +30,15 @@ shiny::testServer(app$serverFuncSource(), {
     identical(circa_card_rows()$game_id[1:5], rows$game_id[c(1, 3, 4, 5, 6)]),
     identical(circa_card_rows()$game_id[6:7], rows$game_id[7:8])
   )
+
+  session$setInputs(circa_final_picks = rows$game_id[c(1, 3, 4, 5, 7)])
+  stopifnot(
+    nrow(circa_final_rows()) == 5L,
+    identical(circa_final_rows()$game_id, rows$game_id[c(1, 3, 4, 5, 7)]),
+    identical(output$circa_final_status, "Five plays selected.")
+  )
+  session$setInputs(circa_final_picks = rows$game_id[c(1, 3, 4, 5)])
+  stopifnot(grepl("Select exactly five plays", output$circa_final_status, fixed = TRUE))
 })
 
 cat("CIRCA_SKIP_PROMOTION_OK\n")

@@ -1087,7 +1087,7 @@ ui <- fluidPage(
             "cons_families",
             "Families",
             choices = stats::setNames(names(family_labels), family_labels),
-            selected = c("ScoresTrees", "ScoresLateReg", "Billy")
+            selected = c("ScoresTrees", "ScoresLateReg", "Billy", "BillyTrees")
           ),
           checkboxGroupInput("cons_seasons", "Backtest seasons", choices = backtest_seasons, selected = backtest_seasons),
           checkboxGroupInput("cons_future_seasons", "Future projection seasons", choices = future_seasons, selected = future_seasons),
@@ -1363,6 +1363,12 @@ ui <- fluidPage(
           DTOutput("circa_top_five"),
           h4("Next two alternates"),
           DTOutput("circa_alternates"),
+          tags$hr(),
+          h4("Final five-pick card"),
+          checkboxGroupInput("circa_final_picks", "Select five plays", choices = NULL),
+          textOutput("circa_final_status"),
+          DTOutput("circa_final_card"),
+          downloadButton("circa_download_final", "Download final card", class = "btn-success"),
           tags$hr(),
           h4("All potential Circa plays"),
           DTOutput("circa_all_plays"),
@@ -3013,7 +3019,7 @@ server <- function(input, output, session) {
           circa_pick != current_pick ~ "Side flips",
           circa_qualifies & !current_qualifies ~ "New at Circa",
           !circa_qualifies & current_qualifies ~ "Drops at Circa",
-          circa_qualifies & current_qualifies ~ "Carries over",
+          circa_qualifies & current_qualifies ~ "Same side qualifies",
           TRUE ~ "Below threshold"
         )
       ) %>%
@@ -3033,6 +3039,37 @@ server <- function(input, output, session) {
     if (nrow(rows) == 0) return(rows)
     skipped <- input$circa_skip_matchups %||% character()
     rows %>% filter(!game_id %in% skipped) %>% mutate(rank = row_number())
+  })
+
+  observeEvent(circa_card_rows(), {
+    choices <- circa_card_rows() %>% slice_head(n = 7)
+    if (!nrow(choices)) {
+      updateCheckboxGroupInput(session, "circa_final_picks", choices = character(), selected = character())
+      return()
+    }
+    labels <- sprintf("%s @ %s: %s %s (%.1f-point edge)",
+      choices$away_team, choices$home_team, choices$pick_team,
+      format_spread_price(choices$pick_line), choices$circa_edge)
+    selected <- intersect(isolate(input$circa_final_picks) %||% character(), choices$game_id)
+    if (!length(selected)) selected <- head(choices$game_id, 5)
+    updateCheckboxGroupInput(session, "circa_final_picks",
+      choices = stats::setNames(choices$game_id, labels), selected = selected)
+  })
+
+  circa_final_rows <- reactive({
+    selected <- input$circa_final_picks %||% character()
+    circa_card_rows() %>% filter(game_id %in% selected)
+  })
+
+  output$circa_final_status <- renderText({
+    n <- nrow(circa_final_rows())
+    if (n == 5L) "Five plays selected." else sprintf("Select exactly five plays (%d selected).", n)
+  })
+
+  output$circa_final_card <- renderDT({
+    rows <- circa_final_rows()
+    display <- if (!nrow(rows)) tibble(Message = "Select plays from the list above.") else format_circa_table(rows)
+    datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 5, scrollX = TRUE))
   })
 
   format_circa_table <- function(rows) {
@@ -3098,6 +3135,15 @@ server <- function(input, output, session) {
     content = function(file) {
       rows <- circa_card_rows() %>% slice_head(n = 5)
       req(nrow(rows) > 0)
+      write_csv(rows, file)
+    }
+  )
+
+  output$circa_download_final <- downloadHandler(
+    filename = function() paste0("circa_final_card_", first(circa_lines_state()$season), "_week_", first(circa_lines_state()$week), ".csv"),
+    content = function(file) {
+      rows <- circa_final_rows()
+      req(nrow(rows) == 5L)
       write_csv(rows, file)
     }
   )
