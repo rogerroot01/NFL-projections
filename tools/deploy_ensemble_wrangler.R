@@ -12,8 +12,8 @@ app_files <- c(
 app_files <- app_files[file.exists(app_files)]
 rsconnect::deployApp(
   appDir = getwd(),
-  appName = "nfl-projection-ensemble-wrangler",
-  account = "roger-root-nfl",
+  appId = "019e0a00-0c1e-7122-33bd-b94ad82403e6",
+  account = "rogerroot",
   server = "connect.posit.cloud",
   appFiles = app_files,
   forceUpdate = TRUE,

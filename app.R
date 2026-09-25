@@ -243,7 +243,8 @@ circa_team_aliases <- c(
   RAIDERS = "LV", CHARGERS = "LAC", RAMS = "LA", DOLPHINS = "MIA",
   VIKINGS = "MIN", PATRIOTS = "NE", SAINTS = "NO", GIANTS = "NYG",
   JETS = "NYJ", EAGLES = "PHI", STEELERS = "PIT", `49ERS` = "SF",
-  SEAHAWKS = "SEA", BUCS = "TB", TITANS = "TEN", COMMANDERS = "WAS"
+  SEAHAWKS = "SEA", BUCS = "TB", TITANS = "TEN", COMMANDERS = "WAS",
+  A9ERS = "SF"
 )
 
 circa_normalize_team <- function(x) {
@@ -272,7 +273,7 @@ circa_parse_ocr_spread <- function(token) {
   whole <- suppressWarnings(as.numeric(digits))
   if (is.na(whole) && str_detect(upper, "A")) whole <- 4
   half_mark <- str_detect(upper, "[%HVY,]") | str_detect(upper, fixed(intToUtf8(0x00BD)))
-  if (is.na(whole) && half_mark) whole <- 0
+  if (is.na(whole) && gsub("[+-]", "", upper) %in% c("½", "H", "%")) whole <- 0
   if (is.na(whole)) return(NA_real_)
   sign * (whole + ifelse(half_mark, 0.5, 0))
 }
@@ -282,10 +283,21 @@ validate_circa_lines <- function(rows) {
   missing <- setdiff(required, names(rows))
   if (length(missing) > 0) stop("Circa lines are missing: ", paste(missing, collapse = ", "))
   if (nrow(rows) == 0) stop("No Circa matchups were found.")
+  if (any(is.na(rows$season) | is.na(rows$week)) || n_distinct(rows$season) != 1L || n_distinct(rows$week) != 1L) {
+    stop("The Circa sheet must contain exactly one season and one week.")
+  }
   if (any(is.na(rows$circa_away_line)) || any(is.na(rows$circa_home_line))) stop("At least one Circa spread could not be read.")
   if (any(abs(rows$circa_away_line + rows$circa_home_line) > 0.001)) stop("At least one Circa matchup has non-opposite spreads.")
   teams <- c(rows$away_team, rows$home_team)
   if (any(is.na(teams) | teams == "") || anyDuplicated(teams)) stop("Each team must appear exactly once on the Circa weekly sheet.")
+  expected_ids <- paste(rows$season, rows$week, rows$away_team, rows$home_team, sep = "_")
+  if (any(is.na(rows$game_id)) || any(rows$game_id != expected_ids) || anyDuplicated(rows$game_id)) {
+    stop("Circa game IDs must match the season, week, away team, and home team exactly.")
+  }
+  scheduled_ids <- current_lines$game_id[str_detect(current_lines$game_id, paste0("^", first(rows$season), "_", first(rows$week), "_"))]
+  if (length(scheduled_ids) > 0 && !setequal(rows$game_id, scheduled_ids)) {
+    stop("The Circa sheet does not match the complete scheduled slate or home/away orientation for the selected week.")
+  }
   rows
 }
 
@@ -327,7 +339,7 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
   missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
   if (length(missing) > 0) stop("PDF import requires: ", paste(missing, collapse = ", "), ". A CSV upload is also supported.")
 
-  png_pattern <- file.path(tempdir(), paste0("circa-", as.integer(Sys.time()), "-%d.png"))
+  png_pattern <- paste0(tempfile(pattern = "circa-"), "-%d.%s")
   png_files <- pdftools::pdf_convert(path, format = "png", dpi = 300, pages = 1, filenames = png_pattern, verbose = FALSE)
   on.exit(unlink(png_files, force = TRUE), add = TRUE)
   image <- magick::image_read(png_files[[1L]])
@@ -341,7 +353,21 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
     x2 = suppressWarnings(as.numeric(bbox[, 3])),
     y2 = suppressWarnings(as.numeric(bbox[, 4]))
   ) %>%
-    mutate(x = (x1 + x2) / 2, y = (y1 + y2) / 2, x_ratio = x / image_width, key = toupper(gsub("[^A-Z0-9]", "", word)))
+    mutate(x = (x1 + x2) / 2, y = (y1 + y2) / 2, x_ratio = x / image_width, key = gsub("[^A-Z0-9]", "", toupper(word)))
+
+  header_words <- words %>% filter(y < magick::image_info(image)$height[[1L]] * 0.15)
+  week_labels <- header_words %>% filter(key == "WEEK")
+  printed_week <- map_int(seq_len(nrow(week_labels)), function(index) {
+    candidates <- header_words %>%
+      filter(x > week_labels$x[[index]], x < week_labels$x[[index]] + 180,
+             abs(y - week_labels$y[[index]]) < 45, str_detect(word, "^[0-9]{1,2}$")) %>%
+      arrange(x)
+    if (nrow(candidates) == 0) NA_integer_ else as.integer(candidates$word[[1L]])
+  })
+  printed_week <- printed_week[!is.na(printed_week)]
+  if (length(printed_week) > 0 && !as.integer(week) %in% printed_week) {
+    stop("The PDF header's week does not match the selected Circa week.")
+  }
 
   team_rows <- words %>%
     filter(key %in% names(circa_team_aliases)) %>%
@@ -384,6 +410,15 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
       parsed_home = parsed_line[team_role == "home"][[1L]],
       .groups = "drop"
     ) %>%
+    mutate(ocr_pair_conflict = !is.na(parsed_away) & !is.na(parsed_home) & abs(parsed_away + parsed_home) > 0.51)
+  if (any(games$ocr_pair_conflict)) {
+    conflicts <- games %>% filter(ocr_pair_conflict)
+    stop("The PDF import read conflicting spreads for ",
+         paste(paste(conflicts$away_team, "at", conflicts$home_team,
+                     "(", conflicts$parsed_away, "/", conflicts$parsed_home, ")"), collapse = "; "),
+         ". Check the official sheet or use a verified CSV.")
+  }
+  games <- games %>%
     rowwise() %>%
     mutate(
       magnitude = if (all(is.na(c(parsed_away, parsed_home)))) NA_real_ else max(abs(c(parsed_away, parsed_home)), na.rm = TRUE),
@@ -405,8 +440,8 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
   validate_circa_lines(games)
 }
 
-load_circa_lines <- function(path, season = 2026L, week = 1L) {
-  extension <- tolower(tools::file_ext(path))
+load_circa_lines <- function(path, season = 2026L, week = 1L, filename = path) {
+  extension <- tolower(tools::file_ext(filename))
   switch(
     extension,
     pdf = parse_circa_pdf(path, season, week),
@@ -467,8 +502,10 @@ download_circa_week_from_web <- function(season = 2026L, week = 1L) {
   rows
 }
 
-circa_default_path <- file.path(app_data_dir, "circa_million_2026_week_1.csv")
-circa_default_lines <- if (file.exists(circa_default_path)) read_circa_lines_csv(circa_default_path) else tibble()
+read_circa_bundled_lines <- function(season, week) {
+  path <- file.path(app_data_dir, paste0("circa_million_", as.integer(season), "_week_", as.integer(week), ".csv"))
+  if (file.exists(path)) read_circa_lines_csv(path, season, week) else tibble()
+}
 
 parse_model_file <- function(path) {
   nm <- basename(path)
@@ -533,6 +570,12 @@ model_week_dates <- model_game_dates %>%
   filter(!is.na(season), !is.na(week)) %>%
   group_by(season, week) %>%
   summarise(last_game_date = max(game_date), .groups = "drop")
+circa_active_season <- if (nrow(model_week_dates) > 0) max(model_week_dates$season) else 2026L
+circa_upcoming_weeks <- model_week_dates %>%
+  filter(season == circa_active_season, last_game_date >= as.Date(Sys.time(), tz = "America/New_York")) %>%
+  pull(week)
+circa_active_week <- if (length(circa_upcoming_weeks) > 0) min(circa_upcoming_weeks) else 1L
+circa_default_lines <- read_circa_bundled_lines(circa_active_season, circa_active_week)
 early_week_game_ids <- model_game_dates %>%
   filter(as.POSIXlt(game_date)$wday %in% 2:5) %>%
   pull(game_id)
@@ -1265,8 +1308,8 @@ ui <- fluidPage(
         sidebarPanel(
           width = 3,
           fluidRow(
-            column(6, numericInput("circa_season", "Season", value = 2026, min = 2024, max = 2100, step = 1)),
-            column(6, numericInput("circa_week", "Week", value = 1, min = 1, max = 22, step = 1))
+            column(6, numericInput("circa_season", "Season", value = circa_active_season, min = 2024, max = 2100, step = 1)),
+            column(6, numericInput("circa_week", "Week", value = circa_active_week, min = 1, max = 22, step = 1))
           ),
           actionButton("circa_refresh_web", "Refresh from Circa Sports", class = "btn-primary btn-block"),
           tags$a(
@@ -1282,8 +1325,8 @@ ui <- fluidPage(
             "Upload weekly Circa lines",
             accept = c(".pdf", ".csv")
           ),
-          actionButton("circa_use_default", "Use bundled Week 1 lines", class = "btn-default btn-block"),
-          helpText("The refresh button retrieves Circa's official weekly PDF. Upload is retained as a fallback for a newly posted or differently named sheet."),
+          actionButton("circa_use_default", "Use bundled selected-week lines", class = "btn-default btn-block"),
+          helpText("The Circa week follows the Dashboard week. The app checks Circa's official PDF when the selected week changes; Refresh retries, and upload remains a fallback."),
           tags$hr(),
           selectInput(
             "circa_source",
@@ -1561,12 +1604,12 @@ server <- function(input, output, session) {
   overall_consensus_rows <- reactiveVal(tibble())
   circa_lines_state <- reactiveVal(circa_default_lines)
   circa_results_state <- reactiveVal(tibble())
-  circa_source_url_state <- reactiveVal(if (nrow(circa_default_lines) > 0) "Bundled verified Week 1 copy" else "")
+  circa_source_url_state <- reactiveVal(if (nrow(circa_default_lines) > 0) paste("Bundled verified Week", circa_active_week, "copy") else "")
   circa_status_state <- reactiveVal(
     if (nrow(circa_default_lines) > 0) {
-      paste0("Bundled Week 1 contest sheet loaded: ", nrow(circa_default_lines), " matchups. Click Build Circa dashboard.")
+      paste0("Bundled Week ", circa_active_week, " contest sheet loaded: ", nrow(circa_default_lines), " matchups. Click Build Circa dashboard.")
     } else {
-      "Upload the official weekly Circa PDF or a compatible CSV."
+      paste0("Checking Circa Sports for the Week ", circa_active_week, " contest sheet.")
     }
   )
 
@@ -2768,9 +2811,17 @@ server <- function(input, output, session) {
       filter(is.na(agree_pct) | agree_pct >= min_agree)
   }
 
-  observeEvent(input$circa_refresh_web, {
-    season <- input$circa_season %||% 2026L
-    week <- input$circa_week %||% 1L
+  set_circa_lines <- function(rows, source_note) {
+    circa_lines_state(rows)
+    circa_results_state(tibble())
+    circa_source_url_state(source_note)
+    circa_status_state(paste0(
+      "Loaded ", nrow(rows), " Circa matchups for ", first(rows$season),
+      " Week ", first(rows$week), ". Click Build Circa dashboard."
+    ))
+  }
+
+  refresh_circa_week <- function(season, week) {
     circa_status_state("Checking Circa Sports for the official weekly sheet...")
     rows <- tryCatch(
       withProgress(
@@ -2785,14 +2836,37 @@ server <- function(input, output, session) {
     )
     if (!is.null(rows)) {
       source_url <- attr(rows, "source_url") %||% "https://www.circasports.com/circa-million"
-      circa_lines_state(rows)
-      circa_results_state(tibble())
-      circa_source_url_state(source_url)
-      circa_status_state(paste0(
-        "Official Circa Sports sheet loaded: ", nrow(rows), " matchups for ",
-        first(rows$season), " Week ", first(rows$week), ". Click Build Circa dashboard."
-      ))
+      set_circa_lines(rows, source_url)
     }
+  }
+
+  observeEvent(list(input$dashboard_season, input$dashboard_week), {
+    season <- suppressWarnings(as.integer(input$dashboard_season))
+    week <- suppressWarnings(as.integer(input$dashboard_week))
+    if (length(season) != 1 || length(week) != 1 || is.na(season) || is.na(week)) return()
+    if (!identical(as.integer(input$circa_season), season)) updateNumericInput(session, "circa_season", value = season)
+    if (!identical(as.integer(input$circa_week), week)) updateNumericInput(session, "circa_week", value = week)
+  }, ignoreInit = TRUE)
+
+  observeEvent(list(input$circa_season, input$circa_week), {
+    season <- suppressWarnings(as.integer(input$circa_season))
+    week <- suppressWarnings(as.integer(input$circa_week))
+    if (length(season) != 1 || length(week) != 1 || is.na(season) || is.na(week)) return()
+    loaded <- circa_lines_state()
+    if (nrow(loaded) > 0 && all(loaded$season == season, loaded$week == week)) return()
+    circa_lines_state(tibble())
+    circa_results_state(tibble())
+    circa_source_url_state("")
+    bundled <- tryCatch(read_circa_bundled_lines(season, week), error = function(e) tibble())
+    if (nrow(bundled) > 0) {
+      set_circa_lines(bundled, paste("Bundled verified Week", week, "copy"))
+    } else {
+      refresh_circa_week(season, week)
+    }
+  }, ignoreInit = FALSE)
+
+  observeEvent(input$circa_refresh_web, {
+    refresh_circa_week(input$circa_season %||% circa_active_season, input$circa_week %||% circa_active_week)
   }, ignoreInit = TRUE)
 
   observeEvent(input$circa_lines_file, {
@@ -2805,7 +2879,8 @@ server <- function(input, output, session) {
         load_circa_lines(
           input$circa_lines_file$datapath,
           input$circa_season %||% 2026L,
-          input$circa_week %||% 1L
+          input$circa_week %||% 1L,
+          input$circa_lines_file$name
         )
       ),
       error = function(e) {
@@ -2814,30 +2889,33 @@ server <- function(input, output, session) {
       }
     )
     if (!is.null(rows)) {
-      circa_lines_state(rows)
-      circa_results_state(tibble())
-      circa_source_url_state(paste("Manual upload:", input$circa_lines_file$name))
-      circa_status_state(paste0("Loaded ", nrow(rows), " Circa matchups for ", first(rows$season), " Week ", first(rows$week), ". Click Build Circa dashboard."))
+      set_circa_lines(rows, paste("Manual upload:", input$circa_lines_file$name))
     }
   }, ignoreInit = TRUE)
 
   observeEvent(input$circa_use_default, {
-    if (nrow(circa_default_lines) == 0) {
-      circa_status_state("The bundled Week 1 Circa lines file is missing.")
+    season <- input$circa_season %||% circa_active_season
+    week <- input$circa_week %||% circa_active_week
+    bundled <- tryCatch(read_circa_bundled_lines(season, week), error = function(e) tibble())
+    if (nrow(bundled) == 0) {
+      circa_status_state(paste0("No bundled Circa lines are available for ", season, " Week ", week, "."))
     } else {
-      circa_lines_state(circa_default_lines)
-      circa_results_state(tibble())
-      circa_source_url_state("Bundled verified Week 1 copy")
-      updateNumericInput(session, "circa_season", value = first(circa_default_lines$season))
-      updateNumericInput(session, "circa_week", value = first(circa_default_lines$week))
-      circa_status_state(paste0("Bundled Week 1 contest sheet restored: ", nrow(circa_default_lines), " matchups. Click Build Circa dashboard."))
+      set_circa_lines(bundled, paste("Bundled verified Week", week, "copy"))
     }
   }, ignoreInit = TRUE)
 
   observeEvent(input$circa_build, {
     lines <- circa_lines_state()
     if (nrow(lines) == 0) {
-      circa_status_state("Upload a Circa weekly sheet before building the dashboard.")
+      if (!str_detect(circa_status_state(), "error")) {
+        circa_status_state(paste0("No Circa lines are loaded for ", input$circa_season, " Week ", input$circa_week, ". Refresh or upload the official sheet."))
+      }
+      circa_results_state(tibble())
+      return()
+    }
+    if (!all(lines$season == as.integer(input$circa_season), lines$week == as.integer(input$circa_week))) {
+      circa_status_state("The loaded Circa sheet is for a different week. Refresh or upload the selected week's sheet.")
+      circa_results_state(tibble())
       return()
     }
     selected_source <- input$circa_source %||% "combined"
