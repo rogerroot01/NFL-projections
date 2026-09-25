@@ -1,5 +1,6 @@
 app <- source("app.R", local = TRUE)$value
 stopifnot(grepl("PoolHost Picks", htmltools::renderTags(ui)$html, fixed = TRUE))
+stopifnot(grepl("Monday night tiebreaker", htmltools::renderTags(ui)$html, fixed = TRUE))
 
 stopifnot(nrow(poolhost_default_lines) == 15L,
           nrow(subset(poolhost_schedule, season == 2026L & week == 3L)) == 15L,
@@ -53,10 +54,17 @@ shiny::testServer(app$serverFuncSource(), {
             all(picks$edge >= 0),
             all(picks$pick_team %in% c(picks$away_team, picks$home_team)),
             !"2026_3_ATL_GB" %in% picks$game_id)
+  tiebreakers <- poolhost_tiebreaker_state()
+  stopifnot(nrow(tiebreakers) == 1L,
+            identical(tiebreakers$game_id, "2026_3_PHI_CHI"),
+            is.finite(tiebreakers$projected_total),
+            identical(tiebreakers$tiebreaker_entry,
+                      as.integer(round(tiebreakers$projected_total))))
   for (source in c("legacy", "next_gen")) {
     session$setInputs(poolhost_source = source)
     session$setInputs(poolhost_build = if (source == "legacy") 2L else 3L)
     stopifnot(nrow(poolhost_results_state()) == 15L)
+    stopifnot(nrow(poolhost_tiebreaker_state()) == 1L)
   }
 })
 

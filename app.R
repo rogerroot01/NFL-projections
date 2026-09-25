@@ -1609,6 +1609,8 @@ ui <- fluidPage(
           p("Every Sunday and Monday game on the selected pick sheet. Contest spreads are compared with the saved model-market lines."),
           verbatimTextOutput("poolhost_status", placeholder = TRUE),
           DTOutput("poolhost_picks"),
+          h4("Monday night tiebreaker"),
+          DTOutput("poolhost_tiebreakers"),
           h4("Loaded PoolHost lines"),
           DTOutput("poolhost_lines_preview")
         )
@@ -1869,6 +1871,7 @@ server <- function(input, output, session) {
   )
   poolhost_lines_state <- reactiveVal(poolhost_default_lines)
   poolhost_results_state <- reactiveVal(tibble())
+  poolhost_tiebreaker_state <- reactiveVal(tibble())
   poolhost_status_state <- reactiveVal(
     if (nrow(poolhost_default_lines)) {
       paste0("Loaded ", nrow(poolhost_default_lines), " PoolHost Week ", circa_active_week,
@@ -3089,6 +3092,77 @@ server <- function(input, output, session) {
       filter(is.na(agree_pct) | agree_pct >= min_agree)
   }
 
+  build_poolhost_tiebreakers <- function(lines, selected_source) {
+    monday <- poolhost_schedule %>%
+      filter(.data$season == first(lines$season), .data$week == first(lines$week),
+             .data$weekday == 1L) %>%
+      semi_join(lines, by = "game_id") %>%
+      arrange(game_date, game_id)
+    if (!nrow(monday)) return(tibble())
+
+    required <- if (identical(selected_source, "combined")) {
+      input$overall_cons_sources %||% c("legacy", "next_gen")
+    } else selected_source
+    long <- tibble()
+    if ("legacy" %in% required) {
+      families <- input$cons_families %||% names(family_labels)
+      selected <- inventory %>%
+        filter(family %in% families, season == first(lines$season))
+      legacy <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
+        long_predictions_for_file(
+          tibble(path = path, file = file, season = season, family = family,
+                 family_label = family_label, split = split),
+          "total", 0, input$cons_line_source %||% "closing",
+          input$cons_injury_source %||% "apply",
+          isTRUE(input$cons_apply_amortization)
+        )
+      }) %>%
+        semi_join(monday, by = "game_id") %>%
+        mutate(source = "Legacy", home_first = !str_detect(split, "^home")) %>%
+        arrange(home_first) %>%
+        group_by(game_id, family, projection_col) %>%
+        slice_head(n = 1) %>%
+        ungroup() %>%
+        select(-home_first)
+      long <- bind_rows(long, legacy)
+    }
+    if ("next_gen" %in% required && nextgen_data_available) {
+      frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
+      families <- input$ng_cons_families %||% names(next_gen_family_labels)
+      selected <- nextgen_inventory %>%
+        filter(framework %in% frameworks, family %in% families,
+               season == first(lines$season))
+      nextgen <- pmap_dfr(selected, function(path, file, season, framework, sample,
+                                             family, family_label) {
+        long_nextgen_predictions_for_file(
+          tibble(path = path, file = file, season = season, framework = framework,
+                 sample = sample, family = family, family_label = family_label),
+          "total", 0, input$ng_cons_line_source %||% "closing",
+          input$ng_cons_injury_source %||% "apply",
+          isTRUE(input$ng_cons_apply_amortization),
+          input$ng_cons_projection_sources %||% c("direct", "implied_team_scores")
+        )
+      }) %>%
+        semi_join(monday, by = "game_id") %>%
+        mutate(source = "Next-gen")
+      long <- bind_rows(long, nextgen)
+    }
+    source_means <- long %>%
+      filter(is.finite(projection)) %>%
+      group_by(game_id, source) %>%
+      summarise(source_total = mean(projection), .groups = "drop")
+    totals <- source_means %>%
+      group_by(game_id) %>%
+      summarise(projected_total = mean(source_total), .groups = "drop")
+    if (!setequal(monday$game_id, totals$game_id)) {
+      stop("Total-score projections are missing for: ",
+           paste(setdiff(monday$game_id, totals$game_id), collapse = ", "), ".")
+    }
+    monday %>%
+      left_join(totals, by = "game_id") %>%
+      mutate(tiebreaker_entry = as.integer(round(projected_total)))
+  }
+
   set_circa_lines <- function(rows, source_note) {
     circa_lines_state(rows)
     circa_results_state(tibble())
@@ -3425,6 +3499,7 @@ server <- function(input, output, session) {
     week <- suppressWarnings(as.integer(input$poolhost_week))
     if (length(season) != 1L || length(week) != 1L || is.na(season) || is.na(week)) return()
     poolhost_results_state(tibble())
+    poolhost_tiebreaker_state(tibble())
     bundled <- tryCatch(poolhost_read_bundled_lines(season, week), error = function(e) {
       poolhost_status_state(paste("PoolHost line error:", conditionMessage(e)))
       tibble()
@@ -3451,12 +3526,14 @@ server <- function(input, output, session) {
     if (is.null(rows)) return()
     poolhost_lines_state(rows)
     poolhost_results_state(tibble())
+    poolhost_tiebreaker_state(tibble())
     poolhost_status_state(paste0("Loaded and checked all ", nrow(rows),
                                  " PoolHost games for Week ", week, ". Build weekly picks when ready."))
   }, ignoreInit = TRUE)
 
   observeEvent(input$poolhost_source, {
     poolhost_results_state(tibble())
+    poolhost_tiebreaker_state(tibble())
   }, ignoreInit = TRUE)
 
   observeEvent(input$poolhost_build, {
@@ -3485,7 +3562,8 @@ server <- function(input, output, session) {
              paste(setdiff(lines$game_id, combined$game_id), collapse = ", "), ".")
       }
       incProgress(0.85, detail = "Checking every matchup")
-      lines %>%
+      monday_totals <- build_poolhost_tiebreakers(lines, selected_source)
+      picks <- lines %>%
         left_join(combined %>% select(game_id, avg_projection, current_market_line,
                                       agree_pct, models_used), by = "game_id") %>%
         mutate(
@@ -3499,6 +3577,8 @@ server <- function(input, output, session) {
           line_difference = poolhost_pick_line - model_market_pick_line,
           edge = abs(signed_edge)
         )
+      attr(picks, "monday_totals") <- monday_totals
+      picks
     }), error = function(e) {
       poolhost_status_state(paste("PoolHost build error:", conditionMessage(e)))
       tibble()
@@ -3507,10 +3587,12 @@ server <- function(input, output, session) {
         all(is.finite(result$current_market_line)) &&
         all(is.finite(result$poolhost_home_line))) {
       poolhost_results_state(result)
+      poolhost_tiebreaker_state(attr(result, "monday_totals") %||% tibble())
       poolhost_status_state(paste0("Picks ready for all ", nrow(result),
                                    " eligible Week ", first(lines$week), " games."))
     } else {
       poolhost_results_state(tibble())
+      poolhost_tiebreaker_state(tibble())
       if (nrow(result)) poolhost_status_state("A model or contest spread is missing; no incomplete pick sheet was shown.")
     }
   }, ignoreInit = TRUE)
@@ -3539,6 +3621,21 @@ server <- function(input, output, session) {
       )
     datatable(display, rownames = FALSE,
               options = list(dom = "t", pageLength = max(1L, nrow(display)), scrollX = TRUE))
+  })
+  output$poolhost_tiebreakers <- renderDT({
+    rows <- poolhost_tiebreaker_state()
+    display <- if (!nrow(rows)) {
+      tibble(Message = "Build weekly picks to see Monday total-score projections.")
+    } else {
+      rows %>% transmute(
+        Matchup = paste(away_team, "@", home_team),
+        Date = format(game_date, "%a %b %d"),
+        `Projected total` = sprintf("%.1f", projected_total),
+        `Tiebreaker entry` = tiebreaker_entry
+      )
+    }
+    datatable(display, rownames = FALSE,
+              options = list(dom = "t", pageLength = max(1L, nrow(display))))
   })
 
   build_overall_consensus_rows <- function() {
