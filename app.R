@@ -8,6 +8,10 @@ library(DT)
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
+canonical_game_id <- function(x) {
+  sub("^(\\d{4})_0([1-9])_", "\\1_\\2_", as.character(x), perl = TRUE)
+}
+
 app_data_dir <- file.path(getwd(), "data")
 early_lines_path <- file.path(app_data_dir, "early_lines.csv")
 current_lines_path <- file.path(app_data_dir, "current_lines_2026.csv")
@@ -15,7 +19,7 @@ current_lines_path <- file.path(app_data_dir, "current_lines_2026.csv")
 early_lines <- if (file.exists(early_lines_path)) {
   read_csv(early_lines_path, show_col_types = FALSE) %>%
     transmute(
-      game_id = as.character(.data[["game_id"]]),
+      game_id = canonical_game_id(.data[["game_id"]]),
       early_spread_line = suppressWarnings(as.numeric(.data[["Mid-week Spread"]])),
       early_total_line = suppressWarnings(as.numeric(.data[["Mid-week Total"]]))
     )
@@ -30,7 +34,7 @@ early_lines <- if (file.exists(early_lines_path)) {
 current_lines <- if (file.exists(current_lines_path)) {
   read_csv(current_lines_path, show_col_types = FALSE) %>%
     transmute(
-      game_id = as.character(.data[["game_id"]]),
+      game_id = canonical_game_id(.data[["game_id"]]),
       current_spread_line = suppressWarnings(as.numeric(.data[["spread_line"]])),
       current_total_line = suppressWarnings(as.numeric(.data[["total_line"]]))
     ) %>%
@@ -43,24 +47,30 @@ current_lines <- if (file.exists(current_lines_path)) {
   )
 }
 
-apply_current_lines <- function(df) {
+apply_current_lines <- function(df, preserve_completed = FALSE) {
+  if (is.data.frame(df) && "game_id" %in% names(df)) df$game_id <- canonical_game_id(df$game_id)
   if (!is.data.frame(df) || nrow(df) == 0 || !"game_id" %in% names(df) || nrow(current_lines) == 0) {
     return(df)
   }
 
   line_row <- match(as.character(df$game_id), current_lines$game_id)
+  allow_update <- rep(TRUE, nrow(df))
+  if (isTRUE(preserve_completed) && all(c("home_score", "away_score") %in% names(df))) {
+    allow_update <- !(is.finite(suppressWarnings(as.numeric(df$home_score))) &
+      is.finite(suppressWarnings(as.numeric(df$away_score))))
+  }
   if ("spread_line" %in% names(df)) {
     replacement <- current_lines$current_spread_line[line_row]
-    replace_at <- !is.na(line_row) & !is.na(replacement)
+    replace_at <- allow_update & !is.na(line_row) & !is.na(replacement)
     df$spread_line[replace_at] <- replacement[replace_at]
   }
   if ("total_line" %in% names(df)) {
     replacement <- current_lines$current_total_line[line_row]
-    replace_at <- !is.na(line_row) & !is.na(replacement)
+    replace_at <- allow_update & !is.na(line_row) & !is.na(replacement)
     df$total_line[replace_at] <- replacement[replace_at]
   }
   if (all(c("spread_line", "total_line") %in% names(df))) {
-    has_market_lines <- !is.na(df$spread_line) & !is.na(df$total_line)
+    has_market_lines <- allow_update & !is.na(df$spread_line) & !is.na(df$total_line)
     if ("home_implied" %in% names(df)) {
       df$home_implied[has_market_lines] <- (df$total_line[has_market_lines] + df$spread_line[has_market_lines]) / 2
     }
@@ -93,7 +103,7 @@ forecast_team_adjustments_2026_path <- file.path(app_data_dir, "forecast_team_of
 
 game_injury_raw <- read_injury_csv(game_injury_path)
 game_injuries <- tibble(
-  game_id = as.character(coalesce(tbl_col(game_injury_raw, "game_id_input"), tbl_col(game_injury_raw, "game_id"))),
+  game_id = canonical_game_id(coalesce(tbl_col(game_injury_raw, "game_id_input"), tbl_col(game_injury_raw, "game_id"))),
   injury_adj = suppressWarnings(as.numeric(coalesce(
     tbl_col(game_injury_raw, "injury_adj"),
     tbl_col(game_injury_raw, "injury_adjust"),
@@ -103,7 +113,7 @@ game_injuries <- tibble(
 
 team_injury_2025_raw <- read_injury_csv(team_injury_2025_path)
 team_injuries_2025 <- tibble(
-  game_id = as.character(tbl_col(team_injury_2025_raw, "game_id")),
+  game_id = canonical_game_id(tbl_col(team_injury_2025_raw, "game_id")),
   home_off_injury_adj = suppressWarnings(as.numeric(tbl_col(team_injury_2025_raw, "home_off_injury_adj"))),
   home_def_injury_adj = suppressWarnings(as.numeric(tbl_col(team_injury_2025_raw, "home_def_injury_adj"))),
   away_off_injury_adj = suppressWarnings(as.numeric(tbl_col(team_injury_2025_raw, "away_off_injury_adj"))),
@@ -554,7 +564,7 @@ compact_models <- if (compact_data_available) readRDS(compact_models_rds) else l
 model_game_dates <- purrr::map_dfr(compact_models, function(model_rows) {
   if (!all(c("game_id", "game_date") %in% names(model_rows))) return(tibble())
   tibble(
-    game_id = as.character(model_rows$game_id),
+    game_id = canonical_game_id(model_rows$game_id),
     game_date = suppressWarnings(as.Date(model_rows$game_date))
   ) %>%
     filter(!is.na(game_id), nzchar(game_id), !is.na(game_date)) %>%
@@ -1338,6 +1348,7 @@ ui <- fluidPage(
           checkboxInput("circa_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
           checkboxInput("circa_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
           checkboxInput("circa_no_early_week_games", "No early-week games", value = TRUE),
+          selectizeInput("circa_skip_matchups", "Skip matchups", choices = NULL, multiple = TRUE),
           actionButton("circa_build", "Build Circa dashboard", class = "btn-primary btn-block"),
           tags$hr(),
           downloadButton("circa_download_top_five", "Download top five", class = "btn-success btn-block"),
@@ -1350,6 +1361,8 @@ ui <- fluidPage(
           tags$hr(),
           h4("Top five shadow card"),
           DTOutput("circa_top_five"),
+          h4("Next two alternates"),
+          DTOutput("circa_alternates"),
           tags$hr(),
           h4("All potential Circa plays"),
           DTOutput("circa_all_plays"),
@@ -1613,6 +1626,17 @@ server <- function(input, output, session) {
     }
   )
 
+  observeEvent(circa_lines_state(), {
+    lines <- circa_lines_state()
+    if (nrow(lines) == 0) {
+      updateSelectizeInput(session, "circa_skip_matchups", choices = character(), selected = character())
+      return()
+    }
+    choices <- setNames(lines$game_id, paste(lines$away_team, "@", lines$home_team))
+    selected <- intersect(input$circa_skip_matchups %||% character(), lines$game_id)
+    updateSelectizeInput(session, "circa_skip_matchups", choices = choices, selected = selected)
+  }, ignoreInit = FALSE)
+
   observe({
     session$sendCustomMessage("toggleMinWinSlider", identical(input$cons_market, "straight_up"))
   })
@@ -1759,7 +1783,7 @@ server <- function(input, output, session) {
 
   read_nextgen_model_file <- function(path) {
     nm <- basename(path)
-    if (nm %in% names(nextgen_compact_models)) return(apply_current_lines(nextgen_compact_models[[nm]]))
+    if (nm %in% names(nextgen_compact_models)) return(apply_current_lines(nextgen_compact_models[[nm]], preserve_completed = TRUE))
     stop("Next-gen compact prepared data is missing for ", nm, ". Run prepare_data_nextgen.R and deploy data/nextgen_compact_models.rds plus data/nextgen_model_inventory.rds.")
   }
 
@@ -3004,6 +3028,13 @@ server <- function(input, output, session) {
       mutate(rank = row_number())
   })
 
+  circa_card_rows <- reactive({
+    rows <- circa_ranked_rows()
+    if (nrow(rows) == 0) return(rows)
+    skipped <- input$circa_skip_matchups %||% character()
+    rows %>% filter(!game_id %in% skipped) %>% mutate(rank = row_number())
+  })
+
   format_circa_table <- function(rows) {
     if (nrow(rows) == 0) return(tibble(Message = "Build the Circa dashboard to rank the uploaded contest lines."))
     rows %>%
@@ -3041,10 +3072,16 @@ server <- function(input, output, session) {
 
   output$circa_top_five <- renderDT({
     datatable(
-      format_circa_table(circa_ranked_rows() %>% slice_head(n = 5)),
+      format_circa_table(circa_card_rows() %>% slice_head(n = 5)),
       rownames = FALSE,
       options = list(dom = "t", pageLength = 5, scrollX = TRUE)
     )
+  })
+
+  output$circa_alternates <- renderDT({
+    rows <- circa_card_rows() %>% slice(6:7)
+    display <- if (nrow(rows) == 0) tibble(Message = "No additional eligible plays.") else format_circa_table(rows)
+    datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 2, scrollX = TRUE))
   })
 
   output$circa_all_plays <- renderDT({
@@ -3059,7 +3096,7 @@ server <- function(input, output, session) {
   output$circa_download_top_five <- downloadHandler(
     filename = function() paste0("circa_shadow_card_", first(circa_lines_state()$season), "_week_", first(circa_lines_state()$week), ".csv"),
     content = function(file) {
-      rows <- circa_ranked_rows() %>% slice_head(n = 5)
+      rows <- circa_card_rows() %>% slice_head(n = 5)
       req(nrow(rows) > 0)
       write_csv(rows, file)
     }
