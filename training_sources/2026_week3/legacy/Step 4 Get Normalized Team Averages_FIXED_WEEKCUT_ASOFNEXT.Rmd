@@ -1,0 +1,305 @@
+
+
+ 
+```{r}
+library(tidyverse)
+library(ggrepel)
+library(ggimage)
+library(nflfastR)
+library(dplyr)
+options(scipen = 9999)
+
+load(file = "../output/data.sos2.RData")
+
+data <- data.sos
+data$game_date <- as.Date(data$game_date, format = "%Y-%m-%d")
+
+# Sort data by game_date in descending order
+data <- data %>%
+  arrange(desc(game_date), posteam_type, posteam)
+
+#data <- data[,c(1:192)]
+
+print(data)
+#write.csv(data, "data.csv")
+```
+
+
+
+```{r}
+library(dplyr)
+
+# --- Weekly cutoff support (no more game_date-based drift) ---
+# We need season/week (or game_id to derive them) to do "as-of week" averages.
+if (!all(c("season","week") %in% names(data))) {
+  if ("game_id" %in% names(data)) {
+    data <- data %>%
+      mutate(
+        season = as.integer(substr(game_id, 1, 4)),
+        week   = as.integer(substr(game_id, 6, 7))
+      )
+  } else {
+    stop("Step 4 requires columns season & week (or game_id to derive them) for weekly cutoffs.")
+  }
+}
+
+# Build a stable week_index across season/week, and add a placeholder next-week per season
+week_map_all <- data %>%
+  distinct(season, week) %>%
+  filter(is.finite(season), is.finite(week), week >= 1L, week <= 22L) %>%
+  arrange(season, week)
+
+next_weeks <- week_map_all %>%
+  group_by(season) %>%
+  summarise(week = max(week, na.rm = TRUE) + 1L, .groups = "drop") %>%
+  filter(is.finite(week), week >= 1L, week <= 22L)
+
+week_map_all <- bind_rows(week_map_all, next_weeks) %>%
+  distinct(season, week) %>%
+  arrange(season, week) %>%
+  mutate(week_index = row_number())
+
+data <- data %>%
+  left_join(week_map_all, by = c("season", "week"))
+
+# Safety: if we couldn't map some rows to a (season, week) index, fail loudly.
+if (any(is.na(data$week_index))) {
+  bad <- data %>% filter(is.na(week_index)) %>% select(game_date, season, week, posteam, defteam) %>% head(10)
+  print(bad)
+  stop("Some rows are missing week_index. Ensure season/week (or game_id) are valid for all rows.")
+}
+
+
+# Weighted average helper
+weighted_avg <- function(x, w) {
+  sum(x * w, na.rm = TRUE) / sum(w, na.rm = TRUE)
+}
+
+# 14-game recency weights (most recent gets highest)
+weights_14 <- c(
+  0.093433333,
+  0.091766667,
+  0.0855,
+  0.0823,
+  0.0791,
+  0.0759,
+  0.0727,
+  0.0695,
+  0.0663,
+  0.0631,
+  0.0599,
+  0.0567,
+  0.0535,
+  0.0503
+)
+stopifnot(length(weights_14) == 14L, abs(sum(weights_14) - 1) < 1e-9)
+```
+
+
+
+
+
+################################################################################################
+### Team + League Averages (Weekly Cutoff, Recency Weights)
+################################################################################################
+
+```{r}
+library(dplyr)
+
+# Helper: resolve week_index for an (season, week) "as-of" snapshot
+get_week_index <- function(season_in, week_in, week_map = week_map_all) {
+  idx <- week_map %>%
+    filter(season == season_in, week == week_in) %>%
+    pull(week_index)
+
+  if (length(idx) != 1L || !is.finite(idx)) {
+    stop("Could not resolve week_index for season=", season_in, " week=", week_in,
+         ". Check that season/week exist (or placeholder week was added).")
+  }
+  idx[[1]]
+}
+
+# Core: last-14 PRIOR games for each team before (season, week), with recency weights applied.
+# team_col should be "posteam" or "defteam".
+build_last14_weighted <- function(team_col, season_in, week_in) {
+  as_of <- get_week_index(season_in, week_in)
+
+  df <- data %>%
+    filter(week_index < as_of) %>%
+    arrange(.data[[team_col]], desc(week_index), desc(game_date)) %>%
+    group_by(.data[[team_col]]) %>%
+    slice_head(n = 14) %>%
+    mutate(
+      rn = row_number(),
+      w_raw = weights_14[rn],
+      weight = w_raw / sum(w_raw, na.rm = TRUE)
+    ) %>%
+    ungroup()
+
+  df
+}
+
+# Posteam averages as-of (season, week)
+posteam_week_avg <- function(season_in, week_in) {
+  df <- build_last14_weighted("posteam", season_in, week_in)
+
+  # numeric stat columns only (exclude bookkeeping + weight columns)
+  num_cols <- df %>% select(where(is.numeric)) %>% names()
+  num_cols <- setdiff(num_cols, c("season", "week", "week_index", "rn", "w_raw", "weight"))
+
+  out <- df %>%
+    group_by(posteam) %>%
+    summarise(
+      across(all_of(num_cols), ~ weighted_avg(.x, weight)),
+      .groups = "drop"
+    ) %>%
+    mutate(season = season_in, week = week_in)
+
+  nm <- names(out)
+  names(out) <- ifelse(nm %in% c("posteam", "season", "week"), nm, paste0("posteam_avg_", nm))
+  out
+}
+
+# Defteam averages as-of (season, week)
+defteam_week_avg <- function(season_in, week_in) {
+  df <- build_last14_weighted("defteam", season_in, week_in)
+
+  num_cols <- df %>% select(where(is.numeric)) %>% names()
+  num_cols <- setdiff(num_cols, c("season", "week", "week_index", "rn", "w_raw", "weight"))
+
+  out <- df %>%
+    group_by(defteam) %>%
+    summarise(
+      across(all_of(num_cols), ~ weighted_avg(.x, weight)),
+      .groups = "drop"
+    ) %>%
+    mutate(season = season_in, week = week_in)
+
+  nm <- names(out)
+  names(out) <- ifelse(nm %in% c("defteam", "season", "week"), nm, paste0("defteam_avg_", nm))
+  out
+}
+
+# League averages as-of (season, week):
+# - compute weighted last-14 average for each team (posteam)
+# - then take the mean across teams (equal-weight across teams)
+league_week_avg <- function(season_in, week_in) {
+  df <- build_last14_weighted("posteam", season_in, week_in)
+
+  num_cols <- df %>% select(where(is.numeric)) %>% names()
+  num_cols <- setdiff(num_cols, c("season", "week", "week_index", "rn", "w_raw", "weight"))
+
+  team_means <- df %>%
+    group_by(posteam) %>%
+    summarise(
+      across(all_of(num_cols), ~ weighted_avg(.x, weight)),
+      .groups = "drop"
+    )
+
+  out <- team_means %>%
+    summarise(across(all_of(num_cols), mean, na.rm = TRUE), .groups = "drop") %>%
+    mutate(season = season_in, week = week_in)
+
+  nm <- names(out)
+  names(out) <- ifelse(nm %in% c("season", "week"), nm, paste0("NFL_avg_", nm))
+  out
+}
+```
+
+### Build averages for all (season, week) snapshots (includes placeholder next week)
+```{r}
+library(dplyr)
+
+season_week_list <- week_map_all %>%
+  arrange(season, week)
+
+data.last20.avg.off    <- data.frame()
+data.last20.avg.def    <- data.frame()
+data.last20.avg.league <- data.frame()
+
+for (i in seq_len(nrow(season_week_list))) {
+  s <- season_week_list$season[i]
+  w <- season_week_list$week[i]
+
+  data.last20.avg.off    <- bind_rows(data.last20.avg.off,    posteam_week_avg(s, w))
+  data.last20.avg.def    <- bind_rows(data.last20.avg.def,    defteam_week_avg(s, w))
+  data.last20.avg.league <- bind_rows(data.last20.avg.league, league_week_avg(s, w))
+}
+
+print(head(data.last20.avg.off))
+print(head(data.last20.avg.def))
+print(head(data.last20.avg.league))
+
+# ----------------------------------------------------------------------------------------------
+# Export "as-of next week" snapshots (one per season)
+#
+# Why: Step 4.5 currently rolls averages forward by game_date. Without an explicit
+# "next-week" snapshot, future games pick up the most-recent *played-week* averages,
+# which are computed as-of that played week (and therefore exclude that week).
+#
+# Here we export a synthetic snapshot for each season at (max_week + 1), with an
+# anchor game_date set to (max played game_date + 1 day). Step 4.5 can append these
+# rows to its rolling source tables so Week (max_week+1) projections include the
+# just-played week.
+# ----------------------------------------------------------------------------------------------
+
+# Identify next week per season (already computed above as `next_weeks`)
+anchor_dates <- data %>%
+  group_by(season) %>%
+  summarise(anchor_game_date = max(game_date, na.rm = TRUE) + 1, .groups = "drop")
+
+asof_next_post <- data.last20.avg.off %>%
+  semi_join(next_weeks, by = c("season", "week")) %>%
+  left_join(anchor_dates, by = "season") %>%
+  transmute(posteam, game_date = anchor_game_date, across(starts_with("posteam_avg_")))
+
+asof_next_def <- data.last20.avg.def %>%
+  semi_join(next_weeks, by = c("season", "week")) %>%
+  left_join(anchor_dates, by = "season") %>%
+  transmute(defteam, game_date = anchor_game_date, across(starts_with("defteam_avg_")))
+
+asof_next_nfl <- data.last20.avg.league %>%
+  semi_join(next_weeks, by = c("season", "week")) %>%
+  left_join(anchor_dates, by = "season") %>%
+  transmute(game_date = anchor_game_date, across(starts_with("NFL_avg_")))
+
+save(
+  asof_next_post,
+  asof_next_def,
+  asof_next_nfl,
+  file = "../output/asof_next_week_avgs.RData"
+)
+
+readr::write_csv(asof_next_post, "../output/asof_next_week_posteam_avgs.csv")
+readr::write_csv(asof_next_def,  "../output/asof_next_week_defteam_avgs.csv")
+readr::write_csv(asof_next_nfl,  "../output/asof_next_week_nfl_avgs.csv")
+```
+
+### Merge averages back onto game rows (join by season/week instead of game_date)
+```{r}
+library(dplyr)
+
+merged_data <- data %>%
+  left_join(data.last20.avg.off,    by = c("posteam", "season", "week")) %>%
+  left_join(data.last20.avg.def,    by = c("defteam", "season", "week")) %>%
+  left_join(data.last20.avg.league, by = c("season", "week"))
+
+# Replace NaN in numeric columns (if any) with column mean
+reference_rows <- !is.na(merged_data$season) & merged_data$season < 2026
+stopifnot(any(reference_rows))
+merged_data <- merged_data %>%
+  mutate(across(where(is.numeric), ~ {
+    x <- .
+    if (any(is.nan(x))) {
+      replacement <- mean(x[reference_rows], na.rm = TRUE)
+      if (is.finite(replacement)) x[is.nan(x)] <- replacement
+    }
+    x
+  }))
+
+print(merged_data)
+```
+
+```{r}
+save(merged_data, file = "../output/merged.data.sos.RData")
+```

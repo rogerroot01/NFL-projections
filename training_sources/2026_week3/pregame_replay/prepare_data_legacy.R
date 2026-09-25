@@ -53,7 +53,7 @@ projection_candidates_for_cover <- function(cover_col) {
 }
 
 prediction_cols_from_names <- function(cols) {
-  cols[str_detect(cols, regex("^(ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy$)", TRUE)) &
+  cols[str_detect(cols, stringr::regex("^(ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy$)", TRUE)) &
          !str_detect(cols, "^Cover_|_target|_cover$")]
 }
 
@@ -148,7 +148,7 @@ compact_models <- purrr::map(inventory$path, function(path) {
   pred_cols <- prediction_cols_from_names(names(df))
   empty_pred_cols <- pred_cols[vapply(df[pred_cols], function(x) all(is.na(x)), logical(1))]
   if (length(empty_pred_cols) > 0) {
-    df <- df %>% select(-all_of(empty_pred_cols))
+    df <- df %>% dplyr::select(-all_of(empty_pred_cols))
   }
   df
 })

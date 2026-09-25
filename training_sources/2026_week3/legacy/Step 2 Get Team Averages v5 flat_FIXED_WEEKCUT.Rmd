@@ -1,0 +1,403 @@
+
+
+```{r}
+library(tidyverse)
+library(ggrepel)
+library(ggimage)
+library(nflfastR)
+library(dplyr)
+options(scipen = 9999)
+
+#load(file = "../output/final_game_data2.RData")
+load(file = "../output/final_game_data1.RData")
+```
+
+
+
+```{r}
+# Omit rows based on week and season conditions
+#final_game_data_filtered <- final_game_data %>%
+#  filter(!(season <= 2020 & week == 17) & !(season >= 2021 & week == 18))
+
+final_game_data_filtered <- final_game_data
+```
+
+
+
+```{r}
+# View the filtered data frame
+#print(final_game_data_filtered)
+
+data <- final_game_data_filtered
+data$game_date <- as.Date(data$game_date, format = "%Y-%m-%d")
+
+# Sort data by game_date in descending order
+data <- final_game_data_filtered %>%
+  arrange(desc(game_date), posteam_type, posteam)
+ 
+print(data)
+#write.csv(data, "data.csv")
+```
+
+
+
+
+```{r}
+library(dplyr)
+
+# Define custom weighted average function
+weighted_avg <- function(x, w) {
+  return(sum(x * w, na.rm = TRUE) / sum(w, na.rm = TRUE))
+}
+
+# Step 2 uses uniform weights for a 14-game rolling average
+GAME_WEIGHT <- 1/14
+```
+
+
+
+
+
+################################################################################################
+### Posteam Avg
+################################################################################################
+
+### Posteam Avg Function
+```{r}
+library(dplyr)
+
+# Example date to filter by (replace with your actual value)
+# x <- as.Date("2024-09-07")  # This should be a date in the format "YYYY-MM-DD"
+
+# Initialize empty data frames
+data.last20 <- data.frame()
+
+posteam20 <- function(season_in, week_in) {
+  # Rolling 14-game averages by TEAM, as-of the start of (season_in, week_in)
+  data.last20 <- data %>%
+    dplyr::filter(season < season_in | (season == season_in & week < week_in)) %>%
+    dplyr::arrange(posteam, dplyr::desc(season), dplyr::desc(week), dplyr::desc(game_date)) %>%
+    dplyr::group_by(posteam) %>%
+    dplyr::slice_head(n = 14) %>%
+    dplyr::ungroup()
+
+  data_means <- data.last20 %>%
+    dplyr::group_by(posteam) %>%
+    dplyr::summarize(dplyr::across(dplyr::where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+                     .groups = "drop")
+
+  # Rename columns to include "posteam_avg_" prefix (except for join keys)
+  colnames(data_means) <- ifelse(colnames(data_means) == "posteam",
+                                 "posteam",
+                                 paste0("posteam_avg_", colnames(data_means)))
+
+  # Add join keys for week-based merge
+  data_means$season <- season_in
+  data_means$week   <- week_in
+
+  return(data_means)
+}
+
+
+```
+
+
+```{r}
+# posteam20(season_in = 2025, week_in = 18)
+```
+
+
+```{r}
+# Get unique season/week pairs present in the dataset (plus a placeholder next-week per season)
+unique_season_weeks <- data %>%
+  dplyr::distinct(season, week) %>%
+  dplyr::arrange(dplyr::desc(season), dplyr::desc(week))
+
+next_weeks <- data %>%
+  dplyr::group_by(season) %>%
+  dplyr::summarise(week = max(week, na.rm = TRUE) + 1L, .groups = "drop") %>%
+  dplyr::filter(is.finite(week), week >= 1L, week <= 22L)
+
+unique_season_weeks <- dplyr::bind_rows(unique_season_weeks, next_weeks) %>%
+  dplyr::distinct(season, week) %>%
+  dplyr::arrange(dplyr::desc(season), dplyr::desc(week))
+```
+
+
+### Loop Posteam Avg
+```{r}
+library(dplyr)
+
+# Initialize an empty data frame to store results
+data.last20.avg.off <- data.frame()
+
+# Loop through season/week pairs and apply the function (week-based cutoffs; no within-week drift)
+for (i in seq_len(nrow(unique_season_weeks))) {
+  s <- unique_season_weeks$season[i]
+  w <- unique_season_weeks$week[i]
+
+  temp_result <- posteam20(s, w)
+
+  # Append to the final dataset
+  data.last20.avg.off <- dplyr::bind_rows(data.last20.avg.off, temp_result)
+}
+
+# View the final merged dataset
+# print(data.last20.avg.off)
+
+```
+
+
+# Merge Data with Posteam averages (week-based)
+```{r}
+library(tidyverse)
+
+merged_data <- data %>%
+  dplyr::left_join(data.last20.avg.off, by = c("posteam", "season", "week"))
+
+print(merged_data)
+```
+
+
+
+
+
+
+
+################################################################################################
+### Defteam Avg
+################################################################################################
+
+```{r}
+library(dplyr)
+
+# Example date to filter by (replace with your actual value)
+#x <- as.Date("2024-09-07")  # This should be a date in the format "YYYY-MM-DD"
+
+# Initialize empty data frames
+data.last20 <- data.frame()
+
+defteam20 <- function(season_in, week_in) {
+  # Rolling 14-game averages by DEFTEAM, as-of the start of (season_in, week_in)
+  data.last20 <- data %>%
+    dplyr::filter(season < season_in | (season == season_in & week < week_in)) %>%
+    dplyr::arrange(defteam, dplyr::desc(season), dplyr::desc(week), dplyr::desc(game_date)) %>%
+    dplyr::group_by(defteam) %>%
+    dplyr::slice_head(n = 14) %>%
+    dplyr::ungroup()
+
+  data_means <- data.last20 %>%
+    dplyr::group_by(defteam) %>%
+    dplyr::summarize(dplyr::across(dplyr::where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+                     .groups = "drop")
+
+  # Rename columns to include "defteam_avg_" prefix (except for join keys)
+  colnames(data_means) <- ifelse(colnames(data_means) == "defteam",
+                                 "defteam",
+                                 paste0("defteam_avg_", colnames(data_means)))
+
+  # Add join keys for week-based merge
+  data_means$season <- season_in
+  data_means$week   <- week_in
+
+  return(data_means)
+}
+
+
+```
+
+ 
+
+```{r}
+# defteam20(season_in = 2025, week_in = 18)
+
+```
+
+
+### Loop Defteam Avg
+```{r}
+library(dplyr)
+
+# Get unique and sorted game dates
+# unique_game_dates <- sort(unique(data$game_date), decreasing = TRUE)
+
+# Initialize an empty data frame to store results
+data.last20.avg.def <- data.frame()
+
+# Loop through season/week pairs and apply the function (week-based cutoffs)
+for (i in seq_len(nrow(unique_season_weeks))) {
+  s <- unique_season_weeks$season[i]
+  w <- unique_season_weeks$week[i]
+
+  temp_result <- defteam20(s, w)
+
+  # Append to the final dataset
+  data.last20.avg.def <- dplyr::bind_rows(data.last20.avg.def, temp_result)
+}
+
+# View the final merged dataset
+# print(data.last20.avg.off)
+
+```
+
+
+# Merge Data with Defteam averages (week-based)
+```{r}
+library(tidyverse)
+
+merged_data <- merged_data %>%
+  dplyr::left_join(data.last20.avg.def, by = c("defteam", "season", "week"))
+
+print(merged_data)
+```
+
+
+
+
+
+
+
+##############################################################################
+### League Avg
+##############################################################################
+
+```{r}
+library(dplyr)
+
+# Example date to filter by (replace with your actual value)
+#x <- as.Date("2024-09-07")  # This should be a date in the format "YYYY-MM-DD"
+
+# Initialize empty data frames
+data.last640 <- data.frame()
+
+league_avg <- function(season_in, week_in) {
+  # League-wide "baseline" averages as-of the start of (season_in, week_in).
+  # We build a 32-team x 14-game panel (last 14 games per team), then average across that panel.
+
+  data.last640 <- data %>%
+    dplyr::filter(season < season_in | (season == season_in & week < week_in)) %>%
+    dplyr::arrange(posteam, dplyr::desc(season), dplyr::desc(week), dplyr::desc(game_date)) %>%
+    dplyr::group_by(posteam) %>%
+    dplyr::slice_head(n = 14) %>%
+    dplyr::ungroup()
+
+  data_means <- data.last640 %>%
+    dplyr::summarize(dplyr::across(dplyr::where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+                     .groups = "drop")
+
+  # Add join keys
+  data_means$season <- season_in
+  data_means$week   <- week_in
+
+  # Prefix non-key columns
+  colnames(data_means) <- ifelse(colnames(data_means) %in% c("season", "week"),
+                                 colnames(data_means),
+                                 paste0("NFL_avg_", colnames(data_means)))
+
+  return(data_means)
+}
+
+
+```
+
+
+
+```{r}
+# league_avg(season_in = 2025, week_in = 18)
+```
+
+
+
+
+### Loop League Avg
+```{r}
+library(dplyr)
+
+# Re-use unique_season_weeks created earlier (season/week pairs, incl. placeholder next week)
+
+# Initialize an empty data frame to store results
+data.last20.avg.league <- data.frame()
+
+# Loop through season/week pairs and apply the function (week-based cutoffs)
+for (i in seq_len(nrow(unique_season_weeks))) {
+  s <- unique_season_weeks$season[i]
+  w <- unique_season_weeks$week[i]
+
+  temp_result <- league_avg(s, w)
+
+  # Append to the final dataset
+  data.last20.avg.league <- dplyr::bind_rows(data.last20.avg.league, temp_result)
+}
+
+# View the final merged dataset
+# print(data.last20.avg.off)
+
+```
+
+
+```{r}
+# Fix NaN at first game of a season
+
+# Replace NaN with the column mean
+reference_rows <- !is.na(data.last20.avg.league$season) & data.last20.avg.league$season < 2026
+stopifnot(any(reference_rows))
+data.last20.avg.league <- data.frame(lapply(data.last20.avg.league, function(x) {
+  if(is.numeric(x)) {
+    replacement <- mean(x[reference_rows], na.rm = TRUE)
+    if (is.finite(replacement)) x[is.nan(x)] <- replacement
+  }
+  return(x)
+}))
+
+```
+
+
+
+# Merge Data with League averages (week-based)
+```{r}
+library(tidyverse)
+
+merged_data <- merged_data %>%
+  dplyr::left_join(data.last20.avg.league, by = c("season", "week"))
+
+print(merged_data)
+```
+ 
+ 
+
+
+```{r}
+# Fix NaN at first game of a season
+
+# Replace NaN with the column mean
+reference_rows <- !is.na(data.last20.avg.league$season) & data.last20.avg.league$season < 2026
+stopifnot(any(reference_rows))
+data.last20.avg.league <- data.frame(lapply(data.last20.avg.league, function(x) {
+  if(is.numeric(x)) {
+    replacement <- mean(x[reference_rows], na.rm = TRUE)
+    if (is.finite(replacement)) x[is.nan(x)] <- replacement
+  }
+  return(x)
+}))
+
+```
+
+ 
+
+
+```{r}
+write.csv(merged_data, "../output/merged_data.csv")
+
+save(merged_data, file = "../output/merged_data.RData")
+```
+
+ 
+ 
+
+
+
+
+
+
+
+

@@ -7,6 +7,7 @@ library(tibble)
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 script_dir <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+source(file.path(script_dir, "pregame_projection_archive.R"), local = TRUE)
 project_dir <- normalizePath(file.path(script_dir, ".."), winslash = "/", mustWork = TRUE)
 app_data_dir <- file.path(project_dir, "output")
 export_dir <- file.path(project_dir, "output")
@@ -63,7 +64,7 @@ projection_candidates_for_cover <- function(cover_col) {
 }
 
 prediction_cols_from_names <- function(cols) {
-  cols[stringr::str_detect(cols, stringr::regex("ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy", TRUE)) &
+  cols[stringr::str_detect(cols, stringr::regex("^(ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy$)", TRUE)) &
          !stringr::str_detect(cols, "^Cover_|_target|_cover$")]
 }
 
@@ -104,7 +105,7 @@ build_prediction_column_inventory <- function(inventory) {
 
 key_cols_from_names <- function(cols) {
   intersect(
-    c("game_id", "season", "week", "game_date", "posteam", "defteam", "home_team", "away_team",
+    c("game_id", "season", "week", "game_date", "posteam_type", "posteam", "defteam", "home_team", "away_team",
       "home_score", "away_score", "spread_line", "total_line"),
     cols
   )
@@ -159,12 +160,25 @@ compact_models <- purrr::map(inventory$path, function(path) {
   pred_cols <- prediction_cols_from_names(names(df))
   empty_pred_cols <- pred_cols[vapply(df[pred_cols], function(x) all(is.na(x)), logical(1))]
   if (length(empty_pred_cols) > 0) {
-    df <- df %>% select(-all_of(empty_pred_cols))
+    df <- df %>% dplyr::select(-all_of(empty_pred_cols))
   }
   df
 })
 
 names(compact_models) <- inventory$file
+
+archive_path <- file.path(export_data_dir, "legacy_pregame_2026_archive.rds")
+if (!file.exists(archive_path)) {
+  stop("Legacy pregame archive is missing; refusing to export postgame-repredicted history: ", archive_path, call. = FALSE)
+}
+pregame_archive <- readRDS(archive_path)
+pregame_archive <- lapply(pregame_archive, function(df) {
+  df[, unique(c(pregame_key_columns, pregame_projection_columns(df, prediction_cols_from_names))), drop = FALSE]
+})
+pregame_archive <- pregame_update_future(pregame_archive, compact_models, prediction_cols_from_names)
+compact_models <- pregame_restore_completed(compact_models, pregame_archive, prediction_cols_from_names)
+saveRDS(pregame_archive, archive_path)
+saveRDS(pregame_archive, file.path(app_deploy_data_dir, "legacy_pregame_2026_archive.rds"))
 
 saveRDS(inventory %>% mutate(path = file.path("data", file)), file.path(export_data_dir, "model_inventory.rds"))
 saveRDS(compact_models, file.path(export_data_dir, "compact_models.rds"))

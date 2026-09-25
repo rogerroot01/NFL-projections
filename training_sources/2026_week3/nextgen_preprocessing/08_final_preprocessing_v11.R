@@ -1,0 +1,1572 @@
+# 08_final_preprocessing_v11.R
+# Wrapped Step 7 v11: final preprocessing / feature layer before regressions.
+#
+# This intentionally preserves the old RMD feature logic as much as possible.
+# v11 and v12 are kept separate because downstream regressions may depend on either.
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(lubridate)
+  library(hms)
+  library(purrr)
+  library(readr)
+  library(rlang)
+  library(tibble)
+  library(nflfastR)
+})
+
+repair_repaired_duplicate_model_columns <- function(df) {
+  repaired_cols <- grep("\\.\\.\\.[0-9]+$", names(df), value = TRUE)
+  if (!length(repaired_cols)) return(df)
+
+  repaired_bases <- unique(sub("\\.\\.\\.[0-9]+$", "", repaired_cols))
+  for (base in repaired_bases) {
+    if (!base %in% names(df)) next
+
+    candidates <- grep(paste0("^", gsub("([\\W])", "\\\\\\1", base), "(\\.\\.\\.[0-9]+)?$"), names(df), value = TRUE)
+    candidates <- candidates[candidates != base]
+    candidates <- candidates[vapply(df[candidates], function(x) any(!is.na(x)), logical(1))]
+    if (!length(candidates)) next
+
+    idx <- is.na(df[[base]])
+    if (any(idx)) {
+      for (candidate in candidates) {
+        fill_idx <- idx & !is.na(df[[candidate]])
+        if (any(fill_idx)) {
+          df[[base]][fill_idx] <- df[[candidate]][fill_idx]
+          idx <- is.na(df[[base]])
+        }
+        if (!any(idx)) break
+      }
+    }
+  }
+
+  df
+}
+
+final_preprocess_v11 <- function(data_interact,
+                                      data_sums,
+                                      data_differences,
+                                      seasons = SEASONS,
+                                      weather_start_season = WEATHER_START_SEASON,
+                                      min_output_season = FINAL_PREPROCESS_MIN_SEASON,
+                                      append_night_games_file = APPEND_NIGHT_GAMES_FILE,
+                                      weather_override_file = WEATHER_OVERRIDE_FILE,
+                                      weather_override_season = WEATHER_OVERRIDE_SEASON,
+                                      team_stadium_surface_file = TEAM_STADIUM_SURFACE_FILE) {
+  data.interact <- data_interact
+  data.sums <- data_sums
+  data.differences <- data_differences
+  merged_data <- data_sums
+
+  weather_seasons <- seasons[seasons >= weather_start_season]
+  if (length(weather_seasons) == 0L) weather_seasons <- seasons
+
+  if (!file.exists(append_night_games_file)) {
+    warning("append night-game override file not found: ", append_night_games_file,
+            ". Creating empty override table and continuing.", call. = FALSE)
+    append_night_games_file <- tempfile(fileext = ".csv")
+    write.csv(data.frame(game_id = character(), night_game = integer()), append_night_games_file, row.names = FALSE)
+  }
+
+  if (!file.exists(weather_override_file)) {
+    warning("weather override file not found: ", weather_override_file,
+            ". Creating empty weather override table and continuing.", call. = FALSE)
+    weather_override_file <- tempfile(fileext = ".csv")
+    write.csv(data.frame(game_id = character(), week = integer(), temperature = numeric(), humidity = numeric(), wind_speed = numeric()), weather_override_file, row.names = FALSE)
+  }
+
+  LLfunction <- function(targets, predicted_values){
+    p_v_zero <- ifelse(predicted_values <= 0, 0, predicted_values)
+    p_v_pos <- ifelse(predicted_values <= 0, 0.000001 ,predicted_values)
+    return(sum(targets*log(p_v_pos)) - sum(p_v_zero))
+  }
+  # "targets" is a vector containing the actual values for the target variable
+  # "predicted_values" is a vector containing the predicted values for the target variable
+
+
+  # ---- legacy RMD chunk boundary ----
+
+
+  RMSE <- function(actual, predicted){
+    return(sqrt(mean((actual - predicted)^2)))
+  }
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+
+  MSE <- function(actual, predicted){
+    return(mean((actual - predicted)^2))
+  }
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  # rows in A not in B
+  only_in_A <- data.interact %>% anti_join(data.sums, by = "game_id")
+
+  # rows in B not in A
+  only_in_B <- data.sums %>% anti_join(data.interact, by = "game_id")
+
+  # rows present in both (by key)
+  in_both  <- data.interact %>% semi_join(data.sums, by = "game_id")
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Assuming the loaded objects are named data.interact and data.sums
+  # Replace these names with the actual object names if different
+
+  # Get column names
+  cols_interact <- colnames(data.interact)
+  cols_sums <- colnames(data.sums)
+
+  # Columns in data.interact but not in data.sums
+  setdiff(cols_interact, cols_sums)
+
+  # Columns in data.sums but not in data.interact
+  setdiff(cols_sums, cols_interact)
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Original key column names
+  key_cols <- c("game_id", "season_type", "season", "week", "game_date", 
+                "posteam_type", "posteam", "defteam", "home_team", "away_team")
+
+  # Rename only key columns in data.sums by removing "_sum"
+  colnames(data.sums)[colnames(data.sums) %in% paste0(key_cols, "_sum")] <-
+    key_cols
+
+  # Now you can merge safely
+  merged_data <- merge(data.interact, data.sums, by = key_cols, all.x = TRUE)
+
+
+  # Rename columns
+  names(merged_data) <- gsub("\\.x$", "", names(merged_data))         # Remove .x suffix
+  names(merged_data) <- gsub("\\.y$", "_sum", names(merged_data))     # Replace .y with _sum
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  merged_data[] <- lapply(merged_data, function(col) {
+    if (is.character(col)) factor(col) else col
+  })
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  merged_data <- merged_data[order(-as.numeric(as.Date(merged_data$game_date)),
+                                   merged_data$posteam_type,
+                                   merged_data$home_team,
+                                   merged_data$game_id
+                                   ), ]
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  merged_data$posteam_type <- factor(merged_data$posteam_type)
+  merged_data <- merged_data[order(-as.numeric(as.Date(merged_data$game_date)),
+                                   merged_data$home_team,
+                                   -as.numeric(merged_data$posteam_type),
+                                   merged_data$game_id), ]
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  subset_102 <- merged_data[, 1:195]
+
+  # Get current column names
+  names_102 <- colnames(subset_102)
+
+  # Leave the first 12 columns unchanged, add "_opp" to the rest
+  colnames(subset_102) <- c(names_102[1:21], paste0(names_102[22:195], "_opp"))
+
+  subset_102 <- subset_102[order(-as.numeric(as.Date(subset_102$game_date)),
+                                   subset_102$home_team,
+                                   as.numeric(subset_102$posteam_type),
+                                   subset_102$game_id), ]
+
+  opp_data <-subset_102[, 22:195]
+
+  merged_with_opp <- bind_cols(merged_data, opp_data)
+
+
+  # ---- legacy RMD chunk boundary ----
+
+
+  # Rename only key columns in data.sums by removing "_sum"
+  colnames(data.differences)[colnames(data.differences) %in% paste0(key_cols, "_diff")] <-
+    key_cols
+
+  # Now you can merge safely
+  merged_with_opp_diff <- merge(merged_with_opp, data.differences, by = key_cols, all.x = TRUE)
+
+
+  # Rename columns
+  names(merged_with_opp_diff) <- gsub("\\.x$", "", names(merged_with_opp_diff))         # Remove .x suffix
+  names(merged_with_opp_diff) <- gsub("\\.y$", "_diff", names(merged_with_opp_diff))     # Replace .y with _sum
+
+
+  data <- repair_repaired_duplicate_model_columns(merged_with_opp_diff)
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Assume your dataframe is called `data`
+
+  # Find all *_opp variables
+  opp_vars <- grep("_opp$", names(data), value = TRUE)
+
+  # Get the base names (strip _opp)
+  base_vars <- sub("_opp$", "", opp_vars)
+
+  # For each base that exists in both data and with _opp, make an interaction
+  for (i in seq_along(base_vars)) {
+    base <- base_vars[i]
+    opp  <- opp_vars[i]
+  
+    if (base %in% names(data)) {
+      new_name <- paste0(base, "_x_opp")  # e.g. rush_RB_x_opp
+      data[[new_name]] <- data[[base]] * data[[opp]]
+    }
+  }
+
+  # Peek at new columns
+  head(data[, grepl("_x_opp$", names(data))])
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  data_weather <- nflfastR::load_pbp(weather_seasons)
+
+  # Keep the first weather record per game_id
+  data_weather_unique <- data_weather[!duplicated(data_weather$game_id), c("game_id", "weather")]
+  start_time_unique <- data_weather[!duplicated(data_weather$game_id), c("game_id", "start_time")]
+
+  # Now perform the merge
+  data <- merge(data, data_weather_unique, by = "game_id", all.x = TRUE)
+  data <- merge(data, start_time_unique, by = "game_id", all.x = TRUE)
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(lubridate)
+
+  data <- data %>%
+    dplyr::mutate(
+      # Parse full datetime
+      start_time_parsed = mdy_hms(start_time),
+
+      # Extract day-of-week and game time
+      day_of_week = lubridate::wday(start_time_parsed, label = TRUE, abbr = FALSE),  # Sunday, Monday, ...
+      game_time   = hms::as_hms(start_time_parsed),
+
+      # Binary indicator: Home Team Sunday Night
+      night_game = ifelse(
+        game_time >= hms::as_hms("19:00:00"), 1, 0)
+    )
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(stringr)
+
+  # Helper: normalize night_game to 0/1 integers from various inputs
+  normalize_night <- function(x) {
+    x_chr <- str_squish(toupper(as.character(x)))
+    dplyr::case_when(
+      x_chr %in% c("1","YES","Y","TRUE","T")  ~ 1L,
+      x_chr %in% c("0","NO","N","FALSE","F")  ~ 0L,
+      suppressWarnings(!is.na(as.integer(x_chr))) ~ as.integer(x_chr),
+      TRUE ~ NA_integer_
+    )
+  }
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Clean both frames
+  times2025 <- read.csv(append_night_games_file, stringsAsFactors = FALSE) %>%
+    mutate(
+      game_id    = str_squish(as.character(game_id)),
+      night_game = normalize_night(night_game)
+    ) %>%
+    distinct(game_id, .keep_all = TRUE)  # avoid accidental duplicates
+
+  data <- data %>%
+    mutate(
+      game_id    = str_squish(as.character(game_id)),
+      night_game = normalize_night(night_game)
+    )
+
+  # Join by game_id only, then fill night_game from 2025 file
+  data <- data %>%
+    left_join(dplyr::select(times2025, game_id, night_game), by = "game_id", suffix = c("", "_2025")) %>%
+    mutate(
+      night_game = coalesce(night_game, night_game_2025)
+    ) %>%
+    dplyr::select(-dplyr::all_of("night_game_2025"))
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(lubridate)
+  library(stringr)
+
+  data <- data %>%
+    mutate(
+      # Derive weekday (prefer game_date; fallback to start_time m/d/y, H:M:S)
+      game_date_date   = suppressWarnings(as.Date(game_date)),
+      start_time_parse = suppressWarnings(mdy_hms(gsub(",", "", as.character(start_time)))),
+      day_of_week_fill = coalesce(format(game_date_date, "%A"),
+                                  format(start_time_parse, "%A")),
+
+      # Normalize existing night_game to numeric 0/1 (handles factor/char)
+      night_existing = suppressWarnings(as.numeric(as.character(night_game))),
+
+      # Fill: NA -> 1 if Monday/Thursday, else 0; keep existing if not NA
+      night_game = dplyr::if_else(
+        is.na(night_existing),
+        dplyr::if_else(day_of_week_fill %in% c("Monday", "Thursday"), 1L, 0L, missing = 0L),
+        as.integer(night_existing)
+      )
+    ) %>%
+    dplyr::select(-night_existing)
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  weather_vec <- c()
+  weather_vec <- data$weather
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(stringr)
+
+  # Assume your weather vector is called `weather_vec`
+  # Extract temperature as numeric (removes "° F")
+  temperature <- str_extract(weather_vec, "Temp: \\d+° F") |> 
+    str_extract("\\d+") |> 
+    as.numeric()
+
+  # Extract humidity as numeric (removes "%")
+  humidity <- str_extract(weather_vec, "Humidity: \\d+%") |> 
+    str_extract("\\d+") |> 
+    as.numeric()
+
+  data$wind_speed <- data$weather |>
+    str_extract("Wind: [A-Za-z]* ?\\d* mph") |>  # Extract the full wind string
+    str_extract("\\d+") |>                       # Extract just the number
+    as.numeric()
+
+
+
+  library(stringr)
+
+  # Extract everything before "Temp"
+  data$climate_desc <- str_extract(data$weather, "^[^T]*") |>
+    str_trim()
+
+  data$temperature <- temperature
+  data$humidity <- humidity
+  data$weather <- NULL
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  weather2025 <- read.csv(weather_override_file)
+
+
+  #weather2025 <- weather2025 %>%
+  #  filter(week >= 13)
+
+  weather2025$week <- NULL
+
+  library(dplyr)
+
+  data <- data %>%
+    dplyr::left_join(weather2025, by = "game_id", suffix = c("", "_w")) %>%
+    dplyr::mutate(
+      temperature = ifelse(season == weather_override_season & is.na(temperature), temperature_w, temperature),
+      humidity    = ifelse(season == weather_override_season & is.na(humidity),    humidity_w,    humidity),
+      wind_speed  = ifelse(season == weather_override_season & is.na(wind_speed),  wind_speed_w,  wind_speed)
+    ) %>%
+    { .[, !grepl("_w$", names(.))] }  # remove *_w columns
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  data$wind_speed[data$climate_desc %in% c("Controlled Climate", "Indoor", "Controlled Climage", "Indoors","N/A (Indoors)")] <- 0
+
+  data$wind_speed[data$roof %in% c("dome", "closed")] <- 0
+  data$wind <- data$wind_speed
+  data$humidity[data$roof %in% c("dome", "closed")] <- 35
+  data$temperature[data$roof %in% c("dome", "closed")] <- 68
+
+
+  # Keep weather defaults fixed to completed pre-2026 observations.
+  outdoor_reference <- data$season < 2026 & data$roof %in% c("open", "outside")
+  data$wind[is.na(data$wind)] <- mean(data$wind[outdoor_reference], na.rm = TRUE)
+  data$temperature[is.na(data$temperature)] <- mean(data$temperature[outdoor_reference], na.rm = TRUE)
+  data$humidity[is.na(data$humidity)] <- mean(data$humidity[outdoor_reference], na.rm = TRUE)
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  summary(data$wind)
+  summary(data$temperature)
+  summary(data$humidity)
+  data$climate <- as.factor(data$climate)
+  #summary(data$climate)
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Define baseline substitution (e.g., use temperature as fallback)
+  baseline <- data$temperature  # or set a fixed value like rep(NA, nrow(data))
+
+  # Apply heat index formula only when temperature ≥ 80°F and humidity ≥ 40%
+  data$heat_index <- ifelse(
+    data$temperature >= 80 & data$humidity >= 40,
+    -42.379 +
+      2.04901523 * data$temperature +
+      10.14333127 * data$humidity -
+      0.22475541 * data$temperature * data$humidity -
+      0.00683783 * data$temperature^2 -
+      0.05481717 * data$humidity^2 +
+      0.00122874 * data$temperature^2 * data$humidity +
+      0.00085282 * data$temperature * data$humidity^2 -
+      0.00000199 * data$temperature^2 * data$humidity^2,
+    baseline
+  )
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  data$heat_index_away <- ifelse(data$posteam_type == "away", sqrt(data$Distance_traveled_away * data$heat_index), 0)
+
+  data$wind_speed <- NULL
+  data$climate_desc <- NULL
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  class(data$game_date)
+
+  # full month name ("January", "February", ...)
+  month_full <- format(as.Date(data$game_date, format = "%Y-%m-%d"), "%B")
+  dayofweek <- format(as.Date(data$game_date, format = "%Y-%m-%d"), "%A")
+
+
+  data <- data %>%
+    mutate(
+      game_date = as.Date(game_date, format = "%Y-%m-%d"),
+      month_name = factor(
+        format(game_date, "%B"),
+        levels = month.name,
+        ordered = TRUE
+      ),
+      day_of_week = factor(
+        format(game_date, "%A"), 
+        levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
+        ordered = TRUE
+      )
+    )
+
+  # Quick check
+  head(data[, c("game_date", "month_name", "day_of_week")])
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(stringr)
+
+  data <- data %>%
+    mutate(
+      climate_raw = as.character(climate),
+      cln = climate_raw |> str_to_lower() |> str_squish(),
+      cln = case_when(cln %in% c("", "n/a", "na", "(other)") ~ NA_character_, TRUE ~ cln),
+      cln = str_replace_all(cln, c(
+        "controlled climage" = "controlled climate",
+        "party cloudy"       = "partly cloudy",
+        "coudy"              = "cloudy",
+        "mostly clear"       = "partly cloudy",
+        "mostly sunny"       = "partly sunny",
+        "mostly cloudy"      = "cloudy",
+        "clear skies"        = "clear",
+        "clear sky"          = "clear"
+      )),
+      climate_cat = case_when(
+        roof %in% c("dome","closed") |
+          str_detect(cln, "indoor|controlled climate|n/a \\(indoor|n/a indoor|n/a indoors") ~ "Indoor",
+        str_detect(cln, "freezing rain|sleet|wintry|ice") ~ "Snow",
+        str_detect(cln, "snow|flurr") ~ "Snow",
+        str_detect(cln, "rain|shower|drizzle|thunder") ~ "Rain",
+        str_detect(cln, "fog|haze|hazy|mist") ~ "Rain",
+        str_detect(cln, "partly cloudy|partly sunny|a few clouds|clouds and sun|fair with low|fair and") ~ "Partly Cloudy",
+        str_detect(cln, "overcast|cloud") ~ "Cloudy",
+        str_detect(cln, "clear|sunny|fair") ~ "Clear",
+        is.na(cln) ~ "Unknown",
+        TRUE ~ "Unknown"
+      ),
+      climate_cat = factor(
+        climate_cat,
+        levels = c("Indoor","Snow","Rain","Cloudy","Partly Cloudy","Clear","Unknown")
+      )
+    )
+
+  # remove helper safely without select()
+  data$cln <- NULL
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  dplyr::count(data, climate_cat, sort = TRUE)
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  data$climate <- NULL
+  data$climate_raw <- NULL
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(stringr)
+
+  data <- data %>%
+    mutate(
+      turf_group = case_when(
+        str_to_lower(surface) %in% c("a_turf", "astroturf") ~ "Turf",
+        str_to_lower(surface) %in% c("grass", "grass ")               ~ "Grass",
+        str_to_lower(surface) %in% c("fieldturf", "matrixturf", "sportturf") ~ "Turf",
+        TRUE ~ "Other"
+      ),
+      turf_group = factor(turf_group, levels = c("Grass", "Turf", "Other"))
+    )
+
+  # Quick check
+  table(data$turf_group, useNA = "ifany")
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Create binary variable: 1 if home_team is "home", 0 if "away"
+  #data$home_binary <- ifelse(data$posteam_type == "home", 1, 0)
+  data$outdoors_binary <- ifelse(data$roof == "outdoors", 1, 0)
+  data$dome_binary <- ifelse(data$roof == "dome", 1, 0)
+  #data$grass_binary <- ifelse(data$surface == "grass" |data$surface == "grass ", 1, 0)
+  data$cold_outside = as.integer(data$outdoors_binary & data$month_name %in% c("January", "December"))
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  data <- data %>%
+    mutate(
+      ## 1) Brand new home / away binaries
+      ## Neutral-site games get 0 for both
+      home_binary = case_when(
+        Neutral == 1L               ~ 0L,  # neutral site
+        posteam_type == "home"      ~ 1L,  # home team row
+        posteam_type == "away"      ~ 0L,  # away team row
+        TRUE                        ~ NA_integer_
+      ),
+      away_binary = case_when(
+        Neutral == 1L               ~ 0L,  # neutral site
+        posteam_type == "away"      ~ 1L,  # away team row
+        posteam_type == "home"      ~ 0L,  # home team row
+        TRUE                        ~ NA_integer_
+      ),
+
+      ## 2) Home/away PM1 flag (symmetric ±1), zeroed out for neutral games
+      home_away_pm1 = case_when(
+        Neutral == 1L               ~ 0L,  # neutral = no edge
+        posteam_type == "home"      ~  1L, # home side
+        posteam_type == "away"      ~ -1L, # away side
+        TRUE                        ~ NA_integer_
+      )
+    )
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  data <- data %>%
+    mutate(
+      away_div_game = ifelse(posteam_type == "away" & div_game == 1, 1, 0)
+    )
+
+  # Quick check
+  table(data$away_div_game, useNA = "ifany")
+  table(data$posteam_type, data$home_away_pm1)
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  data <- data %>%
+    mutate(
+      night_flag = dplyr::coalesce(as.integer(night_game), 0L),
+
+      home_thursday_night = as.integer(posteam_type == "home" & day_of_week == "Thursday" & night_flag == 1L),
+      home_sunday_night   = as.integer(posteam_type == "home" & day_of_week == "Sunday"   & night_flag == 1L),
+      home_monday_night   = as.integer(posteam_type == "home" & day_of_week == "Monday"   & night_flag == 1L)
+    ) %>%
+    dplyr::select(-night_flag)
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  # 1) Collapse to one row per game (adjust columns if needed)
+  games <- data %>%
+    distinct(game_id, season, week, home_team, away_team, game_date, night_game) %>%
+    mutate(
+      game_date  = as.Date(game_date),
+      day_of_week = format(game_date, "%A"),
+      week = as.integer(week)
+    )
+
+  # 2) Build per-team schedule (two rows per game: home & away)
+  team_games <- bind_rows(
+    games %>%
+      transmute(season, week, team = home_team, game_id, game_date, day_of_week, night_game),
+    games %>%
+      transmute(season, week, team = away_team, game_id, game_date, day_of_week, night_game)
+  ) %>%
+    mutate(is_mnf = (day_of_week == "Monday" & night_game == 1))
+
+  # 3) For each (season, week, team), mark if that team played MNF
+  mnf_by_week <- team_games %>%
+    filter(is_mnf) %>%
+    transmute(season, week, team, played_mnf = 1L) %>%
+    distinct(season, week, team, .keep_all = TRUE)
+
+  # 4) Join prior-week MNF status for the current game's home team
+  games_flagged <- games %>%
+    mutate(prev_week = week - 1L) %>%
+    left_join(mnf_by_week,
+              by = c("season" = "season",
+                     "prev_week" = "week",
+                     "home_team" = "team")) %>%
+    mutate(home_mnf_last_week = coalesce(played_mnf, 0L)) %>%
+    dplyr::select(-prev_week, -played_mnf)
+
+  # Result:
+  # games_flagged has binary home_mnf_last_week (1/0)
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(lubridate)
+  library(tidyr)
+
+  # 0) Collapse to a unique schedule (one row per game)
+  schedule <- data %>%
+    distinct(game_id, season, game_date, home_team, away_team)
+
+  # 1) Build per-team logs from the schedule (not the play-level data)
+  games_long <- bind_rows(
+    schedule %>% transmute(game_id, game_date, season, team = home_team, venue_this_game = "home"),
+    schedule %>% transmute(game_id, game_date, season, team = away_team, venue_this_game = "away")
+  ) %>%
+    arrange(team, game_date, game_id) %>%
+    group_by(team) %>%
+    mutate(
+      prev_game_date  = lag(game_date),
+      prev_game_dow   = ifelse(is.na(prev_game_date), NA, as.character(lubridate::wday(prev_game_date, label = TRUE, abbr = FALSE))),
+      prev_game_venue = lag(venue_this_game)  # "home" or "away" for the *previous* game
+    ) %>%
+    ungroup()
+
+  # 2) Create a per-game frame with previous-game attributes for home/away teams
+  home_prev <- games_long %>%
+    filter(venue_this_game == "home") %>%
+    dplyr::select(game_id, team, prev_game_dow, prev_game_venue) %>%
+    dplyr::rename(home_team = team,
+           home_prev_game_dow   = prev_game_dow,
+           home_prev_game_venue = prev_game_venue)
+
+  away_prev <- games_long %>%
+    filter(venue_this_game == "away") %>%
+    dplyr::select(game_id, team, prev_game_dow, prev_game_venue) %>%
+    dplyr::rename(away_team = team,
+           away_prev_game_dow   = prev_game_dow,
+           away_prev_game_venue = prev_game_venue)
+
+  # Ensure uniqueness on the join keys before joining (defensive)
+  home_prev <- home_prev %>% distinct(game_id, home_team, .keep_all = TRUE)
+  away_prev <- away_prev %>% distinct(game_id, away_team, .keep_all = TRUE)
+
+  # 3) Compute flags on a one-row-per-game table
+  flags_by_game <- schedule %>%
+    left_join(home_prev, by = c("game_id", "home_team")) %>%
+    left_join(away_prev, by = c("game_id", "away_team")) %>%
+    mutate(
+      # EXACTLY your three definitions:
+      home_off_MNF_prevHome = as.integer(home_prev_game_dow == "Monday" & home_prev_game_venue == "home"),
+      home_off_MNF_prevAway = as.integer(home_prev_game_dow == "Monday" & home_prev_game_venue == "away"),
+      away_off_MNF_prevHome = as.integer(away_prev_game_dow == "Monday" & away_prev_game_venue == "home"),
+      away_off_MNF_prevAway = as.integer(away_prev_game_dow == "Monday" & away_prev_game_venue == "away")
+    ) %>%
+    mutate(across(c(home_off_MNF_prevHome, home_off_MNF_prevAway, away_off_MNF_prevHome, away_off_MNF_prevAway),
+                  ~ tidyr::replace_na(., 0L))) %>%
+    dplyr::select(game_id, home_off_MNF_prevHome, home_off_MNF_prevAway, away_off_MNF_prevHome, away_off_MNF_prevAway)
+
+  # 4) Join flags back to your full data by game_id only (one-to-many is expected and fine)
+  data <- data %>%
+    left_join(flags_by_game, by = "game_id")
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  data <- data %>%
+    mutate(
+      climate_cat = as.character(climate_cat),  # convert to character
+      climate_cat = ifelse(season == weather_override_season & climate_cat == "Unknown", "Clear", climate_cat),
+      climate_cat = factor(climate_cat)         # convert back to factor with clean levels
+    )
+
+
+  # ---- legacy RMD chunk boundary ----
+
+
+  data$snow_or_rain = ifelse(is.na(data$climate_cat), NA_integer_,
+                        ifelse(data$climate_cat %in% c("Snow", "Rain"), 1, 0))
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Function to update one cell by game_id
+  update_by_game_id <- function(df, game_id, col, value) {
+    if (!("game_id" %in% names(df))) {
+      stop("No 'game_id' column found in dataframe")
+    }
+    if (!(col %in% names(df))) {
+      stop(paste("Column", col, "not found in dataframe"))
+    }
+    if (!(game_id %in% df$game_id)) {
+      stop(paste("game_id", game_id, "not found in dataframe"))
+    }
+  
+    df[df$game_id == game_id, col] <- value
+    return(df)
+  }
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Change score for KC@LAC to 99
+  #data <- update_by_game_id(data, game_id = "2025_04_PHI_TB", col = "snow_or_rain", value = 1)
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  data$game_time <- NULL
+  data$start_time <- NULL
+  data$start_time_parse <- NULL
+  data$start_time_parsed <- NULL
+  data$game_date_date <- NULL
+  data$day_of_week_fill <- NULL
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  # Ensure dates are Date
+  # data$game_date <- as.Date(data$game_date)
+
+  # 0) Unique schedule (one row per game)
+  schedule <- data %>%
+    distinct(game_id, season, game_date, home_team, away_team)
+
+  # 1) Build per-team logs and compute "previous 3 away count"
+  games_long <- bind_rows(
+    schedule %>% transmute(game_id, game_date, season, team = home_team, venue_this_game = "home"),
+    schedule %>% transmute(game_id, game_date, season, team = away_team, venue_this_game = "away")
+  ) %>%
+    arrange(team, game_date, game_id) %>%
+    group_by(team) %>%
+    mutate(
+      is_away      = venue_this_game == "away",
+      # previous 3 games (excluding current): use simple lags
+      prev1_away   = lag(is_away, 1),
+      prev2_away   = lag(is_away, 2),
+      prev3_away   = lag(is_away, 3),
+      prev3_away_n = rowSums(cbind(prev1_away, prev2_away, prev3_away), na.rm = TRUE),
+      # Condition: today is away AND at least 2 of last 3 were away
+      is_3rd_away_in_last4 = as.integer(is_away & prev3_away_n >= 2)
+    ) %>%
+    ungroup()
+
+  # 2) Reduce to a per-game flag based on the AWAY team’s row for that game
+  flag_by_game <- games_long %>%
+    filter(venue_this_game == "away") %>%
+    dplyr::select(game_id, team, is_3rd_away_in_last4) %>%
+    dplyr::rename(away_team = team,
+           home_opponent_away_3in4 = is_3rd_away_in_last4)
+
+  # 3) Join flag to schedule, then back to full data (one-to-many by game_id is fine)
+  schedule <- schedule %>%
+    left_join(flag_by_game, by = c("game_id", "away_team")) %>%
+    mutate(home_opponent_away_3in4 = tidyr::replace_na(home_opponent_away_3in4, 0L))
+
+  data <- data %>%
+    left_join(schedule %>% dplyr::select(game_id, home_opponent_away_3in4), by = "game_id")
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+
+  library(dplyr)
+
+  nm <- tolower(names(data))
+
+  away_cands <- c(
+    "distance_traveled_away_miles","away_distance_miles","travel_distance_away_miles",
+    "distance_miles_away","miles_traveled_away","away_miles_traveled","distance_away_miles",
+    "distance_traveled_away"
+  )
+  home_cands <- c(
+    "distance_traveled_home_miles","home_distance_miles","travel_distance_home_miles",
+    "distance_miles_home","miles_traveled_home","home_miles_traveled","distance_home_miles",
+    "distance_traveled_home"
+  )
+
+  pick_col <- function(cands, nm, original_names) {
+    cand_lower <- cands[cands %in% nm][1]
+    if (is.na(cand_lower)) return(NA_character_)
+    original_names[match(cand_lower, nm)]
+  }
+
+  away_col <- pick_col(away_cands, nm, names(data))
+  home_col <- pick_col(home_cands, nm, names(data))
+
+  if (is.na(away_col) || is.na(home_col)) {
+    stop("Couldn't find required travel distance columns. ",
+         "Tried (away): ", paste(away_cands, collapse=", "),
+         " | (home): ", paste(home_cands, collapse=", "))
+  }
+
+  data <- data %>%
+    mutate(
+      away_m = suppressWarnings(as.numeric(.data[[away_col]])),
+      home_m = suppressWarnings(as.numeric(.data[[home_col]])),
+
+      # Long-haul condition (edit the NA behavior if desired)
+      longhaul_away_only = !is.na(away_m) & away_m >= 2000 &
+                           !is.na(home_m) & home_m < 2000,
+
+      # Identify "home rows" if the table has per-team rows; otherwise assume game-level
+      home_row =
+        if ("posteam" %in% names(.)) { .data$posteam == .data$home_team } else
+        if ("team" %in% names(.))    { .data$team    == .data$home_team } else
+        if ("posteam_type" %in% names(.)) { .data$posteam_type == "home" } else
+        if ("team_side" %in% names(.))    { .data$team_side    == "home" } else
+        TRUE,
+
+      # Final flag: 1 only on home rows that meet the long-haul condition
+      home_vs_away_travel_2000plus_only_away = as.integer(longhaul_away_only & home_row)
+    ) %>%
+    dplyr::select(-away_m, -home_m, -longhaul_away_only, -home_row)
+
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+
+  library(dplyr)
+  library(purrr)
+
+  # --- Detect away miles column (case-insensitive) ---
+  nm <- tolower(names(data))
+  pick_col <- function(cands, nm, original_names) {
+    cand_lower <- cands[cands %in% nm][1]
+    if (is.na(cand_lower)) return(NA_character_)
+    original_names[match(cand_lower, nm)]
+  }
+  away_cands <- c(
+    "distance_traveled_away_miles","away_distance_miles","travel_distance_away_miles",
+    "distance_miles_away","miles_traveled_away","away_miles_traveled","distance_away_miles",
+    "distance_traveled_away"
+  )
+  away_col <- pick_col(away_cands, nm, names(data))
+  if (is.na(away_col)) stop("Couldn't find an away-team travel miles column.")
+
+  # --- One-row-per-game schedule with away miles ---
+  schedule <- data %>%
+    distinct(game_id, game_date, home_team, away_team, .keep_all = TRUE) %>%
+    mutate(
+      game_date  = as.Date(game_date),
+      away_miles = suppressWarnings(as.numeric(.data[[away_col]]))
+    ) %>%
+    dplyr::select(game_id, game_date, home_team, away_team, away_miles)
+
+  # --- Per-team log; rolling 21-day sum of travel miles (includes today) ---
+  games_long <- bind_rows(
+    schedule %>% transmute(game_id, game_date, team = home_team, venue = "home", miles_this_game = 0),
+    schedule %>% transmute(game_id, game_date, team = away_team, venue = "away", miles_this_game = coalesce(away_miles, 0))
+  ) %>%
+    arrange(team, game_date, game_id) %>%
+    group_by(team) %>%
+    mutate(
+      last3w_miles = map_dbl(row_number(), ~{
+        d0  <- game_date[.x]
+        idx <- which(game_date >= (d0 - 25) & game_date <= d0)
+        sum(miles_this_game[idx], na.rm = TRUE)
+      })
+    ) %>%
+    ungroup()
+
+  # --- Flag for away rows only, then join onto team rows by (game_id, posteam) ---
+  away_flags <- games_long %>%
+    filter(venue == "away") %>%
+    transmute(game_id, team, away_travel_3000plus_last3w = as.integer(last3w_miles >= 3000)) %>%
+    distinct(game_id, team, .keep_all = TRUE)
+
+  data <- data %>%
+    left_join(away_flags, by = c("game_id", "posteam" = "team")) %>%
+    mutate(away_travel_3000plus_last3w = tidyr::replace_na(away_travel_3000plus_last3w, 0L))
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(purrr)
+
+  # --- Find the away-miles column (case-insensitive) ---
+  nm <- tolower(names(data))
+  pick_col <- function(cands, nm, original_names) {
+    cand_lower <- cands[cands %in% nm][1]
+    if (is.na(cand_lower)) return(NA_character_)
+    original_names[match(cand_lower, nm)]
+  }
+  away_cands <- c(
+    "distance_traveled_away_miles","away_distance_miles","travel_distance_away_miles",
+    "distance_miles_away","miles_traveled_away","away_miles_traveled","distance_away_miles",
+    "distance_traveled_away"
+  )
+  away_col <- pick_col(away_cands, nm, names(data))
+  if (is.na(away_col)) stop("Couldn't find an away-team travel miles column.")
+
+  # --- One row per game with away miles ---
+  schedule <- data %>%
+    distinct(game_id, game_date, home_team, away_team, .keep_all = TRUE) %>%
+    mutate(
+      game_date  = as.Date(game_date),
+      away_miles = suppressWarnings(as.numeric(.data[[away_col]]))
+    ) %>%
+    dplyr::select(game_id, game_date, home_team, away_team, away_miles)
+
+  # --- Per-team log: previous venue + rolling 21-day miles (away miles only) ---
+  games_long <- bind_rows(
+    schedule %>% transmute(game_id, game_date, team = home_team, venue = "home", miles_this_game = 0),
+    schedule %>% transmute(game_id, game_date, team = away_team, venue = "away", miles_this_game = coalesce(away_miles, 0))
+  ) %>%
+    arrange(team, game_date, game_id) %>%
+    group_by(team) %>%
+    mutate(
+      prev_venue = lag(venue),  # previous game venue for this team
+      last3w_miles = map_dbl(row_number(), ~{
+        d0  <- game_date[.x]
+        idx <- which(game_date >= (d0 - 25) & game_date < d0)  # include today using "<="
+        sum(miles_this_game[idx], na.rm = TRUE)
+      })
+    ) %>%
+    ungroup()
+
+  # --- Flag only for the home team rows in the current game ---
+  home_flags <- games_long %>%
+    filter(venue == "home") %>%
+    transmute(
+      game_id, team,
+      home_prevAway_and_3000mi_3w = as.integer(prev_venue == "away" & last3w_miles >= 3000)
+    ) %>%
+    distinct(game_id, team, .keep_all = TRUE)
+
+  # --- Join onto team rows by (game_id, posteam); 1 only for the home team’s rows ---
+  data <- data %>%
+    left_join(home_flags, by = c("game_id", "posteam" = "team")) %>%
+    mutate(home_prevAway_and_3000mi_3w = tidyr::replace_na(home_prevAway_and_3000mi_3w, 0L))
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+  library(rlang)
+
+  # --- Detect final score columns (case-insensitive) ---
+  nm <- tolower(names(data))
+  pick_col <- function(cands, nm, original) {
+    cand <- cands[cands %in% nm][1]
+    if (is.na(cand)) return(NA_character_)
+    original[match(cand, nm)]
+  }
+  home_score_cands <- c("final_home_score","home_score","home_points","score_home","total_home_score")
+  away_score_cands <- c("final_away_score","away_score","away_points","score_away","total_away_score")
+  home_score_col <- pick_col(home_score_cands, nm, names(data))
+  away_score_col <- pick_col(away_score_cands, nm, names(data))
+  if (is.na(home_score_col) || is.na(away_score_col)) {
+    stop("Couldn't find final score columns. Tried home: ",
+         paste(home_score_cands, collapse=", "),
+         " | away: ", paste(away_score_cands, collapse=", "))
+  }
+
+  # --- One row per game (avoid many-to-many joins) ---
+  schedule <- data %>%
+    distinct(game_id, season, game_date, home_team, away_team, .keep_all = TRUE) %>%
+    dplyr::rename(home_score = !!sym(home_score_col),
+           away_score = !!sym(away_score_col)) %>%
+    mutate(
+      game_date  = as.Date(game_date),
+      home_score = suppressWarnings(as.numeric(home_score)),
+      away_score = suppressWarnings(as.numeric(away_score))
+    ) %>%
+    dplyr::select(game_id, season, game_date, home_team, away_team, home_score, away_score)
+
+  # --- Per-team log to get previous game margin ---
+  games_long <- bind_rows(
+    schedule %>%
+      transmute(game_id, game_date, season,
+                team = home_team, opp = away_team,
+                team_score = home_score, opp_score = away_score),
+    schedule %>%
+      transmute(game_id, game_date, season,
+                team = away_team, opp = home_team,
+                team_score = away_score, opp_score = home_score)
+  ) %>%
+    arrange(team, game_date, game_id) %>%
+    group_by(team) %>%
+    mutate(prev_margin = lag(team_score - opp_score)) %>%
+    ungroup() %>%
+    transmute(
+      game_id, team,
+      team_prev_loss_19plus = as.integer(!is.na(prev_margin) & prev_margin <= -19),
+      team_prev_loss_29plus = as.integer(!is.na(prev_margin) & prev_margin <= -29)
+    ) %>%
+    distinct(game_id, team, .keep_all = TRUE)
+
+  # --- Join flags onto the full data by (game_id, posteam) ---
+  data <- data %>%
+    left_join(games_long, by = c("game_id", "posteam" = "team")) %>%
+    mutate(
+      team_prev_loss_19plus = tidyr::replace_na(team_prev_loss_19plus, 0L),
+      team_prev_loss_29plus = tidyr::replace_na(team_prev_loss_29plus, 0L)
+    )
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  # 1) Game-level overtime flag from data_weather (qtr == 5 means OT)
+  ot_by_game <- data_weather %>%
+    group_by(game_id) %>%
+    summarise(ot_game = as.integer(any(qtr == 5, na.rm = TRUE)), .groups = "drop")
+
+  # 2) For each team, find their previous game's game_id (within season/week order)
+  data <- data %>%
+    arrange(posteam, season, week) %>%
+    group_by(posteam, season) %>%
+    mutate(prev_game_id = dplyr::lag(game_id)) %>%
+    ungroup()
+
+  # 3) Join OT info for the previous game and build OTLW
+  data <- data %>%
+    left_join(ot_by_game, by = c("prev_game_id" = "game_id")) %>%
+    mutate(OTLW = coalesce(ot_game, 0L)) %>%
+    dplyr::select(-ot_game, -prev_game_id)
+
+  # quick sanity check
+  table(data$OTLW, useNA = "ifany")
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  BYE_THRESH <- 12
+
+  data <- data %>%
+    arrange(posteam, season, week) %>%                 # or ... arrange(posteam, game_date)
+    group_by(posteam, season) %>%
+    mutate(
+      # Off a bye this game (look back)
+      OffBye = as.integer(coalesce(days_since_last_game, 0) > BYE_THRESH),
+
+      # Look forward to the next team game within the same season
+      next_days_since_last_game = dplyr::lead(days_since_last_game),
+      BeforeBye = as.integer(coalesce(next_days_since_last_game, 0) > BYE_THRESH)
+    ) %>%
+    ungroup() %>%
+    dplyr::select(-next_days_since_last_game)
+
+  # quick sanity checks
+  table(data$OffBye, useNA = "ifany")
+  table(data$BeforeBye, useNA = "ifany")
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  library(dplyr)
+
+  data <- data %>%
+    group_by(game_id) %>%
+    mutate(
+      .neutral_any = as.integer(any(Neutral %in% c(1, TRUE, "1", "TRUE", "true"))),
+      home_binary  = if_else(.neutral_any == 1L, 0L, home_binary)
+    ) %>%
+    ungroup() %>%
+    dplyr::select(-.neutral_any)
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  suppressPackageStartupMessages({
+    library(dplyr)
+    library(tidyr)
+    library(lubridate)
+  })
+
+  # --- helper: pick first existing column name from a candidate list ---
+  pick_col <- function(df, candidates) {
+    x <- intersect(candidates, names(df))
+    if (length(x)) x[[1]] else NULL
+  }
+
+  # --- helper: 3-game win/loss streak from lagged pWLs (p1 = last game, p3 = 3 games ago) ---
+  compute_streak3 <- function(p1, p2, p3, sign_val = 1L) {
+    case_when(
+      p1 == sign_val & p2 == sign_val & p3 == sign_val ~ 3L,
+      p1 == sign_val & p2 == sign_val                  ~ 2L,
+      p1 == sign_val                                   ~ 1L,
+      TRUE                                             ~ 0L
+    )
+  }
+
+  # --- helper: 4-game home/away streak from lagged "was home/away?" flags ---
+  compute_streak4 <- function(p1, p2, p3, p4) {
+    case_when(
+      p1 == 1L & p2 == 1L & p3 == 1L & p4 == 1L ~ 4L,
+      p1 == 1L & p2 == 1L & p3 == 1L            ~ 3L,
+      p1 == 1L & p2 == 1L                       ~ 2L,
+      p1 == 1L                                  ~ 1L,
+      TRUE                                      ~ 0L
+    )
+  }
+
+  # -------------------------------------------------------------------
+  # Main: build *_pWL, win/loss streaks, and home/away streaks.
+  # * All "prev" and "streak" values are built from lag()'d history.
+  # * No current-game margin/location is used in any of these features.
+  # -------------------------------------------------------------------
+  add_prev_WL_and_streaks_safe <- function(df) {
+    required <- c("game_id", "home_team", "away_team", "home_score", "away_score")
+    if (!all(required %in% names(df))) {
+      stop("Need columns: ", paste(required, collapse = ", "))
+    }
+
+    # --- 1) One row per game: pick a canonical game row ---
+    games_base <- df %>%
+      dplyr::distinct(game_id, .keep_all = TRUE)
+
+    # --- 2) Normalize ordering fields for schedule sequencing ---
+    season_col <- pick_col(games_base, c("season","Season","season_year","year"))
+    week_col   <- pick_col(games_base, c("week","Week"))
+    date_col   <- pick_col(games_base, c("game_datetime","game_date","gamedate","start_time","kickoff"))
+
+    games_ord <- games_base %>%
+      dplyr::mutate(
+        .season = if (!is.null(season_col)) suppressWarnings(as.integer(.data[[season_col]])) else NA_integer_,
+        .week   = if (!is.null(week_col))   suppressWarnings(as.integer(.data[[week_col]]))   else NA_integer_,
+        .dt_raw = if (!is.null(date_col)) .data[[date_col]] else NA,
+        .dt     = dplyr::case_when(
+          inherits(.dt_raw, "POSIXt") ~ as.POSIXct(.dt_raw, tz = "UTC"),
+          inherits(.dt_raw, "Date")   ~ as.POSIXct(.dt_raw, tz = "UTC"),
+          TRUE ~ as.POSIXct(suppressWarnings(lubridate::ymd_hms(.dt_raw, quiet = TRUE)), tz = "UTC")
+        ),
+        .dt = dplyr::if_else(
+          is.na(.dt),
+          as.POSIXct(suppressWarnings(lubridate::ymd(.dt_raw, quiet = TRUE)), tz = "UTC"),
+          .dt
+        )
+      ) %>%
+      dplyr::arrange(.season, .week, .dt, game_id)
+
+    # --- 3) Team-level long table (2 rows per game: home & away) ---
+    team_long <- games_ord %>%
+      dplyr::transmute(
+        game_id,
+        .season,
+        .week,
+        .dt,
+        home_team,
+        away_team,
+        home_score = suppressWarnings(as.numeric(home_score)),
+        away_score = suppressWarnings(as.numeric(away_score))
+      ) %>%
+      { dplyr::bind_rows(
+          tibble::tibble(
+            game_id = .$game_id,
+            .season = .$`.season`,
+            .week   = .$`.week`,
+            .dt     = .$`.dt`,
+            team    = .$home_team,
+            opp     = .$away_team,
+            margin  = .$home_score - .$away_score,  # home perspective
+            side    = "home"
+          ),
+          tibble::tibble(
+            game_id = .$game_id,
+            .season = .$`.season`,
+            .week   = .$`.week`,
+            .dt     = .$`.dt`,
+            team    = .$away_team,
+            opp     = .$home_team,
+            margin  = .$away_score - .$home_score,  # away perspective
+            side    = "away"
+          )
+        )
+      } %>%
+      dplyr::arrange(team, .season, .week, .dt, game_id) %>%
+      dplyr::group_by(team) %>%
+      dplyr::mutate(
+        # per-game result from this team's POV
+        sign_margin = sign(margin),
+
+        # PREVIOUS results (pure lags; *never* the current game)
+        pWL   = dplyr::lag(sign_margin, 1L),
+        ppWL  = dplyr::lag(sign_margin, 2L),
+        pppWL = dplyr::lag(sign_margin, 3L),
+
+        # home/away indicator for THIS game
+        is_home = dplyr::if_else(side == "home", 1L, 0L),
+        is_away = 1L - is_home,
+
+        # PREVIOUS "was home/away?" flags (again, pure lags)
+        pHome    = dplyr::lag(is_home, 1L),
+        ppHome   = dplyr::lag(is_home, 2L),
+        pppHome  = dplyr::lag(is_home, 3L),
+        ppppHome = dplyr::lag(is_home, 4L),
+
+        pAway    = dplyr::lag(is_away, 1L),
+        ppAway   = dplyr::lag(is_away, 2L),
+        pppAway  = dplyr::lag(is_away, 3L),
+        ppppAway = dplyr::lag(is_away, 4L),
+
+        # Win/loss streaks ENTERING this game (max 3)
+        win_streak_enter  = compute_streak3(pWL,  ppWL,  pppWL,  sign_val =  1L),
+        loss_streak_enter = compute_streak3(pWL,  ppWL,  pppWL,  sign_val = -1L),
+
+        # Home/away streaks ENTERING this game (max 4)
+        home_streak_enter = compute_streak4(pHome, ppHome, pppHome, ppppHome),
+        away_streak_enter = compute_streak4(pAway, ppAway, pppAway, ppppAway)
+      ) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(
+        # For convenience: turn NA prev-flags into 0 (no prior result / tie)
+        pWL   = dplyr::if_else(is.na(pWL),   0L, pWL),
+        ppWL  = dplyr::if_else(is.na(ppWL),  0L, ppWL),
+        pppWL = dplyr::if_else(is.na(pppWL), 0L, pppWL)
+      )
+
+    # --- 4) Collapse to 1 row per game with home_*/away_* fields ---
+    hist_wide <- team_long %>%
+      dplyr::select(
+        game_id, side,
+        pWL, ppWL, pppWL,
+        win_streak_enter, loss_streak_enter,
+        home_streak_enter, away_streak_enter
+      ) %>%
+      tidyr::pivot_wider(
+        names_from  = side,
+        values_from = c(pWL, ppWL, pppWL,
+                        win_streak_enter, loss_streak_enter,
+                        home_streak_enter, away_streak_enter),
+        names_sep   = "_"
+      ) %>%
+      dplyr::rename(
+        home_pWL   = pWL_home,
+        away_pWL   = pWL_away,
+        home_ppWL  = ppWL_home,
+        away_ppWL  = ppWL_away,
+        home_pppWL = pppWL_home,
+        away_pppWL = pppWL_away,
+
+        home_win_streak  = win_streak_enter_home,
+        away_win_streak  = win_streak_enter_away,
+        home_loss_streak = loss_streak_enter_home,
+        away_loss_streak = loss_streak_enter_away,
+
+        home_home_streak = home_streak_enter_home,
+        away_home_streak = home_streak_enter_away,
+        home_away_streak = away_streak_enter_home,
+        away_away_streak = away_streak_enter_away
+      )
+
+    # --- 5) Join game-owned history back to full 2-rows-per-game df ---
+    df_out <- df %>%
+      dplyr::left_join(hist_wide, by = "game_id")
+
+    df_out
+  }
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # after data is fully built, but before any modeling
+  data <- add_prev_WL_and_streaks_safe(data)
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  suppressPackageStartupMessages({ library(dplyr, warn.conflicts = FALSE) })
+
+  .first_col <- function(df, candidates) {
+    hit <- intersect(candidates, names(df))
+    if (length(hit)) hit[[1]] else NA_character_
+  }
+
+  add_prev_h2h_WL_flags <- function(df, game_col = NULL, date_col = NULL) {
+    if (is.null(game_col)) game_col <- .first_col(df, c("game_id","gameid","gsis","gsis_id"))
+    if (is.null(date_col)) date_col <- .first_col(df, c("game_date","gamedate","game_datetime","start_time","date","datetime"))
+    if (is.na(game_col) || !(game_col %in% names(df))) stop("Set game_col= (game id not found).")
+    if (is.na(date_col) || !(date_col %in% names(df))) stop("Set date_col= (date/datetime not found).")
+
+    home_col     <- .first_col(df, c("home_team","home"))
+    away_col     <- .first_col(df, c("away_team","away"))
+    home_pts_col <- .first_col(df, c("home_score","home_points","home_pf"))
+    away_pts_col <- .first_col(df, c("away_score","away_points","away_pf"))
+
+    posteam_col      <- .first_col(df, c("posteam","team","offense_team"))
+    defteam_col      <- .first_col(df, c("defteam","opponent","defense_team"))
+    posteam_type_col <- .first_col(df, c("posteam_type","home_away","ha"))
+    pf_col           <- .first_col(df, c("posteam_score","points_for","pf","score_for"))
+    pa_col           <- .first_col(df, c("defteam_score","points_against","pa","score_against"))
+
+    # One row per game
+    if (!is.na(home_col) && !is.na(away_col) && !is.na(home_pts_col) && !is.na(away_pts_col)) {
+      games <- df %>%
+        dplyr::group_by(.data[[game_col]]) %>% dplyr::slice(1L) %>% dplyr::ungroup() %>%
+        dplyr::transmute(
+          !!game_col := .data[[game_col]],
+          .date    = as.Date(.data[[date_col]]),
+          home     = .data[[home_col]],
+          away     = .data[[away_col]],
+          home_pts = as.numeric(.data[[home_pts_col]]),
+          away_pts = as.numeric(.data[[away_pts_col]])
+        )
+    } else if (!is.na(posteam_col) && !is.na(defteam_col) &&
+               !is.na(posteam_type_col) && !is.na(pf_col) && !is.na(pa_col)) {
+      games <- df %>%
+        dplyr::filter(tolower(.data[[posteam_type_col]]) == "home") %>%
+        dplyr::transmute(
+          !!game_col := .data[[game_col]],
+          .date    = as.Date(.data[[date_col]]),
+          home     = .data[[posteam_col]],
+          away     = .data[[defteam_col]],
+          home_pts = as.numeric(.data[[pf_col]]),
+          away_pts = as.numeric(.data[[pa_col]])
+        )
+    } else {
+      stop("Provide either {home_team, away_team, home_score, away_score} or {posteam, defteam, posteam_type, posteam_score, defteam_score}.")
+    }
+
+    h2h <- games %>%
+      dplyr::mutate(
+        home_chr = as.character(home),
+        away_chr = as.character(away),
+        pair = paste(
+          pmin(home_chr, away_chr, na.rm = FALSE),
+          pmax(home_chr, away_chr, na.rm = FALSE),
+          sep = "@"
+        ),
+        winner = dplyr::case_when(home_pts > away_pts ~ as.character(home),
+                                  home_pts < away_pts ~ as.character(away),
+                                  TRUE ~ NA_character_),
+        loser  = dplyr::case_when(home_pts > away_pts ~ as.character(away),
+                                  home_pts < away_pts ~ as.character(home),
+                                  TRUE ~ NA_character_)
+      ) %>%
+      dplyr::select(-home_chr, -away_chr) %>%
+      dplyr::arrange(pair, .date) %>%
+      dplyr::group_by(pair) %>%
+      dplyr::mutate(
+        last_winner       = dplyr::lag(winner),
+        last_loser        = dplyr::lag(loser),
+        last_meeting_date = dplyr::lag(.date)
+      ) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(
+        prevH2H_pm1_home = dplyr::case_when(
+          is.na(last_winner)            ~ 0L,
+          last_winner == as.character(home) ~ 1L,
+          last_winner == as.character(away) ~ -1L,
+          TRUE                           ~ 0L
+        ),
+        prevH2H_pm1_away = -prevH2H_pm1_home
+      ) %>%
+      dplyr::select(., dplyr::all_of(game_col),
+                    prevH2H_pm1_home, prevH2H_pm1_away,
+                    last_winner, last_loser, last_meeting_date)
+
+    out <- df %>% dplyr::left_join(h2h, by = setNames(game_col, game_col))
+
+    if (!is.na(posteam_type_col)) {
+      out <- out %>%
+        dplyr::mutate(
+          prevH2H_pm1 = dplyr::case_when(
+            tolower(.data[[posteam_type_col]]) == "home" ~ prevH2H_pm1_home,
+            tolower(.data[[posteam_type_col]]) == "away" ~ prevH2H_pm1_away,
+            TRUE ~ 0L
+          )
+        )
+    }
+    out
+  }
+
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Auto-detect common column names:
+  data <- add_prev_h2h_WL_flags(data)
+  #train <- add_prev_h2h_WL_flags(train)
+  #test  <- add_prev_h2h_WL_flags(test)
+  #val   <- add_prev_h2h_WL_flags(val)
+
+  # Or specify your column names if different:
+  # train <- add_prev_h2h_WL_flags(train, game_col="gameid", date_col="game_datetime")
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # Zero-sum by game (home + away == 0)
+  data %>%
+    dplyr::group_by(game_id) %>%
+    dplyr::summarise(z = unique(prevH2H_pm1_home + prevH2H_pm1_away)) %>%
+    dplyr::pull(z) %>% all(. %in% c(0L, NA_integer_))
+
+  # If you have team-centric rows:
+  data %>%
+    dplyr::group_by(game_id) %>%
+    dplyr::summarise(z = sum(prevH2H_pm1, na.rm = TRUE)) %>%
+    dplyr::pull(z) %>% all(. %in% c(0L))
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  # games where (home_pm1 + away_pm1) != 0 or NA
+  bad1 <- data %>%
+    dplyr::group_by(game_id) %>%
+    dplyr::summarise(s = unique(prevH2H_pm1_home + prevH2H_pm1_away)) %>%
+    dplyr::filter(!(is.na(s) | s == 0))
+  bad1
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  ok1 <- data %>%
+    dplyr::group_by(game_id) %>%
+    dplyr::summarise(z = unique(prevH2H_pm1_home + prevH2H_pm1_away), .groups = "drop") %>%
+    dplyr::pull(z) %>%
+    { all(is.na(.) | . == 0L) }
+
+  ok1  # should be TRUE
+
+
+
+  # ---- legacy RMD chunk boundary ----
+
+  data_team <- data %>%
+    dplyr::mutate(side = tolower(posteam_type)) %>%
+    dplyr::distinct(game_id, side, .keep_all = TRUE)
+
+  ok2 <- data_team %>%
+    dplyr::group_by(game_id) %>%
+    dplyr::summarise(sum_pm1 = sum(prevH2H_pm1, na.rm = TRUE),
+                     n_sides = dplyr::n(),
+                     .groups = "drop") %>%
+    { all(.$n_sides == 2 & .$sum_pm1 == 0L) }
+
+  ok2  # should be TRUE
+
+
+
+  data <- data %>%
+    dplyr::filter(season >= min_output_season)
+
+  data
+}

@@ -15,6 +15,9 @@ projection regenerated after game data arrived. `prepare_data_nextgen.R` and
   week, home team, away team, and team side, not the unstable `game_id` format.
 - `test_pregame_archive.R` checks every Week 1–2 archived prediction and that
   new 2026 outcomes cannot change pre-2026 imputation constants.
+- The Step 11 Billy-tree bridge pairs Step 10 home and away scores by
+  `game_id`, not CSV row position. The 2026 files have different row orders;
+  row-position pairing gives the wrong opponent score.
 
 The live standalone Wrangler is the existing Gmail-owned NFL Projections app
 at `https://connect.posit.cloud/rogerroot`; its Git source is

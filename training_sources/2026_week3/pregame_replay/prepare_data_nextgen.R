@@ -197,7 +197,7 @@ prediction_cols_from_names <- function(cols) {
   cols[
     str_detect(
       cols,
-      regex(
+      stringr::regex(
         paste(
           "^Score_",
           "^HomeScore_",
@@ -213,8 +213,8 @@ prediction_cols_from_names <- function(cols) {
         TRUE
       )
     ) &
-      str_detect(cols, regex(family_suffix, TRUE)) &
-      !str_detect(cols, regex("^Cover_|_target|_cover$|_pm1$", TRUE))
+      str_detect(cols, stringr::regex(family_suffix, TRUE)) &
+      !str_detect(cols, stringr::regex("^Cover_|_target|_cover$|_pm1$", TRUE))
   ]
 }
 
@@ -457,7 +457,7 @@ compact_models <- purrr::map(seq_len(nrow(inventory)), function(i) {
   pred_cols <- prediction_cols_from_names(names(df))
   empty_pred_cols <- pred_cols[vapply(df[pred_cols], function(x) all(is.na(x)), logical(1))]
   if (length(empty_pred_cols) > 0) {
-    df <- df %>% select(-all_of(empty_pred_cols))
+    df <- df %>% dplyr::select(-all_of(empty_pred_cols))
   }
   df
 })
@@ -488,7 +488,7 @@ saveRDS(pregame_archive, archive_path)
 saveRDS(pregame_archive, file.path(app_deploy_data_dir, "nextgen_pregame_2026_archive.rds"))
 
 inventory_for_app <- inventory %>%
-  select(-source_file) %>%
+  dplyr::select(-source_file) %>%
   mutate(path = file.path("data", file))
 
 saveRDS(inventory_for_app, file.path(export_data_dir, "nextgen_model_inventory.rds"))
