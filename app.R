@@ -59,6 +59,15 @@ apply_current_lines <- function(df) {
     replace_at <- !is.na(line_row) & !is.na(replacement)
     df$total_line[replace_at] <- replacement[replace_at]
   }
+  if (all(c("spread_line", "total_line") %in% names(df))) {
+    has_market_lines <- !is.na(df$spread_line) & !is.na(df$total_line)
+    if ("home_implied" %in% names(df)) {
+      df$home_implied[has_market_lines] <- (df$total_line[has_market_lines] + df$spread_line[has_market_lines]) / 2
+    }
+    if ("away_implied" %in% names(df)) {
+      df$away_implied[has_market_lines] <- (df$total_line[has_market_lines] - df$spread_line[has_market_lines]) / 2
+    }
+  }
   df
 }
 
@@ -1863,9 +1872,9 @@ server <- function(input, output, session) {
     } else if (market == "total") {
       ifelse(!is.na(base$total_line), base$total_line, NA_real_)
     } else if (market == "home_implied") {
-      coalesce(base$home_implied, ifelse(!is.na(base$total_line) & !is.na(base$spread_line), (base$total_line + base$spread_line) / 2, base$line))
+      coalesce(ifelse(!is.na(base$total_line) & !is.na(base$spread_line), (base$total_line + base$spread_line) / 2, NA_real_), base$home_implied, base$line)
     } else {
-      coalesce(base$away_implied, ifelse(!is.na(base$total_line) & !is.na(base$spread_line), (base$total_line - base$spread_line) / 2, base$line))
+      coalesce(ifelse(!is.na(base$total_line) & !is.na(base$spread_line), (base$total_line - base$spread_line) / 2, NA_real_), base$away_implied, base$line)
     }
   }
 
