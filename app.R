@@ -47,6 +47,41 @@ current_lines <- if (file.exists(current_lines_path)) {
   )
 }
 
+legacy_pregame_lines_path <- file.path(app_data_dir, "legacy_pregame_lines_2026.csv")
+if (!file.exists(legacy_pregame_lines_path)) {
+  stop("Archived 2026 Legacy pregame lines are missing.")
+}
+legacy_pregame_lines <- read_csv(legacy_pregame_lines_path, show_col_types = FALSE) %>%
+  mutate(game_id = paste(season, week, away_team, home_team, sep = "_")) %>%
+  select(game_id, archived_spread_line = spread_line,
+         archived_total_line = total_line)
+if (anyDuplicated(legacy_pregame_lines$game_id) ||
+    any(!is.finite(legacy_pregame_lines$archived_spread_line)) ||
+    any(!is.finite(legacy_pregame_lines$archived_total_line))) {
+  stop("Archived 2026 Legacy pregame lines are invalid.")
+}
+
+apply_legacy_pregame_lines <- function(df) {
+  if (!all(c("game_id", "home_score", "away_score") %in% names(df))) return(df)
+  idx <- match(canonical_game_id(df$game_id), legacy_pregame_lines$game_id)
+  completed <- is.finite(suppressWarnings(as.numeric(df$home_score))) &
+    is.finite(suppressWarnings(as.numeric(df$away_score)))
+  use <- completed & !is.na(idx)
+  if ("spread_line" %in% names(df)) {
+    df$spread_line[use] <- legacy_pregame_lines$archived_spread_line[idx[use]]
+  }
+  if ("total_line" %in% names(df)) {
+    df$total_line[use] <- legacy_pregame_lines$archived_total_line[idx[use]]
+  }
+  if ("home_implied" %in% names(df)) {
+    df$home_implied[use] <- (df$total_line[use] + df$spread_line[use]) / 2
+  }
+  if ("away_implied" %in% names(df)) {
+    df$away_implied[use] <- (df$total_line[use] - df$spread_line[use]) / 2
+  }
+  df
+}
+
 apply_current_lines <- function(df, preserve_completed = FALSE) {
   if (is.data.frame(df) && "game_id" %in% names(df)) df$game_id <- canonical_game_id(df$game_id)
   if (!is.data.frame(df) || nrow(df) == 0 || !"game_id" %in% names(df) || nrow(current_lines) == 0) {
@@ -652,18 +687,19 @@ cols_needed_for_file <- function(path) {
 
 read_model_file <- function(path) {
   nm <- basename(path)
-  if (nm %in% names(compact_models)) return(apply_current_lines(compact_models[[nm]]))
+  if (nm %in% names(compact_models)) {
+    return(apply_legacy_pregame_lines(
+      apply_current_lines(compact_models[[nm]], preserve_completed = TRUE)
+    ))
+  }
   stop("Compact prepared data is missing for ", nm, ". Run prepare_data.R locally and deploy data/compact_models.rds plus data/model_inventory.rds.")
 }
 
 file_has_graded_results <- function(path) {
   df <- read_model_file(path)
-  cover_cols <- grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE)
-  if (length(cover_cols) == 0) return(FALSE)
-  any(vapply(cover_cols, function(col) {
-    vals <- suppressWarnings(as.numeric(df[[col]]))
-    any(!is.na(vals))
-  }, logical(1)))
+  if (!all(c("home_score", "away_score") %in% names(df))) return(FALSE)
+  any(is.finite(suppressWarnings(as.numeric(df$home_score))) &
+        is.finite(suppressWarnings(as.numeric(df$away_score))))
 }
 
 graded_seasons <- function() {
@@ -711,22 +747,53 @@ projection_candidates_for_cover <- function(cover_col) {
   ) %>% unique()
 }
 
-detect_cover_summary <- function(df) {
+detect_cover_summary <- function(df, split) {
   cover_cols <- grep("^Cover_", names(df), value = TRUE, ignore.case = TRUE)
   if (length(cover_cols) == 0) return(tibble())
 
   purrr::map_dfr(cover_cols, function(col) {
-    vals <- suppressWarnings(as.numeric(df[[col]]))
     proj <- projection_candidates_for_cover(col)
     proj <- proj[proj %in% names(df)][1] %||% NA_character_
+    market <- cover_market(col)
+    is_home <- !str_detect(split, "^away")
+    numeric_col <- function(name) {
+      if (name %in% names(df)) suppressWarnings(as.numeric(df[[name]])) else rep(NA_real_, nrow(df))
+    }
+    raw <- if (!is.na(proj)) numeric_col(proj) else rep(NA_real_, nrow(df))
+    home_score <- numeric_col("home_score")
+    away_score <- numeric_col("away_score")
+    spread <- numeric_col("spread_line")
+    total <- numeric_col("total_line")
+    line <- switch(market,
+      spread = spread,
+      total = total,
+      team_implied = (total + if (is_home) spread else -spread) / 2,
+      opp_implied = (total + if (is_home) -spread else spread) / 2,
+      score = (total + if (is_home) spread else -spread) / 2,
+      rep(NA_real_, nrow(df))
+    )
+    predicted <- if (market == "spread" && !is_home) -raw else raw
+    actual <- switch(market,
+      spread = home_score - away_score,
+      total = home_score + away_score,
+      team_implied = if (is_home) home_score else away_score,
+      opp_implied = if (is_home) away_score else home_score,
+      score = if (is_home) home_score else away_score,
+      rep(NA_real_, nrow(df))
+    )
+    valid <- is.finite(predicted) & is.finite(line) & is.finite(actual) &
+      predicted != line & actual != line
+    wins <- sum(valid & sign(predicted - line) == sign(actual - line))
+    losses <- sum(valid) - wins
+    picks <- wins + losses
     tibble(
-      market = cover_market(col),
-      market_label = market_labels[cover_market(col)] %||% cover_market(col),
+      market = market,
+      market_label = market_labels[market] %||% market,
       result_col = col,
       projection_col = proj,
-      picks = sum(!is.na(vals)),
-      wins = sum(vals == 1, na.rm = TRUE),
-      losses = sum(vals == 0, na.rm = TRUE),
+      picks = picks,
+      wins = wins,
+      losses = losses,
       win_pct = ifelse(picks > 0, wins / picks, NA_real_)
     )
   }) %>%
@@ -1470,7 +1537,7 @@ server <- function(input, output, session) {
       if (nrow(files) == 0) return(tibble())
 
       summary_rows <- pmap_dfr(files, function(path, file, season, family, family_label, split) {
-        out <- detect_cover_summary(read_model_file(path))
+        out <- detect_cover_summary(read_model_file(path), split)
         if (nrow(out) == 0) return(tibble())
         if (!identical(market, "all")) out <- filter(out, market == !!market)
         if (nrow(out) == 0) return(tibble())
@@ -2257,7 +2324,7 @@ server <- function(input, output, session) {
     }
     selected <- inventory %>% filter(season %in% backtest_seasons, season < cutoff_season)
     rows <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
-      detect_cover_summary(read_model_file(path)) %>%
+      detect_cover_summary(read_model_file(path), split) %>%
         filter(!is.na(projection_col)) %>%
         mutate(
           family = family,
@@ -2314,7 +2381,7 @@ server <- function(input, output, session) {
     if (is.finite(score_season) && score_season >= 2026L) {
       score_lookup <- historical_score_lookup(score_season)
     } else {
-      score_lookup <- detect_cover_summary(df)
+      score_lookup <- detect_cover_summary(df, target_split)
       if (!identical(score_market, "all")) score_lookup <- filter(score_lookup, market %in% score_market)
       score_lookup <- score_lookup %>%
         filter(!is.na(projection_col)) %>%
