@@ -660,7 +660,7 @@ file_header <- function(path) {
 }
 
 prediction_cols_from_names <- function(cols) {
-  cols[str_detect(cols, regex("ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy", TRUE)) &
+  cols[str_detect(cols, regex("^(ScoreDiff|ScoreTotal|TotalScore|Implied|Score_(xgb|forward|stepwise|avg|final)|OppScore|Billy$)", TRUE)) &
          !str_detect(cols, regex("^Cover_|_target|_cover$|_pm1$", TRUE))]
 }
 
