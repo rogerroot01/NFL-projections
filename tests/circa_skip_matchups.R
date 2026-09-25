@@ -24,6 +24,25 @@ shiny::testServer(app$serverFuncSource(), {
     circa_min_edge = 0
   )
   stopifnot(identical(circa_card_rows()$game_id[1:5], rows$game_id[1:5]))
+  formatted <- format_circa_table(circa_ranked_rows())
+  stopifnot(
+    !"Status" %in% names(formatted),
+    "Circa − current" %in% names(formatted),
+    identical(formatted$`Current dashboard`[[1L]], "H1 PK"),
+    identical(formatted$`Circa − current`[[1L]], "-7.0")
+  )
+
+  # Compare the same Circa pick even when the current dashboard favors the
+  # other side. H1 +3.0 means Circa H1 -7 beats the saved H1 -10 line.
+  flipped_rows <- rows
+  flipped_rows$current_market_line[[1L]] <- 10
+  circa_results_state(flipped_rows)
+  flipped <- format_circa_table(circa_ranked_rows())
+  stopifnot(
+    identical(flipped$`Current dashboard`[[1L]], "H1 -10"),
+    identical(flipped$`Circa − current`[[1L]], "+3.0")
+  )
+  circa_results_state(rows)
 
   session$setInputs(circa_no_minus_7_5_favorites = TRUE)
   stopifnot(

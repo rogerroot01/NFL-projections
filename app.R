@@ -3080,6 +3080,8 @@ server <- function(input, output, session) {
         projected_line = ifelse(circa_pick == "Home", -avg_projection, avg_projection),
         current_pick_team = ifelse(current_pick == "Home", home_team, away_team),
         current_pick_line = ifelse(current_pick == "Home", -current_market_line, current_market_line),
+        current_line_for_pick = ifelse(circa_pick == "Home", -current_market_line, current_market_line),
+        line_difference = pick_line - current_line_for_pick,
         current_qualifies = !is.na(current_edge) & current_edge >= current_threshold,
         circa_qualifies = !is.na(circa_edge) & circa_edge >= minimum_edge,
         status = case_when(
@@ -3150,8 +3152,8 @@ server <- function(input, output, session) {
         Pick = paste(pick_team, format_spread_price(pick_line)),
         `Projected line` = paste(pick_team, format_spread_price(projected_line)),
         `Circa edge` = sprintf("%.1f", circa_edge),
-        `Current dashboard` = paste(current_pick_team, format_spread_price(current_pick_line)),
-        Status = status,
+        `Current dashboard` = paste(pick_team, format_spread_price(current_line_for_pick)),
+        `Circa − current` = ifelse(is.na(line_difference), "-", sprintf("%+.1f", line_difference)),
         Agreement = ifelse(is.na(agree_pct), "-", paste0(sprintf("%.0f", 100 * agree_pct), "%")),
         Models = models_used
       )
