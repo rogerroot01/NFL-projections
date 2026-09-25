@@ -624,6 +624,140 @@ circa_default_lines <- read_circa_bundled_lines(circa_active_season, circa_activ
 early_week_game_ids <- model_game_dates %>%
   filter(as.POSIXlt(game_date)$wday %in% 2:5) %>%
   pull(game_id)
+
+# PoolHost's signed-in pick sheet is not accessible to this hosted app. Bundle
+# verified current-week lines and accept a pasted pick sheet for later weeks.
+poolhost_schedule_parts <- stringr::str_match(
+  model_game_dates$game_id, "^(\\d{4})_(\\d{1,2})_([^_]+)_([^_]+)$"
+)
+poolhost_schedule <- model_game_dates %>%
+  mutate(
+    season = as.integer(poolhost_schedule_parts[, 2]),
+    week = as.integer(poolhost_schedule_parts[, 3]),
+    away_team = poolhost_schedule_parts[, 4],
+    home_team = poolhost_schedule_parts[, 5],
+    weekday = as.POSIXlt(game_date)$wday
+  ) %>%
+  filter(!is.na(season), !is.na(week), weekday %in% c(0L, 1L))
+
+poolhost_team_aliases <- c(
+  "ARIZONA" = "ARI", "ATLANTA" = "ATL", "BALTIMORE" = "BAL",
+  "BUFFALO" = "BUF", "CAROLINA" = "CAR", "CHICAGO" = "CHI",
+  "CINCINNATI" = "CIN", "CLEVELAND" = "CLE", "DALLAS" = "DAL",
+  "DENVER" = "DEN", "DETROIT" = "DET", "GREEN BAY" = "GB",
+  "HOUSTON" = "HOU", "INDIANAPOLIS" = "IND", "JACKSONVILLE" = "JAX",
+  "KANSAS CITY" = "KC", "LAS VEGAS" = "LV", "LOS ANGELES (A)" = "LAC",
+  "LOS ANGELES (N)" = "LA", "MIAMI" = "MIA", "MINNESOTA" = "MIN",
+  "NEW ENGLAND" = "NE", "NEW ORLEANS" = "NO", "NEW YORK (A)" = "NYJ",
+  "NEW YORK (N)" = "NYG", "PHILADELPHIA" = "PHI",
+  "PITTSBURGH" = "PIT", "SAN FRANCISCO" = "SF", "SEATTLE" = "SEA",
+  "TAMPA BAY" = "TB", "TENNESSEE" = "TEN", "WASHINGTON" = "WAS"
+)
+
+poolhost_normalize_team <- function(x) {
+  key <- toupper(stringr::str_squish(as.character(x)))
+  mapped <- unname(poolhost_team_aliases[key])
+  ifelse(!is.na(mapped), mapped, circa_normalize_team(key))
+}
+
+poolhost_validate_lines <- function(rows, season, week) {
+  expected <- poolhost_schedule %>% filter(.data$season == !!as.integer(season),
+                                            .data$week == !!as.integer(week))
+  if (!nrow(expected)) stop("No Sunday/Monday games are in the selected model schedule.")
+  if (!nrow(rows) || anyNA(rows[c("away_team", "home_team", "poolhost_home_line")]) ||
+      any(!is.finite(rows$poolhost_home_line)) ||
+      anyDuplicated(rows$game_id) ||
+      anyDuplicated(c(rows$away_team, rows$home_team))) {
+    stop("PoolHost lines contain missing, duplicate, or invalid matchups.")
+  }
+  if (!setequal(rows$game_id, expected$game_id)) {
+    missing <- setdiff(expected$game_id, rows$game_id)
+    extra <- setdiff(rows$game_id, expected$game_id)
+    stop("PoolHost lines do not match all eligible games. Missing: ",
+         if (length(missing)) paste(missing, collapse = ", ") else "none",
+         "; unexpected: ", if (length(extra)) paste(extra, collapse = ", ") else "none", ".")
+  }
+  rows
+}
+
+poolhost_make_lines <- function(away, home, home_line, season, week) {
+  rows <- tibble::tibble(
+    season = as.integer(season), week = as.integer(week),
+    away_team = poolhost_normalize_team(away),
+    home_team = poolhost_normalize_team(home),
+    poolhost_home_line = suppressWarnings(as.numeric(home_line))
+  ) %>%
+    mutate(game_id = paste(season, week, away_team, home_team, sep = "_"))
+  poolhost_validate_lines(rows, season, week)
+}
+
+poolhost_read_bundled_lines <- function(season, week) {
+  path <- file.path(app_data_dir, paste0("poolhost_", as.integer(season),
+                                        "_week_", as.integer(week), ".csv"))
+  if (!file.exists(path)) return(tibble::tibble())
+  raw <- readr::read_csv(path, show_col_types = FALSE)
+  if (any(raw$season != as.integer(season) | raw$week != as.integer(week))) {
+    stop("Bundled PoolHost season or week does not match its file name.")
+  }
+  poolhost_make_lines(raw$away_team, raw$home_team, raw$poolhost_home_line,
+                      season, week)
+}
+
+poolhost_parse_pasted_lines <- function(text, season, week) {
+  text <- gsub("\\r", "", as.character(text), fixed = TRUE)
+  printed_week <- stringr::str_match(text, "(?i)Week\\s+([0-9]{1,2})\\s+Picks")
+  if (!is.na(printed_week[1, 2]) && as.integer(printed_week[1, 2]) != as.integer(week)) {
+    stop("The pasted PoolHost sheet is for a different week.")
+  }
+  tokens <- stringr::str_squish(strsplit(text, "\\n", perl = TRUE)[[1L]])
+  tokens <- tokens[nzchar(tokens)]
+  if (!length(tokens)) stop("Paste the PoolHost pick-sheet text first.")
+  # Also accept one compact matchup per line: LAC at BUF | -7.
+  compact <- stringr::str_match(
+    tokens, "(?i)^([A-Z]{2,3})\\s+(?:at|@)\\s+([A-Z]{2,3})\\s*[|,:]\\s*([+-]?[0-9]+(?:\\.[0-9]+)?|PK)$"
+  )
+  if (all(!is.na(compact[, 1]))) {
+    line <- ifelse(toupper(compact[, 4]) == "PK", "0", compact[, 4])
+    return(poolhost_make_lines(compact[, 2], compact[, 3], line, season, week))
+  }
+  if (length(tokens) < 3L) stop("No complete away/home/spread rows were found in the pasted text.")
+  inline_rows <- purrr::map_dfr(tokens, function(token) {
+    spread <- stringr::str_match(token, "(?i)([+-]?[0-9]+(?:\\.[0-9]+)?|PK)\\s*$")[, 2]
+    if (is.na(spread)) return(tibble())
+    positions <- vapply(names(poolhost_team_aliases), function(alias) {
+      regexpr(alias, toupper(token), fixed = TRUE)[[1L]]
+    }, integer(1))
+    found <- which(positions > 0L)
+    if (length(found) != 2L) return(tibble())
+    found <- found[order(positions[found])]
+    tibble(away = unname(poolhost_team_aliases[found[[1L]]]),
+           home = unname(poolhost_team_aliases[found[[2L]]]),
+           line = ifelse(toupper(spread) == "PK", "0", spread))
+  })
+  teams <- poolhost_normalize_team(tokens)
+  valid_teams <- unique(c(poolhost_schedule$away_team, poolhost_schedule$home_team))
+  is_team <- teams %in% valid_teams
+  line_token <- toupper(gsub("−", "-", tokens, fixed = TRUE))
+  is_line <- grepl("^[+-]?[0-9]+(?:\\.[0-9]+)?$|^PK$", line_token, perl = TRUE)
+  starts <- which(head(is_team, -2L) & is_team[2:(length(tokens) - 1L)] &
+                    is_line[3:length(tokens)])
+  line <- line_token[starts + 2L]
+  line[line == "PK"] <- "0"
+  parsed_rows <- dplyr::bind_rows(
+    inline_rows,
+    tibble(away = teams[starts], home = teams[starts + 1L], line = line)
+  ) %>% distinct(away, home, .keep_all = TRUE)
+  if (!nrow(parsed_rows)) stop("No complete away/home/spread rows were found in the pasted text.")
+  rows <- poolhost_make_lines(parsed_rows$away, parsed_rows$home, parsed_rows$line,
+                              season, week)
+  reported_count <- stringr::str_match(text, "(?i)Pick\\s+([0-9]{1,2})\\s+games?\\s+this\\s+week")
+  if (!is.na(reported_count[1, 2]) && nrow(rows) != as.integer(reported_count[1, 2])) {
+    stop("The number of parsed matchups differs from the PoolHost page count.")
+  }
+  rows
+}
+
+poolhost_default_lines <- poolhost_read_bundled_lines(circa_active_season, circa_active_week)
 nextgen_inventory <- if (nextgen_data_available) {
   readRDS(nextgen_inventory_rds) %>%
     mutate(path = file.path(getwd(), path))
@@ -1447,6 +1581,40 @@ ui <- fluidPage(
       )
     ),
     tabPanel(
+      "PoolHost Picks",
+      sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          fluidRow(
+            column(6, numericInput("poolhost_season", "Season", value = circa_active_season,
+                                   min = 2024, max = 2100, step = 1)),
+            column(6, numericInput("poolhost_week", "Week", value = circa_active_week,
+                                   min = 1, max = 22, step = 1))
+          ),
+          selectInput("poolhost_source", "Consensus source",
+                      choices = c("Combined consensus" = "combined",
+                                  "Legacy consensus" = "legacy",
+                                  "Next-gen consensus" = "next_gen"),
+                      selected = "combined"),
+          tags$a("Open PoolHost pick sheet", href = "https://www.poolhost.com/profootball/picks",
+                 target = "_blank", rel = "noopener noreferrer"),
+          textAreaInput("poolhost_paste", "Paste PoolHost pick-sheet text",
+                        placeholder = "Copy the weekly PoolHost picks page, or paste one line per game: LAC at BUF | -7",
+                        rows = 8),
+          actionButton("poolhost_load_text", "Load pasted lines", class = "btn-default btn-block"),
+          actionButton("poolhost_build", "Build weekly picks", class = "btn-primary btn-block")
+        ),
+        mainPanel(
+          h4("PoolHost weekly picks"),
+          p("Every Sunday and Monday game on the selected pick sheet. Contest spreads are compared with the saved model-market lines."),
+          verbatimTextOutput("poolhost_status", placeholder = TRUE),
+          DTOutput("poolhost_picks"),
+          h4("Loaded PoolHost lines"),
+          DTOutput("poolhost_lines_preview")
+        )
+      )
+    ),
+    tabPanel(
       "Files",
       h4("Loaded app data files"),
       tableOutput("file_table")
@@ -1697,6 +1865,16 @@ server <- function(input, output, session) {
       paste0("Bundled Week ", circa_active_week, " contest sheet loaded: ", nrow(circa_default_lines), " matchups. Click Build Circa dashboard.")
     } else {
       paste0("Checking Circa Sports for the Week ", circa_active_week, " contest sheet.")
+    }
+  )
+  poolhost_lines_state <- reactiveVal(poolhost_default_lines)
+  poolhost_results_state <- reactiveVal(tibble())
+  poolhost_status_state <- reactiveVal(
+    if (nrow(poolhost_default_lines)) {
+      paste0("Loaded ", nrow(poolhost_default_lines), " PoolHost Week ", circa_active_week,
+             " spreads. Build weekly picks when ready.")
+    } else {
+      "Open the current PoolHost pick sheet and paste its lines to build this week's picks."
     }
   )
 
@@ -2787,12 +2965,12 @@ server <- function(input, output, session) {
       filter(is.na(agree_pct) | agree_pct >= min_agree)
   }
 
-  build_circa_legacy_source <- function(lines) {
+  build_circa_legacy_source <- function(lines, include_all = FALSE) {
     families <- input$cons_families %||% names(family_labels)
     seasons <- unique(as.integer(lines$season))
     selected <- inventory %>% filter(family %in% families, season %in% seasons)
     if (nrow(selected) == 0) return(tibble())
-    min_win <- (input$cons_min_win %||% 40) / 100
+    min_win <- if (include_all) 0 else (input$cons_min_win %||% 40) / 100
     long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
       long_predictions_for_file(
         tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
@@ -2820,10 +2998,11 @@ server <- function(input, output, session) {
       slice_head(n = 1) %>%
       ungroup() %>%
       select(-.signal_key, -.home_first)
-    aggregate_circa_model_rows(long, "Legacy", (input$cons_agree %||% 50) / 100)
+    aggregate_circa_model_rows(long, "Legacy",
+                               if (include_all) 0 else (input$cons_agree %||% 50) / 100)
   }
 
-  build_circa_nextgen_source <- function(lines) {
+  build_circa_nextgen_source <- function(lines, include_all = FALSE) {
     if (!nextgen_data_available) return(tibble())
     frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
     families <- input$ng_cons_families %||% names(next_gen_family_labels)
@@ -2832,7 +3011,7 @@ server <- function(input, output, session) {
     selected <- nextgen_inventory %>%
       filter(framework %in% frameworks, family %in% families, season %in% seasons)
     if (nrow(selected) == 0) return(tibble())
-    min_win <- (input$ng_cons_min_win %||% 40) / 100
+    min_win <- if (include_all) 0 else (input$ng_cons_min_win %||% 40) / 100
     long <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label) {
       long_nextgen_predictions_for_file(
         tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
@@ -2849,10 +3028,11 @@ server <- function(input, output, session) {
         by = "game_id"
       ) %>%
       mutate(circa_market_line = -circa_home_line)
-    aggregate_circa_model_rows(long, "Next-gen", (input$ng_cons_agree %||% 50) / 100)
+    aggregate_circa_model_rows(long, "Next-gen",
+                               if (include_all) 0 else (input$ng_cons_agree %||% 50) / 100)
   }
 
-  combine_circa_sources <- function(source_rows, selected_source) {
+  combine_circa_sources <- function(source_rows, selected_source, include_all = FALSE) {
     if (nrow(source_rows) == 0) return(tibble())
     if (!identical(selected_source, "combined")) {
       return(source_rows %>%
@@ -2868,8 +3048,8 @@ server <- function(input, output, session) {
 
     required <- input$overall_cons_sources %||% c("legacy", "next_gen")
     required_labels <- c(if ("legacy" %in% required) "Legacy", if ("next_gen" %in% required) "Next-gen")
-    require_all <- isTRUE(input$overall_cons_require_all_sources %||% TRUE)
-    min_agree <- (input$overall_cons_agree %||% 50) / 100
+    require_all <- !include_all && isTRUE(input$overall_cons_require_all_sources %||% TRUE)
+    min_agree <- if (include_all) 0 else (input$overall_cons_agree %||% 50) / 100
     source_rows %>%
       filter(source %in% required_labels) %>%
       mutate(source_vote = case_when(source_pick == "Home" ~ 1, source_pick == "Away" ~ -1, TRUE ~ NA_real_)) %>%
@@ -3227,6 +3407,139 @@ server <- function(input, output, session) {
       write_csv(rows, file)
     }
   )
+
+  observeEvent(list(input$dashboard_season, input$dashboard_week), {
+    season <- suppressWarnings(as.integer(input$dashboard_season))
+    week <- suppressWarnings(as.integer(input$dashboard_week))
+    if (length(season) != 1L || length(week) != 1L || is.na(season) || is.na(week)) return()
+    if (!identical(as.integer(input$poolhost_season), season)) {
+      updateNumericInput(session, "poolhost_season", value = season)
+    }
+    if (!identical(as.integer(input$poolhost_week), week)) {
+      updateNumericInput(session, "poolhost_week", value = week)
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(list(input$poolhost_season, input$poolhost_week), {
+    season <- suppressWarnings(as.integer(input$poolhost_season))
+    week <- suppressWarnings(as.integer(input$poolhost_week))
+    if (length(season) != 1L || length(week) != 1L || is.na(season) || is.na(week)) return()
+    poolhost_results_state(tibble())
+    bundled <- tryCatch(poolhost_read_bundled_lines(season, week), error = function(e) {
+      poolhost_status_state(paste("PoolHost line error:", conditionMessage(e)))
+      tibble()
+    })
+    poolhost_lines_state(bundled)
+    if (nrow(bundled)) {
+      poolhost_status_state(paste0("Loaded ", nrow(bundled), " PoolHost Week ", week,
+                                   " spreads. Build weekly picks when ready."))
+    } else if (!grepl("error", poolhost_status_state(), fixed = TRUE)) {
+      poolhost_status_state("Paste the selected week's signed-in PoolHost pick sheet, then load its lines.")
+    }
+  }, ignoreInit = FALSE)
+
+  observeEvent(input$poolhost_load_text, {
+    season <- suppressWarnings(as.integer(input$poolhost_season))
+    week <- suppressWarnings(as.integer(input$poolhost_week))
+    rows <- tryCatch(
+      poolhost_parse_pasted_lines(input$poolhost_paste %||% "", season, week),
+      error = function(e) {
+        poolhost_status_state(paste("PoolHost paste error:", conditionMessage(e)))
+        NULL
+      }
+    )
+    if (is.null(rows)) return()
+    poolhost_lines_state(rows)
+    poolhost_results_state(tibble())
+    poolhost_status_state(paste0("Loaded and checked all ", nrow(rows),
+                                 " PoolHost games for Week ", week, ". Build weekly picks when ready."))
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$poolhost_source, {
+    poolhost_results_state(tibble())
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$poolhost_build, {
+    lines <- poolhost_lines_state()
+    if (!nrow(lines)) {
+      poolhost_status_state("No PoolHost contest lines are loaded for the selected week.")
+      poolhost_results_state(tibble())
+      return()
+    }
+    result <- tryCatch(withProgress(message = "Building PoolHost picks...", value = 0, {
+      selected_source <- input$poolhost_source %||% "combined"
+      required <- if (identical(selected_source, "combined")) {
+        input$overall_cons_sources %||% c("legacy", "next_gen")
+      } else selected_source
+      contest_lines <- lines %>%
+        transmute(game_id, season, week, circa_away_line = -poolhost_home_line,
+                  circa_home_line = poolhost_home_line)
+      incProgress(0.1, detail = "Applying model projections to PoolHost lines")
+      sources <- bind_rows(
+        if ("legacy" %in% required) build_circa_legacy_source(contest_lines, include_all = TRUE) else tibble(),
+        if ("next_gen" %in% required) build_circa_nextgen_source(contest_lines, include_all = TRUE) else tibble()
+      )
+      combined <- combine_circa_sources(sources, selected_source, include_all = TRUE)
+      if (!setequal(combined$game_id, lines$game_id) || anyDuplicated(combined$game_id)) {
+        stop("Consensus projections are missing for: ",
+             paste(setdiff(lines$game_id, combined$game_id), collapse = ", "), ".")
+      }
+      incProgress(0.85, detail = "Checking every matchup")
+      lines %>%
+        left_join(combined %>% select(game_id, avg_projection, current_market_line,
+                                      agree_pct, models_used), by = "game_id") %>%
+        mutate(
+          poolhost_home_margin = -poolhost_home_line,
+          signed_edge = avg_projection - poolhost_home_margin,
+          pick_side = ifelse(signed_edge >= 0, "Home", "Away"),
+          pick_team = ifelse(pick_side == "Home", home_team, away_team),
+          poolhost_pick_line = ifelse(pick_side == "Home", poolhost_home_line, -poolhost_home_line),
+          model_market_pick_line = ifelse(pick_side == "Home", -current_market_line, current_market_line),
+          projected_pick_line = ifelse(pick_side == "Home", -avg_projection, avg_projection),
+          line_difference = poolhost_pick_line - model_market_pick_line,
+          edge = abs(signed_edge)
+        )
+    }), error = function(e) {
+      poolhost_status_state(paste("PoolHost build error:", conditionMessage(e)))
+      tibble()
+    })
+    if (nrow(result) && all(is.finite(result$avg_projection)) &&
+        all(is.finite(result$current_market_line)) &&
+        all(is.finite(result$poolhost_home_line))) {
+      poolhost_results_state(result)
+      poolhost_status_state(paste0("Picks ready for all ", nrow(result),
+                                   " eligible Week ", first(lines$week), " games."))
+    } else {
+      poolhost_results_state(tibble())
+      if (nrow(result)) poolhost_status_state("A model or contest spread is missing; no incomplete pick sheet was shown.")
+    }
+  }, ignoreInit = TRUE)
+
+  output$poolhost_status <- renderText(poolhost_status_state())
+  output$poolhost_lines_preview <- renderDT({
+    rows <- poolhost_lines_state()
+    display <- if (!nrow(rows)) tibble(Message = "No PoolHost lines loaded for this week.") else
+      rows %>% transmute(Matchup = paste(away_team, "@", home_team),
+                         `PoolHost home spread` = format_spread_price(poolhost_home_line))
+    datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = max(1L, nrow(display))))
+  })
+  output$poolhost_picks <- renderDT({
+    rows <- poolhost_results_state()
+    display <- if (!nrow(rows)) tibble(Message = "Load lines and build the weekly picks.") else
+      rows %>% transmute(
+        Matchup = paste(away_team, "@", home_team),
+        Pick = paste(pick_team, format_spread_price(poolhost_pick_line)),
+        `Projected line` = paste(pick_team, format_spread_price(projected_pick_line)),
+        `Model market line` = paste(pick_team, format_spread_price(model_market_pick_line)),
+        `PoolHost line` = paste(pick_team, format_spread_price(poolhost_pick_line)),
+        `PoolHost − model` = sprintf("%+.1f", line_difference),
+        Edge = sprintf("%.1f", edge),
+        Agreement = paste0(sprintf("%.0f", 100 * agree_pct), "%"),
+        Models = models_used
+      )
+    datatable(display, rownames = FALSE,
+              options = list(dom = "t", pageLength = max(1L, nrow(display)), scrollX = TRUE))
+  })
 
   build_overall_consensus_rows <- function() {
     overall_consensus_status("Building combined consensus...")

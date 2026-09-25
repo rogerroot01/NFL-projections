@@ -20,3 +20,10 @@ The converted pipeline's Legacy-equivalent output is not interchangeable with
 the standalone Legacy forecast; verify parity before ever substituting it.
 Run `tools/verify_canonical_bundles.R` from this repository before publishing;
 it checks exact source hashes and frozen past-game predictions.
+
+The PoolHost Picks tab bundles the verified 2026 Week 3 Sunday/Monday spreads.
+PoolHost's pick sheet requires the user's signed-in browser session, so later
+weeks are loaded by pasting that week's sheet into the tab. The app checks the
+week, every matchup, home/away orientation, and completeness against the model
+schedule before showing all-game consensus picks. It does not submit picks or
+export a card.
