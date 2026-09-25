@@ -1413,6 +1413,7 @@ ui <- fluidPage(
           ),
           sliderInput("circa_min_edge", "Minimum Circa edge", min = 0, max = 10, value = 0, step = 0.5, post = " pts"),
           checkboxInput("circa_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
+          checkboxInput("circa_no_minus_7_5_favorites", "No -7.5 favorites", value = TRUE),
           checkboxInput("circa_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
           checkboxInput("circa_no_early_week_games", "No early-week games", value = TRUE),
           selectizeInput("circa_skip_matchups", "Skip matchups", choices = NULL, multiple = TRUE),
@@ -3094,6 +3095,7 @@ server <- function(input, output, session) {
         circa_qualifies,
         !is.na(circa_pick),
         !(isTRUE(input$circa_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
+        !(isTRUE(input$circa_no_minus_7_5_favorites) & dplyr::near(pick_line, -7.5)),
         !(isTRUE(input$circa_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5)),
         !(isTRUE(input$circa_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%

@@ -11,18 +11,27 @@ shiny::testServer(app$serverFuncSource(), {
     current_market_line = 0,
     circa_market_line = 0,
     circa_away_line = 0,
-    circa_home_line = 0,
+    circa_home_line = c(-7, -7.5, -8, rep(0, 5)),
     agree_pct = 1,
     models_used = 12L
   )
   circa_results_state(rows)
   session$setInputs(
     circa_no_minus_3_5_favorites = FALSE,
+    circa_no_minus_7_5_favorites = FALSE,
     circa_no_plus_2_5_underdogs = FALSE,
     circa_no_early_week_games = FALSE,
     circa_min_edge = 0
   )
   stopifnot(identical(circa_card_rows()$game_id[1:5], rows$game_id[1:5]))
+
+  session$setInputs(circa_no_minus_7_5_favorites = TRUE)
+  stopifnot(
+    nrow(circa_ranked_rows()) == 7L,
+    !rows$game_id[2] %in% circa_ranked_rows()$game_id,
+    all(rows$game_id[c(1, 3)] %in% circa_ranked_rows()$game_id)
+  )
+  session$setInputs(circa_no_minus_7_5_favorites = FALSE)
 
   session$setInputs(circa_skip_matchups = rows$game_id[2])
   stopifnot(
