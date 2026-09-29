@@ -3,11 +3,11 @@ football_root <- Sys.getenv(
   "C:/Users/rroot/OneDrive/Documents/Football_2026"
 )
 legacy_export <- file.path(
-  football_root, "Legacy_models", "nflFast_Model_2026_Scores_week3",
+  football_root, "Legacy_models", "nflFast_Model_2026_Scores_week4",
   "output", "ensemble_model_wrangler"
 )
 nextgen_export <- file.path(
-  football_root, "Football_projection_pipeline_exclusion",
+  football_root, "Football_projection_pipeline_exclusion_week4",
   "output", "ensemble_model_wrangler_nextgen", "data"
 )
 
