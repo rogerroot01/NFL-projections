@@ -12,15 +12,6 @@ canonical_game_id <- function(x) {
   sub("^(\\d{4})_0([1-9])_", "\\1_\\2_", as.character(x), perl = TRUE)
 }
 
-# The exclusion belongs to the selected bet, never to its opponent or matchup.
-excluded_spread_pick <- function(pick_line, no_minus_3_5 = FALSE,
-                                 no_plus_2_5 = FALSE, no_minus_7_5 = FALSE) {
-  !is.na(pick_line) & (
-    (isTRUE(no_minus_3_5) & dplyr::near(pick_line, -3.5)) |
-    (isTRUE(no_plus_2_5) & dplyr::near(pick_line, 2.5)) |
-    (isTRUE(no_minus_7_5) & dplyr::near(pick_line, -7.5)))
-}
-
 app_data_dir <- file.path(getwd(), "data")
 early_lines_path <- file.path(app_data_dir, "early_lines.csv")
 current_lines_path <- file.path(app_data_dir, "current_lines_2026.csv")
@@ -1488,10 +1479,6 @@ ui <- fluidPage(
             choices = c("Against the spread" = "spread", "Straight up" = "straight_up", "Over / under" = "total", "Home implied" = "home_implied", "Away implied" = "away_implied"),
             selected = c("spread", "straight_up", "total", "home_implied", "away_implied")
           ),
-          checkboxInput("dashboard_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
-          checkboxInput("dashboard_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
-          helpText("These filters exclude only picks at those lines. Picks against those teams remain eligible."),
-          checkboxInput("dashboard_no_early_week_games", "No early-week games", value = FALSE),
           tags$hr(),
           h4("Downloads"),
           downloadButton("dashboard_download", "Download selected markets", class = "btn-success btn-block"),
@@ -3360,8 +3347,9 @@ server <- function(input, output, session) {
       filter(
         circa_qualifies,
         !is.na(circa_pick),
-        !excluded_spread_pick(pick_line, input$circa_no_minus_3_5_favorites,
-          input$circa_no_plus_2_5_underdogs, input$circa_no_minus_7_5_favorites),
+        !(isTRUE(input$circa_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
+        !(isTRUE(input$circa_no_minus_7_5_favorites) & dplyr::near(pick_line, -7.5)),
+        !(isTRUE(input$circa_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5)),
         !(isTRUE(input$circa_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%
       arrange(desc(circa_edge), away_team, home_team) %>%
@@ -3932,24 +3920,6 @@ server <- function(input, output, session) {
     updateSelectInput(session, "dashboard_week", choices = week_choices, selected = selected)
   })
 
-  apply_dashboard_spread_overrides <- function(rows) {
-    rows %>%
-      mutate(
-        dashboard_pick_line = case_when(
-          market != "spread" ~ NA_real_,
-          consensus_pick == "Home" ~ -market_line,
-          consensus_pick == "Away" ~ market_line,
-          TRUE ~ NA_real_
-        )
-      ) %>%
-      filter(
-        !(market == "spread" & excluded_spread_pick(dashboard_pick_line,
-          input$dashboard_no_minus_3_5_favorites, input$dashboard_no_plus_2_5_underdogs)),
-        !(isTRUE(input$dashboard_no_early_week_games) & game_id %in% early_week_game_ids)
-      ) %>%
-      select(-dashboard_pick_line)
-  }
-
   dashboard_filtered_rows <- reactive({
     rows <- dashboard_source_rows()
     selected_season <- suppressWarnings(as.integer(input$dashboard_season))
@@ -3957,8 +3927,7 @@ server <- function(input, output, session) {
     markets <- input$dashboard_markets %||% character()
     if (nrow(rows) == 0 || length(selected_season) == 0 || length(selected_week) == 0 || is.na(selected_season) || is.na(selected_week)) return(tibble())
     rows %>%
-      filter(season == selected_season, week == selected_week, market %in% markets) %>%
-      apply_dashboard_spread_overrides()
+      filter(season == selected_season, week == selected_week, market %in% markets)
   })
 
   format_dashboard_export_rows <- function(rows) {
@@ -4073,7 +4042,6 @@ server <- function(input, output, session) {
         week == selected_week,
         market == market_key
       ) %>%
-      apply_dashboard_spread_overrides() %>%
       format_dashboard_export_rows()
   }
 
