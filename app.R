@@ -12,6 +12,15 @@ canonical_game_id <- function(x) {
   sub("^(\\d{4})_0([1-9])_", "\\1_\\2_", as.character(x), perl = TRUE)
 }
 
+# The exclusion belongs to the selected bet, never to its opponent or matchup.
+excluded_spread_pick <- function(pick_line, no_minus_3_5 = FALSE,
+                                 no_plus_2_5 = FALSE, no_minus_7_5 = FALSE) {
+  !is.na(pick_line) & (
+    (isTRUE(no_minus_3_5) & dplyr::near(pick_line, -3.5)) |
+    (isTRUE(no_plus_2_5) & dplyr::near(pick_line, 2.5)) |
+    (isTRUE(no_minus_7_5) & dplyr::near(pick_line, -7.5)))
+}
+
 app_data_dir <- file.path(getwd(), "data")
 early_lines_path <- file.path(app_data_dir, "early_lines.csv")
 current_lines_path <- file.path(app_data_dir, "current_lines_2026.csv")
@@ -1481,6 +1490,7 @@ ui <- fluidPage(
           ),
           checkboxInput("dashboard_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
           checkboxInput("dashboard_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
+          helpText("These filters exclude only picks at those lines. Picks against those teams remain eligible."),
           checkboxInput("dashboard_no_early_week_games", "No early-week games", value = FALSE),
           tags$hr(),
           h4("Downloads"),
@@ -3350,9 +3360,8 @@ server <- function(input, output, session) {
       filter(
         circa_qualifies,
         !is.na(circa_pick),
-        !(isTRUE(input$circa_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
-        !(isTRUE(input$circa_no_minus_7_5_favorites) & dplyr::near(pick_line, -7.5)),
-        !(isTRUE(input$circa_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5)),
+        !excluded_spread_pick(pick_line, input$circa_no_minus_3_5_favorites,
+          input$circa_no_plus_2_5_underdogs, input$circa_no_minus_7_5_favorites),
         !(isTRUE(input$circa_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%
       arrange(desc(circa_edge), away_team, home_team) %>%
@@ -3934,8 +3943,8 @@ server <- function(input, output, session) {
         )
       ) %>%
       filter(
-        !(market == "spread" & isTRUE(input$dashboard_no_minus_3_5_favorites) & dplyr::near(dashboard_pick_line, -3.5)),
-        !(market == "spread" & isTRUE(input$dashboard_no_plus_2_5_underdogs) & dplyr::near(dashboard_pick_line, 2.5)),
+        !(market == "spread" & excluded_spread_pick(dashboard_pick_line,
+          input$dashboard_no_minus_3_5_favorites, input$dashboard_no_plus_2_5_underdogs)),
         !(isTRUE(input$dashboard_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%
       select(-dashboard_pick_line)

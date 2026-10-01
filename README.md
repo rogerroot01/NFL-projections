@@ -6,6 +6,11 @@ Wrangler at `https://rogerroot-nfl-projections.share.connect.posit.cloud/`.
 Do not deploy this standalone app to the Yahoo Posit account; that account is
 for Pro Football Lab only.
 
+Dashboard spread exclusions apply only to the selected team's betting line.
+The +2.5-underdog filter permits the opposing -2.5 favorite; the -3.5-favorite
+filter permits the opposing +3.5 underdog. Other markets remain eligible.
+The Dashboard and its CSV downloads use the same pick-side filter.
+
 The 2026 Legacy and Next Gen bundles keep pregame Week 1 onward predictions in
 immutable per-game archives. Current results and lines can refresh, but a
 completed game's forecast must come from its saved pregame snapshot. The
