@@ -289,7 +289,7 @@ circa_team_aliases <- c(
   VIKINGS = "MIN", PATRIOTS = "NE", SAINTS = "NO", GIANTS = "NYG",
   JETS = "NYJ", EAGLES = "PHI", STEELERS = "PIT", `49ERS` = "SF",
   SEAHAWKS = "SEA", BUCS = "TB", TITANS = "TEN", COMMANDERS = "WAS",
-  A9ERS = "SF"
+  A9ERS = "SF", AYERS = "SF"
 )
 
 circa_normalize_team <- function(x) {
@@ -318,6 +318,11 @@ circa_parse_ocr_spread <- function(token) {
   whole <- suppressWarnings(as.numeric(digits))
   if (is.na(whole) && str_detect(upper, "A")) whole <- 4
   half_mark <- str_detect(upper, "[%HVY,]") | str_detect(upper, fixed(intToUtf8(0x00BD)))
+  # Tesseract sometimes reads the sheet's half-point glyph as a trailing 4.
+  if (!is.na(whole) && whole > 20 && whole < 100 && str_detect(upper, "^[+-][0-9]4$")) {
+    whole <- floor(whole / 10)
+    half_mark <- TRUE
+  }
   if (is.na(whole) && gsub("[+-]", "", upper) %in% c("½", "H", "%")) whole <- 0
   if (is.na(whole)) return(NA_real_)
   sign * (whole + ifelse(half_mark, 0.5, 0))
