@@ -1,0 +1,59 @@
+app <- source("app.R", local = TRUE)$value
+stopifnot(grepl("Current Market", htmltools::renderTags(ui)$html, fixed = TRUE))
+
+week4 <- read_circa_bundled_lines(2026L, 4L)
+paste_text <- paste(sprintf("%s at %s | %s", week4$away_team, week4$home_team,
+                            week4$circa_home_line), collapse = "\n")
+parsed <- market_parse_pasted_lines(paste_text, 2026L, 4L)
+stopifnot(nrow(parsed) == 16L,
+          setequal(parsed$game_id, week4$game_id),
+          identical(parsed$market_home_line, as.numeric(week4$circa_home_line)))
+stopifnot(nrow(market_parse_pasted_lines("PIT,CLE,+2.5", 2026L, 4L)) == 1L)
+sportsbook_text <- paste(c("THU OCT 1st", "Spread", "Total", "Moneyline",
+                          "PIT Steelers-logo", "PIT Steelers", "at",
+                          "CLE Browns-logo", "CLE Browns", "-2.5", "-120",
+                          "O", "38.5", "-105", "-148", "+2.5", "+100",
+                          "U", "38.5", "-115", "+124", "More Bets"), collapse = "\n")
+sportsbook <- market_parse_pasted_lines(sportsbook_text, 2026L, 4L)
+stopifnot(nrow(sportsbook) == 1L, sportsbook$game_id[[1L]] == "2026_4_PIT_CLE",
+          sportsbook$market_home_line[[1L]] == 2.5)
+stopifnot(inherits(try(market_parse_pasted_lines("CLE at PIT | -2.5", 2026L, 4L),
+                      silent = TRUE), "try-error"))
+stopifnot(inherits(try(market_parse_pasted_lines("PIT at CLE | +2.25", 2026L, 4L),
+                      silent = TRUE), "try-error"))
+stopifnot(inherits(try(market_parse_pasted_lines("PIT at CLE | +2.5\nPIT at CLE | +3",
+                                                     2026L, 4L), silent = TRUE), "try-error"))
+
+shiny::testServer(app$serverFuncSource(), {
+  session$setInputs(market_load = 0L)
+  session$setInputs(market_season = 2026L, market_week = 4L,
+                    market_paste = paste_text, market_load = 1L)
+  stopifnot(nrow(market_lines_state()) == 16L,
+            grepl("Loaded 16", market_status_state(), fixed = TRUE))
+
+  poolhost_lines <- parsed %>% dplyr::filter(game_id %in% poolhost_schedule$game_id)
+  poolhost_text <- paste(sprintf("%s at %s | %s", poolhost_lines$away_team,
+                                 poolhost_lines$home_team, poolhost_lines$market_home_line),
+                         collapse = "\n")
+  session$setInputs(poolhost_season = 2026L, poolhost_week = 4L,
+                    poolhost_paste = poolhost_text, poolhost_load_text = 1L,
+                    poolhost_source = "combined", poolhost_build = 1L)
+  picks <- poolhost_results_state()
+  stopifnot(nrow(picks) == 15L)
+  compared <- market_compare_rows(picks, "pick_side", "poolhost_pick_line",
+                                  "projected_pick_line")
+  stopifnot(all(is.finite(compared$current_market_pick_line)),
+            all(abs(compared$contest_market_difference) < 0.001),
+            all(is.finite(compared$current_market_edge)))
+  gaps <- market_gap_display(picks, "pick_side", "poolhost_pick_line")
+  stopifnot(nrow(gaps) == 7L,
+            "Contest − current" %in% names(gaps))
+
+  session$setInputs(market_paste = "IND at WAS | +3.5", market_load = 2L)
+  stopifnot(nrow(market_lines_state()) == 1L)
+  partial <- market_compare_rows(picks, "pick_side", "poolhost_pick_line")
+  stopifnot(sum(is.finite(partial$contest_market_difference)) == 1L,
+            sum(is.na(partial$contest_market_difference)) == 14L)
+})
+
+cat("CURRENT_MARKET_PICKS_OK\n")

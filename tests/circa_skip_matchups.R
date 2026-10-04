@@ -16,6 +16,8 @@ shiny::testServer(app$serverFuncSource(), {
     models_used = 12L
   )
   circa_results_state(rows)
+  market_lines_state(tibble::tibble(game_id = rows$game_id, season = 2026L,
+                                    week = 3L, market_home_line = 0))
   session$setInputs(
     circa_no_minus_3_5_favorites = FALSE,
     circa_no_minus_7_5_favorites = FALSE,
@@ -28,18 +30,21 @@ shiny::testServer(app$serverFuncSource(), {
   stopifnot(
     !"Status" %in% names(formatted),
     "Circa − current" %in% names(formatted),
-    identical(formatted$`Current dashboard`[[1L]], "H1 PK"),
+    identical(formatted$`Current market line`[[1L]], "H1 PK"),
     identical(formatted$`Circa − current`[[1L]], "-7.0")
   )
 
-  # Compare the same Circa pick even when the current dashboard favors the
-  # other side. H1 +3.0 means Circa H1 -7 beats the saved H1 -10 line.
+  # The manual current-market snapshot is independent of bundled model odds.
+  # H1 +3.0 means Circa H1 -7 beats the supplied current H1 -10 line.
   flipped_rows <- rows
   flipped_rows$current_market_line[[1L]] <- 10
   circa_results_state(flipped_rows)
+  edited_market <- market_lines_state()
+  edited_market$market_home_line[[1L]] <- -10
+  market_lines_state(edited_market)
   flipped <- format_circa_table(circa_ranked_rows())
   stopifnot(
-    identical(flipped$`Current dashboard`[[1L]], "H1 -10"),
+    identical(flipped$`Current market line`[[1L]], "H1 -10"),
     identical(flipped$`Circa − current`[[1L]], "+3.0")
   )
   circa_results_state(rows)
