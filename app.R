@@ -3900,7 +3900,9 @@ server <- function(input, output, session) {
   })
 
   dkp_final_rows <- reactive({
-    dkp_card_rows() %>% filter(game_id %in% (input$dkp_final_picks %||% character()))
+    rows <- dkp_card_rows()
+    if (!nrow(rows)) return(rows)
+    rows %>% filter(game_id %in% (input$dkp_final_picks %||% character()))
   })
 
   format_dkp_table <- function(rows) {
