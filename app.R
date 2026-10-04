@@ -816,6 +816,11 @@ market_parse_pasted_lines <- function(text, season, week) {
   # by "at", followed by away/home spreads and their prices/totals. Require
   # the opposite spread later in the same game block to avoid guessing a line.
   team_token <- stringr::str_match(lines, "^([A-Z]{2,3})\\s+[A-Za-z]")[, 2]
+  # Sportsbook copy uses city abbreviations here, not our game identifiers.
+  # NY and LA must be resolved by the team name before schedule validation.
+  team_token[team_token == "NY" & grepl("(?i)^NY\\s+Jets\\b", lines)] <- "NYJ"
+  team_token[team_token == "NY" & grepl("(?i)^NY\\s+Giants\\b", lines)] <- "NYG"
+  team_token[team_token == "LA" & grepl("(?i)^LA\\s+Chargers\\b", lines)] <- "LAC"
   valid_teams <- unique(c(poolhost_schedule$away_team, poolhost_schedule$home_team))
   team_token[!team_token %in% valid_teams] <- NA_character_
   at_rows <- which(tolower(lines) == "at")

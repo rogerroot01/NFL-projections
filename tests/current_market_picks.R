@@ -17,6 +17,19 @@ sportsbook_text <- paste(c("THU OCT 1st", "Spread", "Total", "Moneyline",
 sportsbook <- market_parse_pasted_lines(sportsbook_text, 2026L, 4L)
 stopifnot(nrow(sportsbook) == 1L, sportsbook$game_id[[1L]] == "2026_4_PIT_CLE",
           sportsbook$market_home_line[[1L]] == 2.5)
+city_ambiguous_text <- paste(c(
+  "Tomorrow", "NY Jets-logo", "NY Jets", "at", "CHI Bears-logo", "CHI Bears",
+  "+3.5", "-108", "O", "43.5", "+100", "+154", "-3.5", "-112", "More Bets",
+  "LA Chargers-logo", "LA Chargers", "at", "SEA Seahawks-logo", "SEA Seahawks",
+  "+7", "-105", "O", "42.5", "-118", "+295", "-7", "-115", "More Bets",
+  "ARI Cardinals-logo", "ARI Cardinals", "at", "NY Giants-logo", "NY Giants",
+  "-2.5", "-112", "O", "44.5", "-108", "-135", "+2.5", "-108", "More Bets"
+), collapse = "\n")
+city_ambiguous <- market_parse_pasted_lines(city_ambiguous_text, 2026L, 4L)
+stopifnot(nrow(city_ambiguous) == 3L,
+          setequal(city_ambiguous$game_id,
+                   c("2026_4_NYJ_CHI", "2026_4_LAC_SEA", "2026_4_ARI_NYG")),
+          identical(city_ambiguous$market_home_line, c(-3.5, -7, 2.5)))
 stopifnot(inherits(try(market_parse_pasted_lines("CLE at PIT | -2.5", 2026L, 4L),
                       silent = TRUE), "try-error"))
 stopifnot(inherits(try(market_parse_pasted_lines("PIT at CLE | +2.25", 2026L, 4L),
