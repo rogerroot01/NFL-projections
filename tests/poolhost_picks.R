@@ -1,19 +1,20 @@
 app <- source("app.R", local = TRUE)$value
+week3_poolhost_lines <- poolhost_read_bundled_lines(2026L, 3L)
 stopifnot(grepl("PoolHost Picks", htmltools::renderTags(ui)$html, fixed = TRUE))
 stopifnot(grepl("Monday night tiebreaker", htmltools::renderTags(ui)$html, fixed = TRUE))
 
-stopifnot(nrow(poolhost_default_lines) == 15L,
+stopifnot(nrow(week3_poolhost_lines) == 15L,
           nrow(subset(poolhost_schedule, season == 2026L & week == 3L)) == 15L,
-          !"2026_3_ATL_GB" %in% poolhost_default_lines$game_id,
+          !"2026_3_ATL_GB" %in% week3_poolhost_lines$game_id,
           !any(c("2026_15_CHI_BUF", "2026_15_SEA_PHI") %in% poolhost_schedule$game_id))
 
 compact <- paste(sprintf("%s at %s | %s",
-                         poolhost_default_lines$away_team,
-                         poolhost_default_lines$home_team,
-                         poolhost_default_lines$poolhost_home_line), collapse = "\n")
+                         week3_poolhost_lines$away_team,
+                         week3_poolhost_lines$home_team,
+                         week3_poolhost_lines$poolhost_home_line), collapse = "\n")
 parsed <- poolhost_parse_pasted_lines(compact, 2026L, 3L)
-stopifnot(identical(parsed$game_id, poolhost_default_lines$game_id),
-          identical(parsed$poolhost_home_line, poolhost_default_lines$poolhost_home_line))
+stopifnot(identical(parsed$game_id, week3_poolhost_lines$game_id),
+          identical(parsed$poolhost_home_line, week3_poolhost_lines$poolhost_home_line))
 
 display_name <- function(team) {
   names(poolhost_team_aliases)[match(team, poolhost_team_aliases)]
@@ -22,18 +23,18 @@ raw_page <- paste(c("Week 3 Picks", "Pick 15 games this week.",
                     unlist(Map(function(away, home, line) {
                       c("Sun. Sep. 27 - 01:00 PM", display_name(away),
                         display_name(home), as.character(line))
-                    }, poolhost_default_lines$away_team,
-                    poolhost_default_lines$home_team,
-                    poolhost_default_lines$poolhost_home_line))), collapse = "\n")
+                    }, week3_poolhost_lines$away_team,
+                    week3_poolhost_lines$home_team,
+                    week3_poolhost_lines$poolhost_home_line))), collapse = "\n")
 parsed_page <- poolhost_parse_pasted_lines(raw_page, 2026L, 3L)
-stopifnot(identical(parsed_page$game_id, poolhost_default_lines$game_id))
+stopifnot(identical(parsed_page$game_id, week3_poolhost_lines$game_id))
 inline_page <- paste(c("Week 3 Picks", "Pick 15 games this week.",
                        sprintf("Sun. Sep. 27  %s  %s  %s",
-                               vapply(poolhost_default_lines$away_team, display_name, character(1)),
-                               vapply(poolhost_default_lines$home_team, display_name, character(1)),
-                               poolhost_default_lines$poolhost_home_line)), collapse = "\n")
+                               vapply(week3_poolhost_lines$away_team, display_name, character(1)),
+                               vapply(week3_poolhost_lines$home_team, display_name, character(1)),
+                               week3_poolhost_lines$poolhost_home_line)), collapse = "\n")
 parsed_inline <- poolhost_parse_pasted_lines(inline_page, 2026L, 3L)
-stopifnot(identical(parsed_inline$game_id, poolhost_default_lines$game_id))
+stopifnot(identical(parsed_inline$game_id, week3_poolhost_lines$game_id))
 
 incomplete <- try(poolhost_parse_pasted_lines(sub("\\n[^\\n]+$", "", compact),
                                                2026L, 3L), silent = TRUE)
@@ -47,7 +48,7 @@ shiny::testServer(app$serverFuncSource(), {
   picks <- poolhost_results_state()
   if (nrow(picks) != 15L) print(poolhost_status_state())
   stopifnot(nrow(picks) == 15L,
-            identical(picks$game_id, poolhost_default_lines$game_id),
+            identical(picks$game_id, week3_poolhost_lines$game_id),
             all(is.finite(picks$avg_projection)),
             all(is.finite(picks$current_market_line)),
             all(is.finite(picks$line_difference)),

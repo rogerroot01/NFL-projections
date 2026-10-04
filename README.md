@@ -31,3 +31,12 @@ weeks are loaded by pasting that week's sheet into the tab. The app checks the
 week, every matchup, home/away orientation, and completeness against the model
 schedule before showing all-game consensus picks. It does not submit picks or
 export a card.
+
+The DraftKings Picks tab copies the selected week's loaded PoolHost spreads as
+editable starting values; it never changes the PoolHost card. Verify each
+home spread against the DraftKings contest, then build a five-pick shadow card
+and two alternates using the current consensus model settings. The tab offers
+minimum-edge, early-week, and specific spread exclusions, plus downloads for
+the top five, chosen final five, and all eligible plays. If the active week has
+no bundled PoolHost sheet, paste and load that week's sheet in PoolHost Picks
+first. The app does not fetch DraftKings contest lines or submit picks.

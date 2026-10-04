@@ -763,6 +763,30 @@ poolhost_parse_pasted_lines <- function(text, season, week) {
 }
 
 poolhost_default_lines <- poolhost_read_bundled_lines(circa_active_season, circa_active_week)
+
+draftkings_lines_from_poolhost <- function(rows) {
+  if (!nrow(rows)) return(tibble::tibble())
+  rows %>%
+    dplyr::transmute(
+      game_id, season, week, away_team, home_team,
+      draftkings_home_line = as.numeric(poolhost_home_line)
+    )
+}
+
+draftkings_validate_lines <- function(rows) {
+  if (!nrow(rows)) stop("Load the selected week's PoolHost lines first.")
+  if (any(!is.finite(rows$draftkings_home_line)) ||
+      any(abs(rows$draftkings_home_line * 2 - round(rows$draftkings_home_line * 2)) > 0.001)) {
+    stop("Every DraftKings home spread must be a finite half-point line.")
+  }
+  poolhost_validate_lines(
+    rows %>% dplyr::transmute(game_id, season, week, away_team, home_team,
+                             poolhost_home_line = draftkings_home_line),
+    unique(rows$season), unique(rows$week)
+  )
+  rows
+}
+
 nextgen_inventory <- if (nextgen_data_available) {
   readRDS(nextgen_inventory_rds) %>%
     mutate(path = file.path(getwd(), path))
@@ -1619,6 +1643,63 @@ ui <- fluidPage(
       )
     ),
     tabPanel(
+      "DraftKings Picks",
+      sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          fluidRow(
+            column(6, numericInput("dkp_season", "Season", value = circa_active_season,
+                                   min = 2024, max = 2100, step = 1)),
+            column(6, numericInput("dkp_week", "Week", value = circa_active_week,
+                                   min = 1, max = 22, step = 1))
+          ),
+          selectInput("dkp_source", "Consensus source",
+                      choices = c("Combined consensus" = "combined",
+                                  "Legacy consensus" = "legacy",
+                                  "Next-gen consensus" = "next_gen"),
+                      selected = "combined"),
+          actionButton("dkp_reset_poolhost", "Reset lines from PoolHost", class = "btn-default btn-block"),
+          helpText("Loads the PoolHost pick-sheet spreads as starting values. Change any home spread below to match DraftKings; your edits do not change PoolHost."),
+          tags$hr(),
+          sliderInput("dkp_min_edge", "Minimum DraftKings edge", min = 0, max = 10,
+                      value = 0, step = 0.5, post = " pts"),
+          checkboxInput("dkp_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
+          checkboxInput("dkp_no_minus_7_5_favorites", "No -7.5 favorites", value = TRUE),
+          checkboxInput("dkp_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
+          checkboxInput("dkp_no_early_week_games", "No early-week games", value = TRUE),
+          selectizeInput("dkp_skip_matchups", "Skip matchups", choices = NULL, multiple = TRUE),
+          actionButton("dkp_build", "Build DraftKings dashboard", class = "btn-primary btn-block"),
+          tags$hr(),
+          downloadButton("dkp_download_top_five", "Download top five", class = "btn-success btn-block"),
+          downloadButton("dkp_download_all", "Download all plays", class = "btn-default btn-block")
+        ),
+        mainPanel(
+          h4("DraftKings five-pick dashboard"),
+          p("PoolHost spreads are editable starting values, not verified DraftKings lines. Check each line against the DraftKings contest before using the card."),
+          verbatimTextOutput("dkp_status", placeholder = TRUE),
+          tags$details(
+            open = "open",
+            tags$summary("Edit DraftKings home spreads"),
+            uiOutput("dkp_line_inputs")
+          ),
+          tags$hr(),
+          h4("Top five shadow card"),
+          DTOutput("dkp_top_five"),
+          h4("Next two alternates"),
+          DTOutput("dkp_alternates"),
+          tags$hr(),
+          h4("Final five-pick card"),
+          checkboxGroupInput("dkp_final_picks", "Select five plays", choices = NULL),
+          textOutput("dkp_final_status"),
+          DTOutput("dkp_final_card"),
+          downloadButton("dkp_download_final", "Download final card", class = "btn-success"),
+          tags$hr(),
+          h4("All eligible DraftKings plays"),
+          DTOutput("dkp_all_plays")
+        )
+      )
+    ),
+    tabPanel(
       "Files",
       h4("Loaded app data files"),
       tableOutput("file_table")
@@ -1880,6 +1961,16 @@ server <- function(input, output, session) {
              " spreads. Build weekly picks when ready.")
     } else {
       "Open the current PoolHost pick sheet and paste its lines to build this week's picks."
+    }
+  )
+  dkp_lines_state <- reactiveVal(draftkings_lines_from_poolhost(poolhost_default_lines))
+  dkp_results_state <- reactiveVal(tibble())
+  dkp_status_state <- reactiveVal(
+    if (nrow(poolhost_default_lines)) {
+      paste0("Loaded ", nrow(poolhost_default_lines), " PoolHost Week ", circa_active_week,
+             " spreads as editable defaults. Verify against DraftKings before building.")
+    } else {
+      "Load this week's PoolHost pick-sheet text on the PoolHost Picks tab, then edit the spreads here."
     }
   )
 
@@ -3639,6 +3730,246 @@ server <- function(input, output, session) {
     datatable(display, rownames = FALSE,
               options = list(dom = "t", pageLength = max(1L, nrow(display))))
   })
+
+  observeEvent(poolhost_lines_state(), {
+    rows <- draftkings_lines_from_poolhost(poolhost_lines_state())
+    dkp_lines_state(rows)
+    dkp_results_state(tibble())
+    if (nrow(rows)) {
+      updateNumericInput(session, "dkp_season", value = first(rows$season))
+      updateNumericInput(session, "dkp_week", value = first(rows$week))
+      dkp_status_state(paste0("Loaded ", nrow(rows), " PoolHost Week ", first(rows$week),
+                              " spreads as editable defaults. Verify against DraftKings before building."))
+    } else {
+      dkp_status_state("Load this week's PoolHost pick-sheet text on the PoolHost Picks tab, then edit the spreads here.")
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(list(input$dkp_season, input$dkp_week), {
+    season <- suppressWarnings(as.integer(input$dkp_season))
+    week <- suppressWarnings(as.integer(input$dkp_week))
+    if (length(season) != 1L || length(week) != 1L || is.na(season) || is.na(week)) return()
+    if (!identical(as.integer(input$poolhost_season), season)) {
+      updateNumericInput(session, "poolhost_season", value = season)
+    }
+    if (!identical(as.integer(input$poolhost_week), week)) {
+      updateNumericInput(session, "poolhost_week", value = week)
+    }
+    dkp_results_state(tibble())
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$dkp_reset_poolhost, {
+    rows <- poolhost_lines_state()
+    if (!nrow(rows) || !all(rows$season == as.integer(input$dkp_season),
+                             rows$week == as.integer(input$dkp_week))) {
+      dkp_status_state("No PoolHost lines are loaded for the selected week. Load its pick sheet on PoolHost Picks first.")
+      return()
+    }
+    dkp_lines_state(draftkings_lines_from_poolhost(rows))
+    dkp_results_state(tibble())
+    dkp_status_state("DraftKings spreads reset to the PoolHost starting values. Verify and edit them before building.")
+  }, ignoreInit = TRUE)
+
+  output$dkp_line_inputs <- renderUI({
+    rows <- dkp_lines_state()
+    if (!nrow(rows)) return(helpText("No lines loaded. Paste the current week's PoolHost sheet on the PoolHost Picks tab."))
+    values <- seq(-30, 30, by = 0.5)
+    choices <- stats::setNames(as.character(values), format_spread_price(values))
+    tagList(lapply(seq_len(nrow(rows)), function(i) {
+      row <- rows[i, , drop = FALSE]
+      column(6, selectInput(
+        paste0("dkp_line_", row$game_id),
+        paste(row$away_team, "@", row$home_team, "— home spread"),
+        choices = choices, selected = as.character(row$draftkings_home_line)
+      ))
+    }))
+  })
+
+  observeEvent(dkp_lines_state(), {
+    rows <- dkp_lines_state()
+    choices <- if (nrow(rows)) stats::setNames(rows$game_id,
+                                               paste(rows$away_team, "@", rows$home_team)) else character()
+    selected <- intersect(input$dkp_skip_matchups %||% character(),
+                          if (nrow(rows)) rows$game_id else character())
+    updateSelectizeInput(session, "dkp_skip_matchups", choices = choices, selected = selected)
+  }, ignoreInit = FALSE)
+
+  observeEvent(input$dkp_source, {
+    dkp_results_state(tibble())
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$dkp_build, {
+    lines <- dkp_lines_state()
+    if (!nrow(lines)) {
+      dkp_status_state("Load the selected week's PoolHost lines before building DraftKings picks.")
+      return()
+    }
+    built <- tryCatch(withProgress(message = "Building DraftKings picks...", value = 0, {
+      if (!all(lines$season == as.integer(input$dkp_season),
+               lines$week == as.integer(input$dkp_week))) {
+        stop("Loaded lines are for a different week. Load the selected week's PoolHost sheet first.")
+      }
+      selected_lines <- vapply(lines$game_id, function(game_id) {
+        value <- input[[paste0("dkp_line_", game_id)]]
+        if (is.null(value) || length(value) != 1L) stop("A DraftKings line selector is not ready. Try Build again.")
+        suppressWarnings(as.numeric(value))
+      }, numeric(1))
+      lines$draftkings_home_line <- unname(selected_lines)
+      draftkings_validate_lines(lines)
+      selected_source <- input$dkp_source %||% "combined"
+      required <- if (identical(selected_source, "combined")) {
+        input$overall_cons_sources %||% c("legacy", "next_gen")
+      } else selected_source
+      contest_lines <- lines %>%
+        transmute(game_id, season, week, circa_away_line = -draftkings_home_line,
+                  circa_home_line = draftkings_home_line)
+      incProgress(0.15, detail = "Applying the edited contest lines")
+      sources <- bind_rows(
+        if ("legacy" %in% required) build_circa_legacy_source(contest_lines, include_all = TRUE) else tibble(),
+        if ("next_gen" %in% required) build_circa_nextgen_source(contest_lines, include_all = TRUE) else tibble()
+      )
+      combined <- combine_circa_sources(sources, selected_source, include_all = TRUE)
+      if (!setequal(combined$game_id, lines$game_id) || anyDuplicated(combined$game_id) ||
+          any(!is.finite(combined$avg_projection))) {
+        stop("Consensus projections are missing or invalid for: ",
+             paste(setdiff(lines$game_id, combined$game_id), collapse = ", "), ".")
+      }
+      incProgress(0.85, detail = "Ranking picks and alternatives")
+      list(lines = lines, results = combined)
+    }), error = function(e) {
+      dkp_status_state(paste("DraftKings build error:", conditionMessage(e)))
+      NULL
+    })
+    if (is.null(built)) {
+      dkp_results_state(tibble())
+      return()
+    }
+    dkp_lines_state(built$lines)
+    dkp_results_state(built$results)
+    dkp_status_state(paste0("Built ", nrow(built$results), " DraftKings matchups for Week ",
+                            first(built$lines$week), ". The top five and two alternates use the edited spreads."))
+  }, ignoreInit = TRUE)
+
+  dkp_ranked_rows <- reactive({
+    rows <- dkp_results_state()
+    if (!nrow(rows)) return(tibble())
+    minimum_edge <- suppressWarnings(as.numeric(input$dkp_min_edge %||% 0))
+    if (!is.finite(minimum_edge)) minimum_edge <- 0
+    rows %>%
+      mutate(
+        signed_edge = avg_projection - circa_market_line,
+        edge = abs(signed_edge),
+        pick_side = case_when(signed_edge > 0 ~ "Home", signed_edge < 0 ~ "Away", TRUE ~ NA_character_),
+        pick_team = ifelse(pick_side == "Home", home_team, away_team),
+        pick_line = ifelse(pick_side == "Home", circa_home_line, circa_away_line),
+        projected_line = ifelse(pick_side == "Home", -avg_projection, avg_projection),
+        model_market_pick_line = ifelse(pick_side == "Home", -current_market_line, current_market_line),
+        line_difference = pick_line - model_market_pick_line
+      ) %>%
+      filter(
+        is.finite(edge), edge >= minimum_edge, !is.na(pick_side),
+        !(isTRUE(input$dkp_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
+        !(isTRUE(input$dkp_no_minus_7_5_favorites) & dplyr::near(pick_line, -7.5)),
+        !(isTRUE(input$dkp_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5)),
+        !(isTRUE(input$dkp_no_early_week_games) & game_id %in% early_week_game_ids)
+      ) %>%
+      arrange(desc(edge), away_team, home_team) %>%
+      mutate(rank = row_number())
+  })
+
+  dkp_card_rows <- reactive({
+    rows <- dkp_ranked_rows()
+    if (!nrow(rows)) return(rows)
+    rows %>% filter(!game_id %in% (input$dkp_skip_matchups %||% character())) %>%
+      mutate(rank = row_number())
+  })
+
+  observeEvent(dkp_card_rows(), {
+    rows <- dkp_card_rows() %>% slice_head(n = 7)
+    if (!nrow(rows)) {
+      updateCheckboxGroupInput(session, "dkp_final_picks", choices = character(), selected = character())
+      return()
+    }
+    labels <- sprintf("%s @ %s: %s %s (%.1f-point edge)",
+                      rows$away_team, rows$home_team, rows$pick_team,
+                      format_spread_price(rows$pick_line), rows$edge)
+    selected <- intersect(isolate(input$dkp_final_picks) %||% character(), rows$game_id)
+    if (!length(selected)) selected <- head(rows$game_id, 5)
+    updateCheckboxGroupInput(session, "dkp_final_picks",
+                             choices = stats::setNames(rows$game_id, labels), selected = selected)
+  })
+
+  dkp_final_rows <- reactive({
+    dkp_card_rows() %>% filter(game_id %in% (input$dkp_final_picks %||% character()))
+  })
+
+  format_dkp_table <- function(rows) {
+    if (!nrow(rows)) return(tibble(Message = "Build DraftKings picks to see eligible plays."))
+    rows %>% transmute(
+      Rank = rank,
+      Matchup = paste(away_team, "@", home_team),
+      Pick = paste(pick_team, format_spread_price(pick_line)),
+      `Projected line` = paste(pick_team, format_spread_price(projected_line)),
+      `DraftKings edge` = sprintf("%.1f", edge),
+      `Model market line` = paste(pick_team, format_spread_price(model_market_pick_line)),
+      `DK − model` = sprintf("%+.1f", line_difference),
+      Agreement = ifelse(is.na(agree_pct), "-", paste0(sprintf("%.0f", 100 * agree_pct), "%")),
+      Models = models_used
+    )
+  }
+
+  output$dkp_status <- renderText(dkp_status_state())
+  output$dkp_top_five <- renderDT({
+    datatable(format_dkp_table(dkp_card_rows() %>% slice_head(n = 5)),
+              rownames = FALSE, options = list(dom = "t", pageLength = 5, scrollX = TRUE))
+  })
+  output$dkp_alternates <- renderDT({
+    rows <- dkp_card_rows() %>% slice(6:7)
+    display <- if (!nrow(rows)) tibble(Message = "No additional eligible plays.") else format_dkp_table(rows)
+    datatable(display, rownames = FALSE,
+              options = list(dom = "t", pageLength = 2, scrollX = TRUE))
+  })
+  output$dkp_final_status <- renderText({
+    n <- nrow(dkp_final_rows())
+    if (n == 5L) "Five plays selected." else sprintf("Select exactly five plays (%d selected).", n)
+  })
+  output$dkp_final_card <- renderDT({
+    rows <- dkp_final_rows()
+    display <- if (!nrow(rows)) tibble(Message = "Select plays from the top seven.") else format_dkp_table(rows)
+    datatable(display, rownames = FALSE,
+              options = list(dom = "t", pageLength = 5, scrollX = TRUE))
+  })
+  output$dkp_all_plays <- renderDT({
+    datatable(format_dkp_table(dkp_ranked_rows()), rownames = FALSE,
+              filter = "top", options = list(pageLength = 16, scrollX = TRUE))
+  })
+  output$dkp_download_top_five <- downloadHandler(
+    filename = function() paste0("draftkings_shadow_card_", input$dkp_season,
+                                 "_week_", input$dkp_week, ".csv"),
+    content = function(file) {
+      rows <- dkp_card_rows() %>% slice_head(n = 5)
+      req(nrow(rows) == 5L)
+      write_csv(rows, file)
+    }
+  )
+  output$dkp_download_final <- downloadHandler(
+    filename = function() paste0("draftkings_final_card_", input$dkp_season,
+                                 "_week_", input$dkp_week, ".csv"),
+    content = function(file) {
+      rows <- dkp_final_rows()
+      req(nrow(rows) == 5L)
+      write_csv(rows, file)
+    }
+  )
+  output$dkp_download_all <- downloadHandler(
+    filename = function() paste0("draftkings_all_plays_", input$dkp_season,
+                                 "_week_", input$dkp_week, ".csv"),
+    content = function(file) {
+      rows <- dkp_ranked_rows()
+      req(nrow(rows) > 0)
+      write_csv(rows, file)
+    }
+  )
 
   build_overall_consensus_rows <- function() {
     overall_consensus_status("Building combined consensus...")
