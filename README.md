@@ -18,10 +18,11 @@ preparation scripts and replay checks live in
 stop if an archived completed game is missing.
 
 For 2026, `data/compact_models.rds` (Legacy) comes from the standalone
-`Legacy_models/nflFast_Model_2026_Scores_week3` Step 12 export.
-`data/nextgen_compact_models.rds` comes from the active Next Gen pipeline.
-The converted pipeline's Legacy-equivalent output is not interchangeable with
-the standalone Legacy forecast; verify parity before ever substituting it.
+`Legacy_models/nflFast_Model_2026_Scores_week4` Step 12 export.
+`data/nextgen_compact_models.rds` comes from the active
+`Football_projection_pipeline_exclusion` Next Gen export. That pipeline also
+creates a separate Legacy-equivalent diagnostic export, but it does not replace
+the standalone Legacy forecast in this app.
 Run `tools/verify_canonical_bundles.R` from this repository before publishing;
 it checks exact source hashes and frozen past-game predictions.
 

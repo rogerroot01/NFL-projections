@@ -7,7 +7,7 @@ legacy_export <- file.path(
   "output", "ensemble_model_wrangler"
 )
 nextgen_export <- file.path(
-  football_root, "Football_projection_pipeline_exclusion_week4",
+  football_root, "Football_projection_pipeline_exclusion",
   "output", "ensemble_model_wrangler_nextgen", "data"
 )
 
