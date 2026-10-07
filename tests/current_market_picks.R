@@ -30,6 +30,20 @@ stopifnot(nrow(city_ambiguous) == 3L,
           setequal(city_ambiguous$game_id,
                    c("2026_4_NYJ_CHI", "2026_4_LAC_SEA", "2026_4_ARI_NYG")),
           identical(city_ambiguous$market_home_line, c(-3.5, -7, 2.5)))
+week5_sportsbook_text <- paste(readLines('tests/fixtures/current_market_week05_sportsbook.txt',
+                                        encoding = 'UTF-8', warn = FALSE), collapse = '\n')
+week5_sportsbook <- market_parse_pasted_lines(week5_sportsbook_text, 2026L, 5L)
+stopifnot(nrow(week5_sportsbook) == 15L,
+  identical(week5_sportsbook$away_team,
+    c('TB','PHI','CIN','NYG','HOU','CLE','CHI','LV','IND','MIN','DEN','DET','SF','BAL','BUF')),
+  identical(week5_sportsbook$home_team,
+    c('DAL','JAX','MIA','WAS','TEN','NYJ','GB','NE','PIT','NO','LAC','ARI','SEA','ATL','LA')),
+  identical(week5_sportsbook$market_home_line,
+    c(-8.5,-7,6.5,-3.5,7.5,-1.5,2.5,-3.5,-2.5,1.5,3.5,5.5,-2.5,-3.5,-3)))
+for (code_point in c(0x2212, 0x2012, 0x2013, 0x2014, 0xFF0D)) {
+  unicode_spread <- market_parse_pasted_lines(paste0('SF at SEA | ', intToUtf8(code_point), '2.5'), 2026L, 5L)
+  stopifnot(unicode_spread$market_home_line[[1L]] == -2.5)
+}
 stopifnot(inherits(try(market_parse_pasted_lines("CLE at PIT | -2.5", 2026L, 4L),
                       silent = TRUE), "try-error"))
 stopifnot(inherits(try(market_parse_pasted_lines("PIT at CLE | +2.25", 2026L, 4L),
@@ -67,6 +81,13 @@ shiny::testServer(app$serverFuncSource(), {
   partial <- market_compare_rows(picks, "pick_side", "poolhost_pick_line")
   stopifnot(sum(is.finite(partial$contest_market_difference)) == 1L,
             sum(is.na(partial$contest_market_difference)) == 14L)
+  session$setInputs(market_week = 5L, market_paste = week5_sportsbook_text, market_load = 3L)
+  stopifnot(nrow(market_lines_state()) == 15L,
+    identical(market_lines_state(), week5_sportsbook),
+    grepl('Loaded 15 current market spreads for Week 5', market_status_state(), fixed = TRUE))
+  session$setInputs(market_paste = 'SF at SEA | -2.25', market_load = 4L)
+  stopifnot(identical(market_lines_state(), week5_sportsbook),
+    grepl('previous snapshot retained', market_status_state(), fixed = TRUE))
 })
 
 cat("CURRENT_MARKET_PICKS_OK\n")

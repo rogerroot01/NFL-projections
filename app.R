@@ -789,7 +789,12 @@ market_make_lines <- function(away, home, home_line, season, week) {
 }
 
 market_parse_pasted_lines <- function(text, season, week) {
-  text <- gsub("−", "-", gsub("\r", "", as.character(text), fixed = TRUE), fixed = TRUE)
+  text <- gsub("\r", "", as.character(text), fixed = TRUE)
+  # Use code points rather than non-ASCII source literals so sportsbook minus
+  # signs normalize consistently on Windows and the hosted Linux app.
+  for (code_point in c(0x2212, 0x2012, 0x2013, 0x2014, 0xFF0D)) {
+    text <- gsub(intToUtf8(code_point), "-", text, fixed = TRUE)
+  }
   printed_week <- stringr::str_match(text, "(?i)Week\\s+([0-9]{1,2})")
   if (!is.na(printed_week[1, 2]) && as.integer(printed_week[1, 2]) != as.integer(week)) {
     stop("The pasted market lines are labeled for a different week.")
@@ -815,7 +820,7 @@ market_parse_pasted_lines <- function(text, season, week) {
   # Also accept the multiline sportsbook copy format: two team lines separated
   # by "at", followed by away/home spreads and their prices/totals. Require
   # the opposite spread later in the same game block to avoid guessing a line.
-  team_token <- stringr::str_match(lines, "^([A-Z]{2,3})\\s+[A-Za-z]")[, 2]
+  team_token <- stringr::str_match(lines, "^([A-Z]{2,3})\\s+[A-Za-z0-9]")[, 2]
   # Sportsbook copy uses city abbreviations here, not our game identifiers.
   # NY and LA must be resolved by the team name before schedule validation.
   team_token[team_token == "NY" & grepl("(?i)^NY\\s+Jets\\b", lines)] <- "NYJ"
