@@ -47,6 +47,32 @@ current_lines <- if (file.exists(current_lines_path)) {
   )
 }
 
+# The weekly 2026 market control is the Tuesday early-line source. The older
+# early_lines.csv contains only the 2024-25 historical early-line snapshots.
+early_lines <- bind_rows(
+  early_lines %>% filter(!str_detect(game_id, "^2026_")),
+  current_lines %>% transmute(
+    game_id, early_spread_line = current_spread_line,
+    early_total_line = current_total_line
+  )
+) %>% distinct(game_id, .keep_all = TRUE)
+
+apply_backtest_lines <- function(base, line_source = "closing") {
+  if (!identical(line_source, "early")) return(base)
+  idx <- match(canonical_game_id(base$game_id), early_lines$game_id)
+  # Missing early snapshots must not silently become closing-line backtests.
+  base$spread_line <- early_lines$early_spread_line[idx]
+  base$total_line <- early_lines$early_total_line[idx]
+  if ("home_implied" %in% names(base)) {
+    base$home_implied <- (base$total_line + base$spread_line) / 2
+  }
+  if ("away_implied" %in% names(base)) {
+    base$away_implied <- (base$total_line - base$spread_line) / 2
+  }
+  if ("line" %in% names(base)) base$line <- NA_real_
+  base
+}
+
 legacy_pregame_lines_path <- file.path(app_data_dir, "legacy_pregame_lines_2026.csv")
 if (!file.exists(legacy_pregame_lines_path)) {
   stop("Archived 2026 Legacy pregame lines are missing.")
@@ -893,6 +919,63 @@ nextgen_inventory <- if (nextgen_data_available) {
   )
 }
 nextgen_compact_models <- if (nextgen_data_available) readRDS(nextgen_compact_models_rds) else list()
+
+# Some Billy exports carry frozen forecasts without their final scores. Resolve
+# completed-game facts from scored pipeline exports, independently of forecasts
+# and the weekly market controls, so every model uses the same game outcome.
+build_pipeline_game_results <- function(models) {
+  facts <- purrr::map_dfr(models, function(df) {
+    needed <- c("game_id", "home_score", "away_score", "spread_line", "total_line")
+    if (!all(needed %in% names(df))) return(tibble())
+    df %>% transmute(
+      game_id = canonical_game_id(game_id),
+      home_score = suppressWarnings(as.numeric(home_score)),
+      away_score = suppressWarnings(as.numeric(away_score)),
+      spread_line = suppressWarnings(as.numeric(spread_line)),
+      total_line = suppressWarnings(as.numeric(total_line))
+    ) %>% filter(!is.na(game_id), is.finite(home_score), is.finite(away_score))
+  })
+  if (nrow(facts) == 0L) return(tibble(
+    game_id = character(), home_score = double(), away_score = double(),
+    spread_line = double(), total_line = double()
+  ))
+  conflicts <- facts %>% group_by(game_id) %>% summarise(
+    across(c(home_score, away_score, spread_line, total_line),
+           ~ n_distinct(.x[is.finite(.x)])), .groups = "drop"
+  ) %>% filter(if_any(-game_id, ~ .x > 1L))
+  if (nrow(conflicts) > 0L) {
+    stop("Pipeline completed-game facts disagree for: ",
+         paste(head(conflicts$game_id, 5L), collapse = ", "))
+  }
+  facts %>% group_by(game_id) %>% summarise(
+    across(c(home_score, away_score, spread_line, total_line), function(x) {
+      values <- x[is.finite(x)]
+      if (length(values)) values[[1L]] else NA_real_
+    }), .groups = "drop"
+  )
+}
+pipeline_game_results <- build_pipeline_game_results(c(compact_models, nextgen_compact_models))
+
+apply_pipeline_game_results <- function(df) {
+  if (!"game_id" %in% names(df)) return(df)
+  df$game_id <- canonical_game_id(df$game_id)
+  idx <- match(df$game_id, pipeline_game_results$game_id)
+  for (col in c("home_score", "away_score", "spread_line", "total_line")) {
+    if (!col %in% names(df)) df[[col]] <- NA_real_
+    value <- pipeline_game_results[[col]][idx]
+    use <- !is.na(idx) & is.finite(value)
+    df[[col]][use] <- value[use]
+  }
+  implied_rows <- !is.na(idx) & is.finite(df$total_line) & is.finite(df$spread_line)
+  if ("home_implied" %in% names(df)) {
+    df$home_implied[implied_rows] <- (df$total_line[implied_rows] + df$spread_line[implied_rows]) / 2
+  }
+  if ("away_implied" %in% names(df)) {
+    df$away_implied[implied_rows] <- (df$total_line[implied_rows] - df$spread_line[implied_rows]) / 2
+  }
+  df
+}
+
 nextgen_backtest_seasons <- sort(unique(nextgen_inventory$season[nextgen_inventory$sample == "test"]))
 nextgen_future_seasons <- sort(unique(nextgen_inventory$season[nextgen_inventory$sample == "val"]))
 nextgen_backtest_season_choices <- c(
@@ -943,7 +1026,7 @@ read_model_file <- function(path) {
   nm <- basename(path)
   if (nm %in% names(compact_models)) {
     return(apply_legacy_pregame_lines(
-      apply_current_lines(compact_models[[nm]], preserve_completed = TRUE)
+      apply_current_lines(apply_pipeline_game_results(compact_models[[nm]]), preserve_completed = TRUE)
     ))
   }
   stop("Compact prepared data is missing for ", nm, ". Run prepare_data.R locally and deploy data/compact_models.rds plus data/model_inventory.rds.")
@@ -1424,6 +1507,7 @@ ui <- fluidPage(
             choices = c("Closing lines" = "closing", "Early lines" = "early"),
             selected = "closing"
           ),
+          helpText("Closing uses saved game lines. Early uses weekly market snapshots. Games without early lines are omitted in Early mode."),
           selectInput(
             "cons_injury_source",
             "Projection injury adjustment",
@@ -1501,6 +1585,7 @@ ui <- fluidPage(
             choices = c("Closing lines" = "closing", "Early lines" = "early"),
             selected = "closing"
           ),
+          helpText("Closing uses saved game lines. Early uses weekly market snapshots. Games without early lines are omitted in Early mode."),
           selectInput(
             "ng_cons_injury_source",
             "Projection injury adjustment",
@@ -2293,7 +2378,7 @@ server <- function(input, output, session) {
 
   read_nextgen_model_file <- function(path) {
     nm <- basename(path)
-    if (nm %in% names(nextgen_compact_models)) return(apply_current_lines(nextgen_compact_models[[nm]], preserve_completed = TRUE))
+    if (nm %in% names(nextgen_compact_models)) return(apply_current_lines(apply_pipeline_game_results(nextgen_compact_models[[nm]]), preserve_completed = TRUE))
     stop("Next-gen compact prepared data is missing for ", nm, ". Run prepare_data_nextgen.R and deploy data/nextgen_compact_models.rds plus data/nextgen_model_inventory.rds.")
   }
 
@@ -2510,15 +2595,7 @@ server <- function(input, output, session) {
         actual_market_result = get_line(df, "actual_market_result"),
         actual_push = if ("actual_push" %in% names(df)) as.logical(df[["actual_push"]]) else rep(FALSE, nrow(df))
       )
-    if (identical(line_source, "early") && nrow(early_lines) > 0) {
-      base <- base %>%
-        left_join(early_lines, by = "game_id") %>%
-        mutate(
-          spread_line = coalesce(early_spread_line, spread_line),
-          total_line = coalesce(early_total_line, total_line)
-        ) %>%
-        select(-early_spread_line, -early_total_line)
-    }
+    base <- apply_backtest_lines(base, line_source)
     base <- apply_projection_adjustments(base, injury_source, apply_amortization)
 
     out <- map_dfr(cols, function(col) {
@@ -2559,8 +2636,8 @@ server <- function(input, output, session) {
       actual_side <- dplyr::case_when(
         !is.na(actual) & actual > line ~ 1,
         !is.na(actual) & actual < line ~ -1,
-        is.na(actual) & !is.na(base$actual_market_result) & !base$actual_push & base$actual_market_result == 1 ~ 1,
-        is.na(actual) & !is.na(base$actual_market_result) & !base$actual_push & base$actual_market_result == 0 ~ -1,
+        !identical(line_source, "early") & is.na(actual) & !is.na(base$actual_market_result) & !base$actual_push & base$actual_market_result == 1 ~ 1,
+        !identical(line_source, "early") & is.na(actual) & !is.na(base$actual_market_result) & !base$actual_push & base$actual_market_result == 0 ~ -1,
         TRUE ~ NA_real_
       )
 
@@ -2840,15 +2917,7 @@ server <- function(input, output, session) {
         spread_line = get_line(df, "spread_line"),
         total_line = get_line(df, "total_line")
       )
-    if (identical(line_source, "early") && nrow(early_lines) > 0) {
-      base <- base %>%
-        left_join(early_lines, by = "game_id") %>%
-        mutate(
-          spread_line = coalesce(early_spread_line, spread_line),
-          total_line = coalesce(early_total_line, total_line)
-        ) %>%
-        select(-early_spread_line, -early_total_line)
-    }
+    base <- apply_backtest_lines(base, line_source)
     base <- apply_projection_adjustments(base, injury_source, apply_amortization)
 
     out <- map_dfr(cols, function(col) {
@@ -2924,7 +2993,7 @@ server <- function(input, output, session) {
     })
 
     out %>%
-      filter(!is.na(projection)) %>%
+      filter(!is.na(projection), !is.na(market_line)) %>%
       filter(!is.na(model_win_pct), model_win_pct >= min_win_pct)
   }
 
