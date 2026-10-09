@@ -339,6 +339,8 @@ circa_parse_ocr_spread <- function(token) {
     TRUE ~ NA_real_
   )
   if (is.na(sign)) return(NA_real_)
+  numeric_token <- str_extract(upper, "^[+-][0-9]+\\.[0-9]+$")
+  if (!is.na(numeric_token)) return(as.numeric(numeric_token))
 
   digits <- str_extract(upper, "[0-9]+")
   whole <- suppressWarnings(as.numeric(digits))
@@ -447,25 +449,40 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
 
   team_rows <- words %>%
     filter(key %in% names(circa_team_aliases)) %>%
-    transmute(team = unname(circa_team_aliases[key]), y, side = ifelse(x_ratio < 0.5, "left", "right")) %>%
+    transmute(team = unname(circa_team_aliases[key]), x2, y1, y2, y,
+              side = ifelse(x_ratio < 0.5, "left", "right")) %>%
     distinct(team, .keep_all = TRUE)
   side_counts <- table(team_rows$side)
   if (nrow(team_rows) < 2 || nrow(team_rows) %% 2 != 0 || any(side_counts %% 2 != 0) || n_distinct(team_rows$team) != nrow(team_rows)) {
     stop("The PDF import did not find a valid set of paired NFL matchups. Upload the official one-page Circa sheet or use CSV.")
   }
 
+  # Sheets can place their odds at different horizontal positions. Read the
+  # numeric portion of each team's row instead of relying on fixed columns or
+  # whole-page OCR, which loses half-point glyphs and confuses 7 with 1.
+  odds_engine <- tesseract::tesseract(options = list(
+    tessedit_pageseg_mode = 7,
+    tessedit_char_whitelist = "0123456789+-½.%"
+  ))
   odds_words <- words %>%
-    filter(x_ratio > 0.35, x_ratio < 0.86) %>%
-    mutate(parsed_line = map_dbl(word, circa_parse_ocr_spread))
-
-  attach_line <- function(team, y, side) {
-    candidates <- odds_words %>%
-      filter(abs(.data$y - !!y) <= 36) %>%
-      filter(if (side == "left") x_ratio > 0.36 & x_ratio < 0.48 else x_ratio > 0.74 & x_ratio < 0.86) %>%
-      arrange(abs(.data$y - !!y))
-    if (nrow(candidates) == 0) return(NA_real_)
-    non_missing <- candidates$parsed_line[!is.na(candidates$parsed_line)]
-    if (length(non_missing) == 0) NA_real_ else non_missing[[1L]]
+    filter(y >= min(team_rows$y) - 36, y <= max(team_rows$y) + 36,
+           (x_ratio > 0.35 & x_ratio < 0.5) | x_ratio > 0.74) %>%
+    mutate(parsed_line = map_dbl(word, circa_parse_ocr_spread),
+           side = ifelse(x_ratio < 0.5, "left", "right")) %>%
+    filter(is.finite(parsed_line))
+  attach_line <- function(x2, y1, y2, side) {
+    column <- odds_words[odds_words$side == side, , drop = FALSE]
+    if (!nrow(column)) return(NA_real_)
+    # Learn the odds column from all rows, including intact glyphs elsewhere
+    # on the sheet. Crop out the next column's date/time on older templates.
+    right_edge <- max(column$x2) + 10
+    left_edge <- max(x2 + 10, min(column$x1) - 10)
+    crop <- magick::image_crop(image, magick::geometry_area(
+      width = right_edge - left_edge, height = y2 - y1 + 20,
+      x_off = left_edge, y_off = max(0, y1 - 10)
+    ))
+    token <- trimws(tesseract::ocr(crop, engine = odds_engine))
+    circa_parse_ocr_spread(token)
   }
 
   ordered <- team_rows %>%
@@ -474,7 +491,7 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
     mutate(row_in_column = row_number(), game_in_column = ceiling(row_in_column / 2), team_role = ifelse(row_in_column %% 2 == 1, "away", "home")) %>%
     ungroup() %>%
     rowwise() %>%
-    mutate(parsed_line = attach_line(team, y, side)) %>%
+    mutate(parsed_line = attach_line(x2, y1, y2, side)) %>%
     ungroup()
 
   games <- ordered %>%
@@ -486,6 +503,8 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
       parsed_home = parsed_line[team_role == "home"][[1L]],
       .groups = "drop"
     ) %>%
+    # A missing half-point glyph can be recovered from the opposing team's
+    # printed line. Reject larger differences instead of guessing the number.
     mutate(ocr_pair_conflict = !is.na(parsed_away) & !is.na(parsed_home) & abs(parsed_away + parsed_home) > 0.51)
   if (any(games$ocr_pair_conflict)) {
     conflicts <- games %>% filter(ocr_pair_conflict)
@@ -792,14 +811,15 @@ poolhost_default_lines <- poolhost_read_bundled_lines(circa_active_season, circa
 
 # A user-supplied market snapshot is deliberately separate from the model's
 # bundled lines. Never label a bundled Tuesday/Wednesday line as current odds.
-market_make_lines <- function(away, home, home_line, season, week) {
+market_make_lines <- function(away, home, home_line, season, week, total_line = NA_real_) {
   season <- as.integer(season)
   week <- as.integer(week)
   rows <- tibble::tibble(
     season = season, week = week,
     away_team = poolhost_normalize_team(away),
     home_team = poolhost_normalize_team(home),
-    market_home_line = suppressWarnings(as.numeric(ifelse(toupper(trimws(as.character(home_line))) == "PK", "0", home_line)))
+    market_home_line = suppressWarnings(as.numeric(ifelse(toupper(trimws(as.character(home_line))) == "PK", "0", home_line))),
+    market_total_line = suppressWarnings(as.numeric(total_line))
   ) %>%
     mutate(game_id = paste(season, week, away_team, home_team, sep = "_"))
   expected <- model_game_dates$game_id[
@@ -808,6 +828,8 @@ market_make_lines <- function(away, home, home_line, season, week) {
   if (!nrow(rows) || !length(expected) || anyNA(rows[c("away_team", "home_team", "market_home_line")]) ||
       any(!is.finite(rows$market_home_line)) ||
       any(abs(rows$market_home_line * 2 - round(rows$market_home_line * 2)) > 0.001) ||
+      any(!is.na(rows$market_total_line) & (!is.finite(rows$market_total_line) |
+          rows$market_total_line <= 0 | rows$market_total_line > 100)) ||
       anyDuplicated(rows$game_id) || any(!rows$game_id %in% expected)) {
     stop("Market lines must have unique scheduled matchups and valid home-team half-point spreads for the selected week.")
   }
@@ -831,16 +853,16 @@ market_parse_pasted_lines <- function(text, season, week) {
   if (!length(lines)) stop("Paste market lines first.")
   parsed <- stringr::str_match(
     lines,
-    "(?i)^([A-Z]{2,3})\\s+(?:at|@)\\s+([A-Z]{2,3})\\s*(?:\\||,|:)\\s*([+-]?[0-9]+(?:\\.[0-9]+)?|PK)$"
+    "(?i)^([A-Z]{2,3})\\s+(?:at|@)\\s+([A-Z]{2,3})\\s*(?:\\||,|:)\\s*([+-]?[0-9]+(?:\\.[0-9]+)?|PK)(?:\\s*\\|\\s*([0-9]+(?:\\.[0-9]+)?))?$"
   )
   csv <- stringr::str_match(
     lines,
-    "(?i)^([A-Z]{2,3})\\s*,\\s*([A-Z]{2,3})\\s*,\\s*([+-]?[0-9]+(?:\\.[0-9]+)?|PK)$"
+    "(?i)^([A-Z]{2,3})\\s*,\\s*([A-Z]{2,3})\\s*,\\s*([+-]?[0-9]+(?:\\.[0-9]+)?|PK)(?:\\s*,\\s*([0-9]+(?:\\.[0-9]+)?))?$"
   )
   use_csv <- is.na(parsed[, 1]) & !is.na(csv[, 1])
   parsed[use_csv, ] <- csv[use_csv, ]
   if (!anyNA(parsed[, 1])) {
-    return(market_make_lines(parsed[, 2], parsed[, 3], parsed[, 4], season, week))
+    return(market_make_lines(parsed[, 2], parsed[, 3], parsed[, 4], season, week, parsed[, 5]))
   }
 
   # Also accept the multiline sportsbook copy format: two team lines separated
@@ -873,12 +895,22 @@ market_parse_pasted_lines <- function(text, season, week) {
     away_spread <- spread_candidates[[1L]]
     if (length(spread_candidates) < 2L ||
         !any(abs(spread_candidates[-1L] + away_spread) < 0.001)) return(tibble())
-    tibble(away = away, home = home, home_line = -away_spread)
+    total_tokens <- stringr::str_match(block, "(?i)^(?:O|U)(?:VER|NDER)?\\s*([0-9]+(?:\\.[0-9]+)?)?$")
+    total_rows <- which(!is.na(total_tokens[, 1]))
+    totals <- vapply(total_rows, function(index) {
+      value <- total_tokens[index, 2]
+      if (is.na(value) && index < length(block)) value <- block[index + 1L]
+      suppressWarnings(as.numeric(value))
+    }, numeric(1))
+    totals <- unique(totals[is.finite(totals)])
+    if (length(totals) > 1L) stop("The copied over/under totals disagree for ", away, " at ", home, ".")
+    tibble(away = away, home = home, home_line = -away_spread,
+           total_line = if (length(totals)) totals[[1L]] else NA_real_)
   })
   if (nrow(sportsbook) != length(at_rows) || !nrow(sportsbook)) {
     stop("Could not safely identify every matchup and both spreads. Paste AWAY at HOME | HOME_SPREAD (for example, PIT at CLE | +2.5), or AWAY,HOME,HOME_SPREAD.")
   }
-  market_make_lines(sportsbook$away, sportsbook$home, sportsbook$home_line, season, week)
+  market_make_lines(sportsbook$away, sportsbook$home, sportsbook$home_line, season, week, sportsbook$total_line)
 }
 
 draftkings_lines_from_poolhost <- function(rows) {
@@ -1227,6 +1259,15 @@ nextgen_family_tab_ui <- function(id, label) {
         verbatimTextOutput(paste0(id, "_summary"), placeholder = TRUE)
       )
     )
+  )
+}
+
+market_comparison_ui <- function(id) {
+  tagList(
+    p("Compare the listed line with your Current Market snapshot. Spread differences use the picked team's line; a positive difference gives you a better contest spread."),
+    textOutput(paste0(id, "_market_status")),
+    actionButton(paste0(id, "_open_market"), "Load / update current market", class = "btn-default"),
+    tags$hr()
   )
 }
 
@@ -1696,6 +1737,7 @@ ui <- fluidPage(
         ),
         mainPanel(
           h4("Weekly dashboard"),
+          market_comparison_ui("dashboard"),
           tableOutput("dashboard_summary"),
           tags$hr(),
           h4("Against the spread"),
@@ -1727,14 +1769,14 @@ ui <- fluidPage(
                                    min = 1, max = 22, step = 1))
           ),
           textAreaInput("market_paste", "Paste current market spreads",
-                        placeholder = "AWAY at HOME | HOME_SPREAD\nPIT at CLE | +2.5\nIND at WAS | +3.5",
+                        placeholder = "AWAY at HOME | HOME_SPREAD | TOTAL (optional)\nPIT at CLE | +2.5 | 38.5\nIND at WAS | +3.5",
                         rows = 12),
           actionButton("market_load", "Use pasted market lines", class = "btn-primary btn-block"),
-          helpText("Paste copied multiline DraftKings odds, or use one game per line with the home team's spread; PK is accepted. You may paste only the games you need. These lines are a manual snapshot, not a live odds feed.")
+          helpText("Paste copied multiline DraftKings odds, or one game per line with the home team's spread and an optional total; PK is accepted. This snapshot feeds the consensus, Circa, PoolHost and DraftKings comparisons. You may paste only the games you need.")
         ),
         mainPanel(
           h4("Current market comparison lines"),
-          p("Paste a fresh market snapshot once per session. Circa, PoolHost, and DraftKings Picks all use it for their contest-versus-current comparisons. Positive contest minus current means the contest offers a better spread on that pick; positive current-market edge means the model still favors that pick at the supplied market spread. Contest-line edges and projections are unchanged."),
+          p("Paste a fresh market snapshot once per session. The consensus Dashboard, Circa, PoolHost, and DraftKings Picks all use it for their contest-versus-current comparisons. Positive contest minus current means the contest offers a better spread on that pick; positive current-market edge means the model still favors that pick at the supplied market spread. Contest-line edges and projections are unchanged."),
           verbatimTextOutput("market_status", placeholder = TRUE),
           DTOutput("market_lines_preview")
         )
@@ -1764,7 +1806,7 @@ ui <- fluidPage(
             accept = c(".pdf", ".csv")
           ),
           actionButton("circa_use_default", "Use bundled selected-week lines", class = "btn-default btn-block"),
-          helpText("The Circa week follows the Dashboard week. The app checks Circa's official PDF when the selected week changes; Refresh retries, and upload remains a fallback."),
+          helpText("The Circa week follows the Dashboard week. Verified bundled lines load when available; Refresh checks the official PDF, and PDF/CSV upload is a fallback."),
           tags$hr(),
           selectInput(
             "circa_source",
@@ -1786,14 +1828,14 @@ ui <- fluidPage(
         mainPanel(
           h4("Circa Sports Million VIII"),
           p("Official contest spreads are fixed for the week. The dashboard reapplies the active consensus projections to those stale lines."),
-          verbatimTextOutput("circa_status", placeholder = TRUE),
+          uiOutput("circa_status_notice"),
+          market_comparison_ui("circa"),
           tags$hr(),
           h4("Top five shadow card"),
           DTOutput("circa_top_five"),
           h4("Next two alternates"),
           DTOutput("circa_alternates"),
           h4("Largest Circa-versus-current market gaps"),
-          textOutput("circa_market_status"),
           DTOutput("circa_market_gaps"),
           tags$hr(),
           h4("Final five-pick card"),
@@ -1838,9 +1880,9 @@ ui <- fluidPage(
           h4("PoolHost weekly picks"),
           p("Every Sunday and Monday game on the selected pick sheet. Contest spreads are compared with your manually loaded Current Market snapshot."),
           verbatimTextOutput("poolhost_status", placeholder = TRUE),
+          market_comparison_ui("poolhost"),
           DTOutput("poolhost_picks"),
           h4("Largest PoolHost-versus-current market gaps"),
-          textOutput("poolhost_market_status"),
           DTOutput("poolhost_market_gaps"),
           h4("Monday night tiebreaker"),
           DTOutput("poolhost_tiebreakers"),
@@ -1884,6 +1926,7 @@ ui <- fluidPage(
           h4("DraftKings five-pick dashboard"),
           p("PoolHost spreads are editable starting values, not verified DraftKings lines. Check each line against the DraftKings contest before using the card."),
           verbatimTextOutput("dkp_status", placeholder = TRUE),
+          market_comparison_ui("dkp"),
           tags$details(
             open = "open",
             tags$summary("Edit DraftKings home spreads"),
@@ -1895,7 +1938,6 @@ ui <- fluidPage(
           h4("Next two alternates"),
           DTOutput("dkp_alternates"),
           h4("Largest DraftKings-versus-current market gaps"),
-          textOutput("dkp_market_status"),
           DTOutput("dkp_market_gaps"),
           tags$hr(),
           h4("Final five-pick card"),
@@ -2204,7 +2246,7 @@ server <- function(input, output, session) {
 
   market_snapshot_note <- reactive({
     lines <- market_lines_state()
-    if (!nrow(lines)) return("No current market lines loaded; comparisons are blank, not stale bundled odds.")
+    if (!nrow(lines)) return("Load current lines on the Current Market tab to see comparisons.")
     paste0("Manual current market snapshot: ", nrow(lines), " Week ", first(lines$week),
            " games, loaded ", market_loaded_at(), ". Missing games show a blank comparison.")
   })
@@ -2212,11 +2254,23 @@ server <- function(input, output, session) {
   output$circa_market_status <- renderText(market_snapshot_note())
   output$poolhost_market_status <- renderText(market_snapshot_note())
   output$dkp_market_status <- renderText(market_snapshot_note())
+  output$dashboard_market_status <- renderText(market_snapshot_note())
+  for (panel in c("dashboard", "circa", "poolhost", "dkp")) local({
+    panel_id <- panel
+    observeEvent(input[[paste0(panel_id, "_open_market")]], {
+      season <- input[[paste0(panel_id, "_season")]] %||% circa_active_season
+      week <- input[[paste0(panel_id, "_week")]] %||% circa_active_week
+      updateNumericInput(session, "market_season", value = as.integer(season))
+      updateNumericInput(session, "market_week", value = as.integer(week))
+      updateTabsetPanel(session, "main_tabs", selected = "Current Market")
+    }, ignoreInit = TRUE)
+  })
   output$market_lines_preview <- renderDT({
     lines <- market_lines_state()
     display <- if (!nrow(lines)) tibble(Message = "No current market spreads loaded.") else
       lines %>% transmute(Matchup = paste(away_team, "@", home_team),
-                          `Current home spread` = format_spread_price(market_home_line))
+                          `Current home spread` = format_spread_price(market_home_line),
+                          `Current total` = ifelse(is.na(market_total_line), "-", sprintf("%.1f", market_total_line)))
     datatable(display, rownames = FALSE,
               options = list(dom = "t", pageLength = max(1L, nrow(display)), scrollX = TRUE))
   })
@@ -3488,6 +3542,7 @@ server <- function(input, output, session) {
   }
 
   set_circa_lines <- function(rows, source_note) {
+    removeNotification("circa-import-error")
     circa_lines_state(rows)
     circa_results_state(tibble())
     circa_source_url_state(source_note)
@@ -3495,6 +3550,14 @@ server <- function(input, output, session) {
       "Loaded ", nrow(rows), " Circa matchups for ", first(rows$season),
       " Week ", first(rows$week), ". Click Build Circa dashboard."
     ))
+  }
+
+  reject_circa_lines <- function(message) {
+    circa_lines_state(tibble())
+    circa_results_state(tibble())
+    circa_source_url_state("")
+    circa_status_state(message)
+    showNotification(message, type = "error", duration = NULL, id = "circa-import-error")
   }
 
   refresh_circa_week <- function(season, week) {
@@ -3506,7 +3569,7 @@ server <- function(input, output, session) {
         download_circa_week_from_web(season, week)
       ),
       error = function(e) {
-        circa_status_state(paste("Circa web refresh error:", conditionMessage(e)))
+        reject_circa_lines(paste("Circa web refresh error:", conditionMessage(e)))
         NULL
       }
     )
@@ -3560,7 +3623,7 @@ server <- function(input, output, session) {
         )
       ),
       error = function(e) {
-        circa_status_state(paste("Circa upload error:", conditionMessage(e)))
+        reject_circa_lines(paste("Circa upload error:", conditionMessage(e)))
         NULL
       }
     )
@@ -3586,6 +3649,7 @@ server <- function(input, output, session) {
       if (!str_detect(circa_status_state(), "error")) {
         circa_status_state(paste0("No Circa lines are loaded for ", input$circa_season, " Week ", input$circa_week, ". Refresh or upload the official sheet."))
       }
+      showNotification(circa_status_state(), type = "error", duration = NULL, id = "circa-import-error")
       circa_results_state(tibble())
       return()
     }
@@ -3721,8 +3785,10 @@ server <- function(input, output, session) {
     rows <- circa_final_rows()
     display <- if (!nrow(rows)) tibble(Message = "Select plays from the list above.") else format_circa_table(rows)
     datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 5, scrollX = TRUE))
-  })
+  }, server = FALSE)
 
+  # Weekly cards are small: send their rows with the render, avoiding a second
+  # DataTables request that can fail while a card is rebuilt.
   format_circa_table <- function(rows) {
     if (nrow(rows) == 0) return(tibble(Message = "Build the Circa dashboard to rank the uploaded contest lines."))
     rows <- market_compare_rows(rows, "circa_pick", "pick_line", "projected_line")
@@ -3731,10 +3797,10 @@ server <- function(input, output, session) {
         Rank = rank,
         Matchup = paste(away_team, "@", home_team),
         Pick = paste(pick_team, format_spread_price(pick_line)),
-        `Projected line` = paste(pick_team, format_spread_price(projected_line)),
-        `Circa edge` = sprintf("%.1f", circa_edge),
         `Current market line` = paste(pick_team, format_spread_price(current_market_pick_line)),
         `Circa − current` = ifelse(is.na(contest_market_difference), "-", sprintf("%+.1f", contest_market_difference)),
+        `Projected line` = paste(pick_team, format_spread_price(projected_line)),
+        `Circa edge` = sprintf("%.1f", circa_edge),
         `Current market edge` = ifelse(is.na(current_market_edge), "-", sprintf("%+.1f", current_market_edge)),
         Agreement = ifelse(is.na(agree_pct), "-", paste0(sprintf("%.0f", 100 * agree_pct), "%")),
         Models = models_used
@@ -3744,6 +3810,17 @@ server <- function(input, output, session) {
   output$circa_status <- renderText({
     source_note <- circa_source_url_state()
     paste0(circa_status_state(), if (nzchar(source_note)) paste0("\nSource: ", source_note) else "")
+  })
+
+  output$circa_status_notice <- renderUI({
+    message <- circa_status_state()
+    style <- if (str_detect(message, "error:")) "danger" else if (startsWith(message, "Complete.")) {
+      "success"
+    } else if (startsWith(message, "No Circa") || startsWith(message, "The loaded")) "warning" else "info"
+    source_note <- circa_source_url_state()
+    tags$div(class = paste("alert", paste0("alert-", style)), role = "status",
+             `aria-live` = "polite", tags$strong(message),
+             if (nzchar(source_note)) tags$div(paste("Source:", source_note)))
   })
 
   output$circa_lines_preview <- renderDT({
@@ -3766,18 +3843,18 @@ server <- function(input, output, session) {
       rownames = FALSE,
       options = list(dom = "t", pageLength = 5, scrollX = TRUE)
     )
-  })
+  }, server = FALSE)
 
   output$circa_alternates <- renderDT({
     rows <- circa_card_rows() %>% slice(6:7)
     display <- if (nrow(rows) == 0) tibble(Message = "No additional eligible plays.") else format_circa_table(rows)
     datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 2, scrollX = TRUE))
-  })
+  }, server = FALSE)
 
   output$circa_market_gaps <- renderDT({
     datatable(market_gap_display(circa_ranked_rows(), "circa_pick", "pick_line"),
               rownames = FALSE, options = list(dom = "t", pageLength = 7, scrollX = TRUE))
-  })
+  }, server = FALSE)
 
   output$circa_all_plays <- renderDT({
     datatable(
@@ -3786,7 +3863,7 @@ server <- function(input, output, session) {
       filter = "top",
       options = list(pageLength = 16, lengthMenu = c(16, 32, 64), scrollX = TRUE)
     )
-  })
+  }, server = FALSE)
 
   output$circa_download_top_five <- downloadHandler(
     filename = function() paste0("circa_shadow_card_", first(circa_lines_state()$season), "_week_", first(circa_lines_state()$week), ".csv"),
@@ -3944,10 +4021,10 @@ server <- function(input, output, session) {
       market_compare_rows(rows, "pick_side", "poolhost_pick_line", "projected_pick_line") %>% transmute(
         Matchup = paste(away_team, "@", home_team),
         Pick = paste(pick_team, format_spread_price(poolhost_pick_line)),
-        `Projected line` = paste(pick_team, format_spread_price(projected_pick_line)),
         `Current market line` = paste(pick_team, format_spread_price(current_market_pick_line)),
-        `PoolHost line` = paste(pick_team, format_spread_price(poolhost_pick_line)),
         `PoolHost − current` = ifelse(is.na(contest_market_difference), "-", sprintf("%+.1f", contest_market_difference)),
+        `Projected line` = paste(pick_team, format_spread_price(projected_pick_line)),
+        `PoolHost line` = paste(pick_team, format_spread_price(poolhost_pick_line)),
         `Current market edge` = ifelse(is.na(current_market_edge), "-", sprintf("%+.1f", current_market_edge)),
         Edge = sprintf("%.1f", edge),
         Agreement = paste0(sprintf("%.0f", 100 * agree_pct), "%"),
@@ -3955,12 +4032,12 @@ server <- function(input, output, session) {
       )
     datatable(display, rownames = FALSE,
               options = list(dom = "t", pageLength = max(1L, nrow(display)), scrollX = TRUE))
-  })
+  }, server = FALSE)
 
   output$poolhost_market_gaps <- renderDT({
     datatable(market_gap_display(poolhost_results_state(), "pick_side", "poolhost_pick_line"),
               rownames = FALSE, options = list(dom = "t", pageLength = 7, scrollX = TRUE))
-  })
+  }, server = FALSE)
   output$poolhost_tiebreakers <- renderDT({
     rows <- poolhost_tiebreaker_state()
     display <- if (!nrow(rows)) {
@@ -4158,10 +4235,10 @@ server <- function(input, output, session) {
       Rank = rank,
       Matchup = paste(away_team, "@", home_team),
       Pick = paste(pick_team, format_spread_price(pick_line)),
-      `Projected line` = paste(pick_team, format_spread_price(projected_line)),
-      `DraftKings edge` = sprintf("%.1f", edge),
       `Current market line` = paste(pick_team, format_spread_price(current_market_pick_line)),
       `DK − current` = ifelse(is.na(contest_market_difference), "-", sprintf("%+.1f", contest_market_difference)),
+      `Projected line` = paste(pick_team, format_spread_price(projected_line)),
+      `DraftKings edge` = sprintf("%.1f", edge),
       `Current market edge` = ifelse(is.na(current_market_edge), "-", sprintf("%+.1f", current_market_edge)),
       Agreement = ifelse(is.na(agree_pct), "-", paste0(sprintf("%.0f", 100 * agree_pct), "%")),
       Models = models_used
@@ -4186,6 +4263,35 @@ server <- function(input, output, session) {
     rows
   }
 
+  market_compare_consensus <- function(rows) {
+    if (!nrow(rows)) return(rows)
+    snapshot <- market_lines_state()
+    index <- if (nrow(snapshot)) match(rows$game_id, snapshot$game_id) else rep(NA_integer_,nrow(rows))
+    home_line <- if (nrow(snapshot)) snapshot$market_home_line[index] else rep(NA_real_,nrow(rows))
+    total <- if (nrow(snapshot) && "market_total_line" %in% names(snapshot)) {
+      snapshot$market_total_line[index]
+    } else rep(NA_real_,nrow(rows))
+    spread <- rows$market == "spread"
+    rows$contest_pick_line <- ifelse(spread,
+      ifelse(rows$consensus_pick == "Home", -rows$market_line, rows$market_line), rows$market_line)
+    rows$current_market_pick_line <- case_when(
+      spread & rows$consensus_pick == "Home" ~ home_line,
+      spread & rows$consensus_pick == "Away" ~ -home_line,
+      rows$market == "total" ~ total,
+      rows$market == "home_implied" ~ (total - home_line) / 2,
+      rows$market == "away_implied" ~ (total + home_line) / 2,
+      TRUE ~ NA_real_
+    )
+    rows$contest_market_difference <- rows$contest_pick_line - rows$current_market_pick_line
+    rows$current_market_edge <- case_when(
+      spread ~ rows$current_market_pick_line - ifelse(rows$consensus_pick == "Home", -rows$avg_projection, rows$avg_projection),
+      rows$consensus_pick == "Over" ~ rows$avg_projection - rows$current_market_pick_line,
+      rows$consensus_pick == "Under" ~ rows$current_market_pick_line - rows$avg_projection,
+      TRUE ~ NA_real_
+    )
+    rows
+  }
+
   market_gap_display <- function(rows, side_col, contest_line_col) {
     if (!nrow(rows)) return(tibble(Message = "Build this contest dashboard to compare lines."))
     rows <- market_compare_rows(rows, side_col, contest_line_col) %>%
@@ -4206,18 +4312,18 @@ server <- function(input, output, session) {
   output$dkp_top_five <- renderDT({
     datatable(format_dkp_table(dkp_card_rows() %>% slice_head(n = 5)),
               rownames = FALSE, options = list(dom = "t", pageLength = 5, scrollX = TRUE))
-  })
+  }, server = FALSE)
   output$dkp_alternates <- renderDT({
     rows <- dkp_card_rows() %>% slice(6:7)
     display <- if (!nrow(rows)) tibble(Message = "No additional eligible plays.") else format_dkp_table(rows)
     datatable(display, rownames = FALSE,
               options = list(dom = "t", pageLength = 2, scrollX = TRUE))
-  })
+  }, server = FALSE)
 
   output$dkp_market_gaps <- renderDT({
     datatable(market_gap_display(dkp_ranked_rows(), "pick_side", "pick_line"),
               rownames = FALSE, options = list(dom = "t", pageLength = 7, scrollX = TRUE))
-  })
+  }, server = FALSE)
   output$dkp_final_status <- renderText({
     n <- nrow(dkp_final_rows())
     if (n == 5L) "Five plays selected." else sprintf("Select exactly five plays (%d selected).", n)
@@ -4227,11 +4333,11 @@ server <- function(input, output, session) {
     display <- if (!nrow(rows)) tibble(Message = "Select plays from the top seven.") else format_dkp_table(rows)
     datatable(display, rownames = FALSE,
               options = list(dom = "t", pageLength = 5, scrollX = TRUE))
-  })
+  }, server = FALSE)
   output$dkp_all_plays <- renderDT({
     datatable(format_dkp_table(dkp_ranked_rows()), rownames = FALSE,
               filter = "top", options = list(pageLength = 16, scrollX = TRUE))
-  })
+  }, server = FALSE)
   output$dkp_download_top_five <- downloadHandler(
     filename = function() paste0("draftkings_shadow_card_", input$dkp_season,
                                  "_week_", input$dkp_week, ".csv"),
@@ -4588,7 +4694,7 @@ server <- function(input, output, session) {
       NA
     )
 
-    rows %>%
+    market_compare_consensus(rows) %>%
       mutate(
         consensus_source = source_label,
         line_source = line_source,
@@ -4629,6 +4735,10 @@ server <- function(input, output, session) {
         spread_line,
         total_line,
         market_line,
+        contest_pick_line,
+        current_market_pick_line,
+        contest_market_difference,
+        current_market_edge,
         avg_projection,
         avg_edge,
         agreement_pct,
@@ -4705,7 +4815,7 @@ server <- function(input, output, session) {
         hist_win_pct = mean(correct %in% TRUE),
         .groups = "drop"
       )
-    market_rows %>%
+    market_compare_consensus(market_rows) %>%
       left_join(history, by = "consensus_pick") %>%
       transmute(
         Season = as.integer(season),
@@ -4713,7 +4823,14 @@ server <- function(input, output, session) {
         Game = paste(away_team, "@", home_team),
         Pick = consensus_pick,
         Projection = sprintf("%.1f", avg_projection),
-        Line = ifelse(is.na(market_line), NA_character_, sprintf("%.1f", market_line)),
+        Line = ifelse(market == "spread",
+          paste(ifelse(consensus_pick == "Home",home_team,away_team),format_spread_price(contest_pick_line)),
+          ifelse(is.na(market_line), NA_character_, sprintf("%.1f", market_line))),
+        `Current market line` = ifelse(market == "spread",
+          paste(ifelse(consensus_pick == "Home",home_team,away_team),format_spread_price(current_market_pick_line)),
+          ifelse(is.na(current_market_pick_line), "-", sprintf("%.1f", current_market_pick_line))),
+        `Line − current` = ifelse(is.na(contest_market_difference), "-", sprintf("%+.1f", contest_market_difference)),
+        `Current market edge` = ifelse(is.na(current_market_edge), "-", sprintf("%+.1f", current_market_edge)),
         Edge = ifelse(is.na(avg_edge), NA_character_, sprintf("%.1f", avg_edge)),
         Agreement = ifelse(is.na(agree_pct), NA_character_, paste0(sprintf("%.0f", 100 * agree_pct), "%")),
         Models = models_used,
@@ -4743,7 +4860,7 @@ server <- function(input, output, session) {
           scrollX = TRUE
         )
       )
-    })
+    }, server = FALSE)
   }
 
   output$dashboard_summary <- renderTable({
