@@ -671,6 +671,22 @@ circa_upcoming_weeks <- model_week_dates %>%
   pull(week)
 circa_active_week <- if (length(circa_upcoming_weeks) > 0) min(circa_upcoming_weeks) else 1L
 circa_default_lines <- read_circa_bundled_lines(circa_active_season, circa_active_week)
+
+# A newly published card can advance before the previous Monday game finishes.
+# Keep that publication default separate from the contest sheet's active week.
+dashboard_defaults <- read.csv(file.path('data', 'dashboard_defaults.csv'))
+stopifnot(all(c('season', 'week') %in% names(dashboard_defaults)),
+          !anyDuplicated(dashboard_defaults$season),
+          all(dashboard_defaults$week >= 1L & dashboard_defaults$week <= 18L))
+dashboard_default_week <- function(season, weeks, upcoming) {
+  published <- dashboard_defaults$week[dashboard_defaults$season == season]
+  eligible <- upcoming[upcoming >= if (length(published)) published[[1L]] else 1L]
+  if (length(eligible)) min(eligible)
+  else if (length(published) && published[[1L]] %in% weeks) published[[1L]]
+  else if (length(upcoming)) min(upcoming)
+  else if (length(weeks)) min(weeks)
+  else NA_integer_
+}
 early_week_game_ids <- model_game_dates %>%
   filter(as.POSIXlt(game_date)$wday %in% 2:5) %>%
   pull(game_id)
@@ -4645,7 +4661,7 @@ server <- function(input, output, session) {
         ) %>%
         pull(week)
     }
-    default_week <- if (length(upcoming) > 0) min(upcoming) else if (length(weeks) > 0) min(weeks) else NA_integer_
+    default_week <- dashboard_default_week(selected_season, weeks, upcoming)
     selected <- if (length(weeks) == 0) character() else if (length(current) > 0 && current %in% as.character(weeks)) current else as.character(default_week)
     week_choices <- if (length(weeks) == 0) character() else stats::setNames(as.character(weeks), paste("Week", weeks))
     updateSelectInput(session, "dashboard_week", choices = week_choices, selected = selected)
