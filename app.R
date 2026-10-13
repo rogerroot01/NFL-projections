@@ -12,6 +12,27 @@ canonical_game_id <- function(x) {
   sub("^(\\d{4})_0([1-9])_", "\\1_\\2_", as.character(x), perl = TRUE)
 }
 
+filter_dashboard_picks <- function(rows, early_ids, no_minus_3_5 = TRUE,
+                                   no_minus_7_5 = TRUE, no_plus_2_5 = TRUE,
+                                   no_early_week = TRUE) {
+  if (!nrow(rows)) return(rows)
+  pick_line <- rep(NA_real_, nrow(rows))
+  if (all(c("market_line", "consensus_pick") %in% names(rows))) {
+    line <- suppressWarnings(as.numeric(rows$market_line))
+    pick_line <- ifelse(rows$consensus_pick == "Home", -line, line)
+  }
+  spread <- rows$market == "spread"
+  blocked <- spread & is.finite(pick_line) & (
+    (isTRUE(no_minus_3_5) & dplyr::near(pick_line, -3.5)) |
+    (isTRUE(no_minus_7_5) & dplyr::near(pick_line, -7.5)) |
+    (isTRUE(no_plus_2_5) & dplyr::near(pick_line, 2.5)))
+  blocked[is.na(blocked)] <- FALSE
+  if (isTRUE(no_early_week) && "game_id" %in% names(rows)) {
+    blocked <- blocked | canonical_game_id(rows$game_id) %in% canonical_game_id(early_ids)
+  }
+  rows[!blocked, , drop = FALSE]
+}
+
 app_data_dir <- file.path(getwd(), "data")
 early_lines_path <- file.path(app_data_dir, "early_lines.csv")
 current_lines_path <- file.path(app_data_dir, "current_lines_2026.csv")
@@ -1705,6 +1726,11 @@ ui <- fluidPage(
           ),
           sliderInput("overall_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
           sliderInput("overall_cons_min_edge", "Minimum edge", min = 0, max = 10, value = 2, step = 0.5, post = " pts"),
+          checkboxInput("overall_cons_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
+          checkboxInput("overall_cons_no_minus_7_5_favorites", "No -7.5 favorites", value = TRUE),
+          checkboxInput("overall_cons_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
+          checkboxInput("overall_cons_no_early_week_games", "No early-week games", value = TRUE),
+          helpText("Dashboard results and downloads use these settings for every consensus source. Spread restrictions apply to ATS; early-week games are skipped in every market."),
           actionButton("overall_cons_run", "Build combined consensus", class = "btn-primary")
         ),
         mainPanel(
@@ -4667,6 +4693,14 @@ server <- function(input, output, session) {
     updateSelectInput(session, "dashboard_week", choices = week_choices, selected = selected)
   })
 
+  apply_consensus_setup_exclusions <- function(rows) {
+    filter_dashboard_picks(rows, early_week_game_ids,
+      no_minus_3_5 = input$overall_cons_no_minus_3_5_favorites %||% TRUE,
+      no_minus_7_5 = input$overall_cons_no_minus_7_5_favorites %||% TRUE,
+      no_plus_2_5 = input$overall_cons_no_plus_2_5_underdogs %||% TRUE,
+      no_early_week = input$overall_cons_no_early_week_games %||% TRUE)
+  }
+
   dashboard_filtered_rows <- reactive({
     rows <- dashboard_source_rows()
     selected_season <- suppressWarnings(as.integer(input$dashboard_season))
@@ -4674,7 +4708,8 @@ server <- function(input, output, session) {
     markets <- input$dashboard_markets %||% character()
     if (nrow(rows) == 0 || length(selected_season) == 0 || length(selected_week) == 0 || is.na(selected_season) || is.na(selected_week)) return(tibble())
     rows %>%
-      filter(season == selected_season, week == selected_week, market %in% markets)
+      filter(season == selected_season, week == selected_week, market %in% markets) %>%
+      apply_consensus_setup_exclusions()
   })
 
   format_dashboard_export_rows <- function(rows) {
@@ -4793,6 +4828,7 @@ server <- function(input, output, session) {
         week == selected_week,
         market == market_key
       ) %>%
+      apply_consensus_setup_exclusions() %>%
       format_dashboard_export_rows()
   }
 
@@ -4815,7 +4851,7 @@ server <- function(input, output, session) {
 
   dashboard_table_for_market <- function(market_key) {
     rows <- dashboard_filtered_rows()
-    source_rows <- dashboard_source_rows()
+    source_rows <- apply_consensus_setup_exclusions(dashboard_source_rows())
     if (nrow(rows) == 0 || !market_key %in% (input$dashboard_markets %||% character())) {
       return(tibble(Message = "No built consensus rows for this source, season, week, and market."))
     }
