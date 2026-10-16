@@ -499,9 +499,11 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
     tessedit_pageseg_mode = 7,
     tessedit_char_whitelist = "0123456789+-½.%PKIC"
   ))
-  odds_words <- words %>%
+  odds_region <- words %>%
     filter(y >= min(team_rows$y) - 36, y <= max(team_rows$y) + 36,
            (x_ratio > 0.35 & x_ratio < 0.5) | x_ratio > 0.74) %>%
+    mutate(side = ifelse(x_ratio < 0.5, "left", "right"))
+  odds_words <- odds_region %>%
     mutate(parsed_line = map_dbl(word, circa_parse_ocr_spread),
            side = ifelse(x_ratio < 0.5, "left", "right")) %>%
     filter(is.finite(parsed_line))
@@ -510,14 +512,29 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
     if (!nrow(column)) return(NA_real_)
     # Learn the odds column from all rows, including intact glyphs elsewhere
     # on the sheet. Crop out the next column's date/time on older templates.
-    right_edge <- max(column$x2) + 10
+    # A half-point can be a separate OCR word. Include that fragment when
+    # measuring the column, even when it has no standalone numeric value.
+    right_edge <- max(odds_region$x2[odds_region$side == side]) + 10
     left_edge <- max(x2 + 10, min(column$x1) - 10)
     crop <- magick::image_crop(image, magick::geometry_area(
       width = right_edge - left_edge, height = y2 - y1 + 20,
       x_off = left_edge, y_off = max(0, y1 - 10)
     ))
     token <- trimws(tesseract::ocr(crop, engine = odds_engine))
-    circa_parse_ocr_spread(token)
+    cropped <- circa_parse_ocr_spread(token)
+    row_words <- odds_region %>%
+      filter(.data$side == .env$side, y >= .env$y1 - 10, y <= .env$y2 + 10,
+             x1 >= left_edge - 10, x2 <= right_edge) %>% arrange(x1)
+    full_row <- circa_parse_ocr_spread(paste(row_words$word, collapse = ""))
+    if (is.na(cropped)) return(full_row)
+    # Different OCR versions can lose a half glyph in the single-line pass.
+    # Recover it only when the independent whole-page pass agrees on sign
+    # and the whole number; it cannot replace a 7 with a misread 1.
+    if (is.finite(full_row) && sign(cropped) == sign(full_row) &&
+        floor(abs(cropped)) == floor(abs(full_row))) {
+      return(sign(cropped) * max(abs(cropped), abs(full_row)))
+    }
+    cropped
   }
 
   ordered <- team_rows %>%
