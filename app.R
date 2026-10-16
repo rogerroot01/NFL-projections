@@ -53,16 +53,23 @@ early_lines <- if (file.exists(early_lines_path)) {
 }
 
 current_lines <- if (file.exists(current_lines_path)) {
-  read_csv(current_lines_path, show_col_types = FALSE) %>%
-    transmute(
-      game_id = canonical_game_id(.data[["game_id"]]),
-      current_spread_line = suppressWarnings(as.numeric(.data[["spread_line"]])),
-      current_total_line = suppressWarnings(as.numeric(.data[["total_line"]]))
-    ) %>%
+  raw_lines <- read_csv(current_lines_path, show_col_types = FALSE)
+  raw_lines$posted_spread_line <- suppressWarnings(as.numeric(raw_lines$spread_line))
+  raw_lines$posted_total_line <- suppressWarnings(as.numeric(raw_lines$total_line))
+  raw_lines$current_spread_line <- raw_lines$posted_spread_line
+  raw_lines$current_total_line <- raw_lines$posted_total_line
+  if (all(c("market_spread_line", "market_total_line") %in% names(raw_lines))) {
+    raw_lines$current_spread_line <- coalesce(as.numeric(raw_lines$market_spread_line), raw_lines$posted_spread_line)
+    raw_lines$current_total_line <- coalesce(as.numeric(raw_lines$market_total_line), raw_lines$posted_total_line)
+  }
+  raw_lines %>%
+    transmute(game_id = canonical_game_id(.data[["game_id"]]),
+      posted_spread_line, posted_total_line, current_spread_line, current_total_line) %>%
     distinct(game_id, .keep_all = TRUE)
 } else {
   tibble(
     game_id = character(),
+    posted_spread_line = numeric(), posted_total_line = numeric(),
     current_spread_line = numeric(),
     current_total_line = numeric()
   )
@@ -73,8 +80,8 @@ current_lines <- if (file.exists(current_lines_path)) {
 early_lines <- bind_rows(
   early_lines %>% filter(!str_detect(game_id, "^2026_")),
   current_lines %>% transmute(
-    game_id, early_spread_line = current_spread_line,
-    early_total_line = current_total_line
+    game_id, early_spread_line = posted_spread_line,
+    early_total_line = posted_total_line
   )
 ) %>% distinct(game_id, .keep_all = TRUE)
 
