@@ -2147,26 +2147,44 @@
     }
   },
   "files": {
+    "README.md": {
+      "checksum": "609d1a17d2d7519bc5e4ab91cb7c1a65"
+    },
     "app.R": {
-      "checksum": "a13362c39872a98ed52ee3df0c72d59d"
+      "checksum": "611d73f811d7299d7d758033480ce80e"
     },
     "data/circa_million_2026_week_1.csv": {
       "checksum": "2ecf611daf37604024c4f8b3e90f7e80"
     },
+    "data/circa_million_2026_week_3.csv": {
+      "checksum": "6075bcaaa567fbc816ac84182e4e33e4"
+    },
+    "data/circa_million_2026_week_4.csv": {
+      "checksum": "ada53ecbecafa4fda16993617d4d53d7"
+    },
+    "data/circa_million_2026_week_5.csv": {
+      "checksum": "dd89e5302f6d5e3ec9fe7d9ba70fc09c"
+    },
+    "data/circa_million_2026_week_6.csv": {
+      "checksum": "216ca5289231252e6206439742b3b6e8"
+    },
     "data/compact_models.rds": {
-      "checksum": "0eb264dfa7f9958fae1d3c42cb4f452f"
+      "checksum": "634625b97658aebcab73872c53031e98"
     },
     "data/current_lines_2026.csv": {
-      "checksum": "1d5a5c72707b43f4c6f71acee0037927"
+      "checksum": "c64f131e512439c0bf735612216a3a9e"
+    },
+    "data/dashboard_defaults.csv": {
+      "checksum": "0c429f0ebc477f6a30231e51c3e7e51c"
     },
     "data/early_lines.csv": {
-      "checksum": "f377de48ff466fb95d57e0629c13496d"
+      "checksum": "5bf9f23ac1599fcb52b48116c01e537f"
     },
     "data/forecast_team_off_def_injuries_2026.csv": {
-      "checksum": "6ac1c6af245e235ecdec982bc98090f4"
+      "checksum": "cd4ca5f7faee0558e2432bf4ca625e79"
     },
     "data/hiddengame_future_team_injury_adjustments_2026.csv": {
-      "checksum": "ecfa12fd2a2fb122727c33dd8eb65ae2"
+      "checksum": "6161cccff0a1bd5bd0c9d573aaa2ead0"
     },
     "data/hiddengame_injury_adjustments.csv": {
       "checksum": "ddef9f944a5053d83721ead74abdc5c5"
@@ -2174,29 +2192,38 @@
     "data/hiddengame_team_injury_adjustments_2025.csv": {
       "checksum": "221c418174623d3846a26d1093f66726"
     },
+    "data/legacy_pregame_2026_archive.rds": {
+      "checksum": "4d7d5840835ea2213d4046b7463bf5bd"
+    },
+    "data/legacy_pregame_lines_2026.csv": {
+      "checksum": "4ae259854515234a8ffe081e85faf1df"
+    },
     "data/model_inventory.rds": {
-      "checksum": "3fdbcd28f166d157ed5ca88af33622a4"
+      "checksum": "cc6aa5b5aa95e4c82b5649a10daa27fa"
     },
     "data/nextgen_compact_models.rds": {
-      "checksum": "1738e8d2e858eb1f0daae71189ec375f"
+      "checksum": "511a6f694b90a880ab107ab285ac8610"
     },
     "data/nextgen_model_inventory.rds": {
-      "checksum": "1b04eeaca7b2bd1e21b092e4e6e65c3d"
+      "checksum": "1b35c5c0db5ba70d8d74300fab3f3d17"
     },
     "data/nextgen_prediction_column_inventory.csv": {
-      "checksum": "42a752107088b42f0d9c8d206818e1ab"
+      "checksum": "b6b126e55dd6b2141d242f6f2122af74"
+    },
+    "data/nextgen_pregame_2026_archive.rds": {
+      "checksum": "8ac5622c3f823e974d39c0da5216b243"
+    },
+    "data/poolhost_2026_week_3.csv": {
+      "checksum": "a902681cb481d78ae8470596593683d2"
     },
     "data/prediction_column_inventory.csv": {
-      "checksum": "254627511696a5b3f176e7a4d78d3aed"
+      "checksum": "44609b10b0ac9792bcd503dbfdfa7111"
     },
     "prediction_column_inventory.csv": {
-      "checksum": "2b45d451a221fd59f7ae67a12c8d5668"
-    },
-    "README.md": {
-      "checksum": "9be48a958b699cbb4e582eff265b8975"
+      "checksum": "107e9102f3c79c858f2b2619c40f8181"
     },
     "refresh_forecast_adjustments.R": {
-      "checksum": "a7507509af8c1ec0607b252fa8208648"
+      "checksum": "6dbe7638db356e9b600db5060c67206d"
     },
     "www/ensemble-icon.png": {
       "checksum": "33e48f584eb62b03fa6b1a88519156e6"

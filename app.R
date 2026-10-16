@@ -345,6 +345,18 @@ circa_normalize_team <- function(x) {
   ifelse(!is.na(mapped), mapped, key)
 }
 
+circa_match_ocr_team <- function(key) {
+  # OCR can add/drop one glyph (for example A9OERS). Accept a correction only
+  # when every closest alias identifies the same NFL team; never guess between
+  # teams. Full-slate and home/away validation still run after recognition.
+  exact <- unname(circa_team_aliases[key])
+  if (!is.na(exact)) return(exact)
+  if (is.na(key) || nchar(key) < 4L) return(NA_character_)
+  distance <- as.integer(utils::adist(key, names(circa_team_aliases)))
+  nearest <- unique(unname(circa_team_aliases[distance == min(distance)]))
+  if (min(distance) == 1L && length(nearest) == 1L) nearest else NA_character_
+}
+
 circa_parse_ocr_spread <- function(token) {
   token <- as.character(token %||% "")
   cleaned <- token
@@ -452,7 +464,9 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
     x2 = suppressWarnings(as.numeric(bbox[, 3])),
     y2 = suppressWarnings(as.numeric(bbox[, 4]))
   ) %>%
-    mutate(x = (x1 + x2) / 2, y = (y1 + y2) / 2, x_ratio = x / image_width, key = gsub("[^A-Z0-9]", "", toupper(word)))
+    mutate(x = (x1 + x2) / 2, y = (y1 + y2) / 2, x_ratio = x / image_width,
+           key = gsub("[^A-Z0-9]", "", toupper(word)),
+           ocr_team = map_chr(key, circa_match_ocr_team))
 
   header_words <- words %>% filter(y < magick::image_info(image)$height[[1L]] * 0.15)
   week_labels <- header_words %>% filter(key == "WEEK")
@@ -469,8 +483,8 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
   }
 
   team_rows <- words %>%
-    filter(key %in% names(circa_team_aliases)) %>%
-    transmute(team = unname(circa_team_aliases[key]), x2, y1, y2, y,
+    filter(!is.na(ocr_team)) %>%
+    transmute(team = ocr_team, x2, y1, y2, y,
               side = ifelse(x_ratio < 0.5, "left", "right")) %>%
     distinct(team, .keep_all = TRUE)
   side_counts <- table(team_rows$side)
@@ -483,7 +497,7 @@ parse_circa_pdf <- function(path, season = 2026L, week = 1L) {
   # whole-page OCR, which loses half-point glyphs and confuses 7 with 1.
   odds_engine <- tesseract::tesseract(options = list(
     tessedit_pageseg_mode = 7,
-    tessedit_char_whitelist = "0123456789+-½.%"
+    tessedit_char_whitelist = "0123456789+-½.%PKIC"
   ))
   odds_words <- words %>%
     filter(y >= min(team_rows$y) - 36, y <= max(team_rows$y) + 36,
@@ -593,13 +607,21 @@ download_circa_week_from_web <- function(season = 2026L, week = 1L) {
   })
   downloaded <- NULL
   source_url <- NULL
+  blocked <- FALSE
   for (candidate in candidates) {
     destination <- tempfile(fileext = ".pdf")
-    status <- tryCatch(
-      suppressWarnings(utils::download.file(candidate, destination, mode = "wb", quiet = TRUE, method = "libcurl")),
-      error = function(e) 1L
+    # Circa rejects the default R user agent with HTTP 403. Send normal browser
+    # request headers and check HTTP status AND PDF bytes, not an HTML error.
+    handle <- curl::new_handle(
+      useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      referer = "https://www.circasports.com/",
+      connecttimeout = 10, timeout = 20
     )
-    is_pdf <- identical(status, 0L) && file.exists(destination) && file.info(destination)$size > 4 &&
+    curl::handle_setheaders(handle, Accept = "application/pdf,*/*;q=0.8")
+    status <- tryCatch(curl::curl_fetch_disk(candidate, destination, handle)$status_code,
+                       error = function(e) NA_integer_)
+    blocked <- blocked || isTRUE(status %in% c(401L, 403L))
+    is_pdf <- isTRUE(status == 200L) && file.exists(destination) && file.info(destination)$size > 4 &&
       identical(rawToChar(readBin(destination, what = "raw", n = 4)), "%PDF")
     if (is_pdf) {
       downloaded <- destination
@@ -609,6 +631,7 @@ download_circa_week_from_web <- function(season = 2026L, week = 1L) {
     unlink(destination, force = TRUE)
   }
   if (is.null(downloaded)) {
+    if (blocked) stop("Circa Sports blocked the web request. Upload the official PDF/CSV or use verified bundled lines for this week.")
     stop("The official Circa weekly sheet was not found yet. It is normally posted Thursday; use the manual PDF/CSV fallback if you already have it.")
   }
   on.exit(unlink(downloaded, force = TRUE), add = TRUE)
@@ -3611,7 +3634,14 @@ server <- function(input, output, session) {
         download_circa_week_from_web(season, week)
       ),
       error = function(e) {
-        reject_circa_lines(paste("Circa web refresh error:", conditionMessage(e)))
+        loaded <- circa_lines_state()
+        if (nrow(loaded) > 0 && all(loaded$season == as.integer(season), loaded$week == as.integer(week))) {
+          message <- paste("Web refresh failed; keeping the loaded verified sheet.", conditionMessage(e))
+          circa_status_state(message)
+          showNotification(message, type = "warning", duration = 10)
+        } else {
+          reject_circa_lines(paste("Circa web refresh error:", conditionMessage(e)))
+        }
         NULL
       }
     )

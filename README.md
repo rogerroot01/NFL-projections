@@ -6,6 +6,14 @@ Wrangler at `https://rogerroot-nfl-projections.share.connect.posit.cloud/`.
 Do not deploy this standalone app to the Yahoo Posit account; that account is
 for Pro Football Lab only.
 
+Circa PDF imports tolerate a single OCR character error only when it resolves
+to one NFL team, recognize PK/zero spreads, and validate every matchup against
+the selected week's schedule. Web refresh sends browser request headers and
+checks the HTTP response and PDF signature. A failed refresh preserves an
+already loaded sheet for the same week. Week 6 has a verified bundled fallback.
+Run `tests/circa_week6.R` (with `CIRCA_TEST_WEB=1` for live refresh) and
+`tests/circa_week5.R` to check the PDF/upload/build flow and older sheets.
+
 The Dashboard and its CSV downloads include every qualifying consensus row
 for the selected source, season, week, and markets. They do not exclude rows
 based on +2.5 underdogs, -3.5 favorites, or early-week games.
