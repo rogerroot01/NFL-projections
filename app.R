@@ -14,7 +14,7 @@ canonical_game_id <- function(x) {
 
 filter_dashboard_picks <- function(rows, early_ids, no_minus_3_5 = TRUE,
                                    no_minus_7_5 = TRUE, no_plus_2_5 = TRUE,
-                                   no_early_week = TRUE) {
+                                   no_early_week = TRUE, no_big_favorites = TRUE) {
   if (!nrow(rows)) return(rows)
   pick_line <- rep(NA_real_, nrow(rows))
   if (all(c("market_line", "consensus_pick") %in% names(rows))) {
@@ -25,6 +25,7 @@ filter_dashboard_picks <- function(rows, early_ids, no_minus_3_5 = TRUE,
   blocked <- spread & is.finite(pick_line) & (
     (isTRUE(no_minus_3_5) & dplyr::near(pick_line, -3.5)) |
     (isTRUE(no_minus_7_5) & dplyr::near(pick_line, -7.5)) |
+    (isTRUE(no_big_favorites) & pick_line <= -10.5) |
     (isTRUE(no_plus_2_5) & dplyr::near(pick_line, 2.5)))
   blocked[is.na(blocked)] <- FALSE
   if (isTRUE(no_early_week) && "game_id" %in% names(rows)) {
@@ -1775,6 +1776,7 @@ ui <- fluidPage(
           sliderInput("overall_cons_min_edge", "Minimum edge", min = 0, max = 10, value = 2, step = 0.5, post = " pts"),
           checkboxInput("overall_cons_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
           checkboxInput("overall_cons_no_minus_7_5_favorites", "No -7.5 favorites", value = TRUE),
+          checkboxInput("overall_cons_no_big_favorites", "No favorites of 10.5+ points", value = TRUE),
           checkboxInput("overall_cons_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
           checkboxInput("overall_cons_no_early_week_games", "No early-week games", value = TRUE),
           helpText("Dashboard results and downloads use these settings for every consensus source. Spread restrictions apply to ATS; early-week games are skipped in every market."),
@@ -1906,6 +1908,7 @@ ui <- fluidPage(
           sliderInput("circa_min_edge", "Minimum Circa edge", min = 0, max = 10, value = 0, step = 0.5, post = " pts"),
           checkboxInput("circa_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
           checkboxInput("circa_no_minus_7_5_favorites", "No -7.5 favorites", value = TRUE),
+          checkboxInput("circa_no_big_favorites", "No favorites of 10.5+ points", value = TRUE),
           checkboxInput("circa_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
           checkboxInput("circa_no_early_week_games", "No early-week games", value = TRUE),
           selectizeInput("circa_skip_matchups", "Skip matchups", choices = NULL, multiple = TRUE),
@@ -1922,7 +1925,7 @@ ui <- fluidPage(
           tags$hr(),
           h4("Top five shadow card"),
           DTOutput("circa_top_five"),
-          h4("Next two alternates"),
+          h4("Next three alternates"),
           DTOutput("circa_alternates"),
           h4("Largest Circa-versus-current market gaps"),
           DTOutput("circa_market_gaps"),
@@ -2003,6 +2006,7 @@ ui <- fluidPage(
                       value = 0, step = 0.5, post = " pts"),
           checkboxInput("dkp_no_minus_3_5_favorites", "No -3.5 favorites", value = TRUE),
           checkboxInput("dkp_no_minus_7_5_favorites", "No -7.5 favorites", value = TRUE),
+          checkboxInput("dkp_no_big_favorites", "No favorites of 10.5+ points", value = TRUE),
           checkboxInput("dkp_no_plus_2_5_underdogs", "No +2.5 underdogs", value = TRUE),
           checkboxInput("dkp_no_early_week_games", "No early-week games", value = TRUE),
           selectizeInput("dkp_skip_matchups", "Skip matchups", choices = NULL, multiple = TRUE),
@@ -2024,7 +2028,7 @@ ui <- fluidPage(
           tags$hr(),
           h4("Top five shadow card"),
           DTOutput("dkp_top_five"),
-          h4("Next two alternates"),
+          h4("Next three alternates"),
           DTOutput("dkp_alternates"),
           h4("Largest DraftKings-versus-current market gaps"),
           DTOutput("dkp_market_gaps"),
@@ -3836,6 +3840,7 @@ server <- function(input, output, session) {
         !is.na(circa_pick),
         !(isTRUE(input$circa_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
         !(isTRUE(input$circa_no_minus_7_5_favorites) & dplyr::near(pick_line, -7.5)),
+        !(isTRUE(input$circa_no_big_favorites %||% TRUE) & pick_line <= -10.5),
         !(isTRUE(input$circa_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5)),
         !(isTRUE(input$circa_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%
@@ -3850,8 +3855,9 @@ server <- function(input, output, session) {
     rows %>% filter(!game_id %in% skipped) %>% mutate(rank = row_number())
   })
 
-  observeEvent(circa_card_rows(), {
-    choices <- circa_card_rows() %>% slice_head(n = 7)
+  circa_final_choices <- reactive(circa_card_rows() %>% slice_head(n = 8))
+  observeEvent(circa_final_choices(), {
+    choices <- circa_final_choices()
     if (!nrow(choices)) {
       updateCheckboxGroupInput(session, "circa_final_picks", choices = character(), selected = character())
       return()
@@ -3942,9 +3948,9 @@ server <- function(input, output, session) {
   }, server = FALSE)
 
   output$circa_alternates <- renderDT({
-    rows <- circa_card_rows() %>% slice(6:7)
+    rows <- circa_card_rows() %>% slice(6:8)
     display <- if (nrow(rows) == 0) tibble(Message = "No additional eligible plays.") else format_circa_table(rows)
-    datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 2, scrollX = TRUE))
+    datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 3, scrollX = TRUE))
   }, server = FALSE)
 
   output$circa_market_gaps <- renderDT({
@@ -4266,7 +4272,7 @@ server <- function(input, output, session) {
     dkp_lines_state(built$lines)
     dkp_results_state(built$results)
     dkp_status_state(paste0("Built ", nrow(built$results), " DraftKings matchups for Week ",
-                            first(built$lines$week), ". The top five and two alternates use the edited spreads."))
+                            first(built$lines$week), ". The top five and three alternates use the edited spreads."))
   }, ignoreInit = TRUE)
 
   dkp_ranked_rows <- reactive({
@@ -4289,6 +4295,7 @@ server <- function(input, output, session) {
         is.finite(edge), edge >= minimum_edge, !is.na(pick_side),
         !(isTRUE(input$dkp_no_minus_3_5_favorites) & dplyr::near(pick_line, -3.5)),
         !(isTRUE(input$dkp_no_minus_7_5_favorites) & dplyr::near(pick_line, -7.5)),
+        !(isTRUE(input$dkp_no_big_favorites %||% TRUE) & pick_line <= -10.5),
         !(isTRUE(input$dkp_no_plus_2_5_underdogs) & dplyr::near(pick_line, 2.5)),
         !(isTRUE(input$dkp_no_early_week_games) & game_id %in% early_week_game_ids)
       ) %>%
@@ -4303,8 +4310,9 @@ server <- function(input, output, session) {
       mutate(rank = row_number())
   })
 
-  observeEvent(dkp_card_rows(), {
-    rows <- dkp_card_rows() %>% slice_head(n = 7)
+  dkp_final_choices <- reactive(dkp_card_rows() %>% slice_head(n = 8))
+  observeEvent(dkp_final_choices(), {
+    rows <- dkp_final_choices()
     if (!nrow(rows)) {
       updateCheckboxGroupInput(session, "dkp_final_picks", choices = character(), selected = character())
       return()
@@ -4410,10 +4418,10 @@ server <- function(input, output, session) {
               rownames = FALSE, options = list(dom = "t", pageLength = 5, scrollX = TRUE))
   }, server = FALSE)
   output$dkp_alternates <- renderDT({
-    rows <- dkp_card_rows() %>% slice(6:7)
+    rows <- dkp_card_rows() %>% slice(6:8)
     display <- if (!nrow(rows)) tibble(Message = "No additional eligible plays.") else format_dkp_table(rows)
     datatable(display, rownames = FALSE,
-              options = list(dom = "t", pageLength = 2, scrollX = TRUE))
+              options = list(dom = "t", pageLength = 3, scrollX = TRUE))
   }, server = FALSE)
 
   output$dkp_market_gaps <- renderDT({
@@ -4426,7 +4434,7 @@ server <- function(input, output, session) {
   })
   output$dkp_final_card <- renderDT({
     rows <- dkp_final_rows()
-    display <- if (!nrow(rows)) tibble(Message = "Select plays from the top seven.") else format_dkp_table(rows)
+    display <- if (!nrow(rows)) tibble(Message = "Select plays from the top eight.") else format_dkp_table(rows)
     datatable(display, rownames = FALSE,
               options = list(dom = "t", pageLength = 5, scrollX = TRUE))
   }, server = FALSE)
@@ -4751,6 +4759,7 @@ server <- function(input, output, session) {
     filter_dashboard_picks(rows, early_week_game_ids,
       no_minus_3_5 = input$overall_cons_no_minus_3_5_favorites %||% TRUE,
       no_minus_7_5 = input$overall_cons_no_minus_7_5_favorites %||% TRUE,
+      no_big_favorites = input$overall_cons_no_big_favorites %||% TRUE,
       no_plus_2_5 = input$overall_cons_no_plus_2_5_underdogs %||% TRUE,
       no_early_week = input$overall_cons_no_early_week_games %||% TRUE)
   }

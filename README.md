@@ -14,9 +14,10 @@ already loaded sheet for the same week. Week 6 has a verified bundled fallback.
 Run `tests/circa_week6.R` (with `CIRCA_TEST_WEB=1` for live refresh) and
 `tests/circa_week5.R` to check the PDF/upload/build flow and older sheets.
 
-The Dashboard and its CSV downloads include every qualifying consensus row
-for the selected source, season, week, and markets. They do not exclude rows
-based on +2.5 underdogs, -3.5 favorites, or early-week games.
+The Dashboard and its CSV downloads apply the Consensus Setup exclusions for
+every selected source. Optional spread filters exclude -3.5 favorites, -7.5
+favorites, favorites laying 10.5 points or more, and +2.5 underdogs. The
+early-week filter applies across markets. These filters are enabled by default.
 
 The 2026 Legacy and Next Gen bundles keep pregame Week 1 onward predictions in
 immutable per-game archives. Current results and lines can refresh, but a
@@ -44,8 +45,11 @@ export a card.
 The DraftKings Picks tab copies the selected week's loaded PoolHost spreads as
 editable starting values; it never changes the PoolHost card. Verify each
 home spread against the DraftKings contest, then build a five-pick shadow card
-and two alternates using the current consensus model settings. The tab offers
+and three alternates using the current consensus model settings. The tab offers
 minimum-edge, early-week, and specific spread exclusions, plus downloads for
-the top five, chosen final five, and all eligible plays. If the active week has
+the top five, chosen final five, and all eligible plays. Circa and DraftKings
+both allow selecting the final five from the top eight eligible games. Their
+10.5+ favorite filter excludes the selected favorite at -10.5 or any larger
+handicap; +10.5 underdogs and -10 favorites remain eligible. If the active week has
 no bundled PoolHost sheet, paste and load that week's sheet in PoolHost Picks
 first. The app does not fetch DraftKings contest lines or submit picks.
