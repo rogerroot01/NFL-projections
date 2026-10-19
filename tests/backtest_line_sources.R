@@ -61,15 +61,12 @@ shiny::testServer(e$server,{
     ne
   }
   expected_l <- e$pipeline_game_results
-  idx <- match(expected_l$game_id,e$legacy_pregame_lines$game_id)
-  held <- !is.na(idx)
-  expected_l$spread_line[held] <- e$legacy_pregame_lines$archived_spread_line[idx[held]]
   expected_early <- e$current_lines |> dplyr::transmute(game_id,spread_line=current_spread_line)
   ne_cl <- check(close_l,expected_l,'LEGACY_CLOSING')
   ne_cn <- check(close_n,e$pipeline_game_results,'NEXTGEN_CLOSING')
   ne_el <- check(early_l,expected_early,'LEGACY_EARLY')
   ne_en <- check(early_n,expected_early,'NEXTGEN_EARLY')
-  stopifnot(ne_cl$market_line==3.5,ne_cl$correct,
+  stopifnot(ne_cl$market_line==3,is.na(ne_cl$correct),
             ne_cn$market_line==3,is.na(ne_cn$correct),
             ne_el$market_line==3,is.na(ne_el$correct),
             ne_en$market_line==3,is.na(ne_en$correct))
@@ -84,16 +81,16 @@ shiny::testServer(e$server,{
         if(engine=='legacy' && market=='spread' && !nrow(z)) next
         z <- z |> dplyr::filter(game_id=='2026_1_NE_SEA')
         stopifnot(nrow(z)>0,all(z$home_score==13),all(z$away_score==10))
-        spread <- if(source=='closing' && engine=='legacy') 3.5 else 3
+        spread <- 3
         line <- switch(market,spread=spread,total=44.5,home_implied=(44.5+spread)/2,away_implied=(44.5-spread)/2)
         stopifnot(all(z$market_line==line))
       }
     }
   }
-  # Week 5 future forecasts are independent of the historical-line selector.
+  # Upcoming forecasts are independent of the historical-line selector.
   for (pair in list(list(close_l,early_l),list(close_n,early_n))) {
     cols <- c('game_id','avg_projection','market_line','avg_edge','consensus_pick','agree_pct')
-    stopifnot(isTRUE(all.equal(pair[[1]][pair[[1]]$week==5,cols],pair[[2]][pair[[2]]$week==5,cols])))
+    stopifnot(isTRUE(all.equal(pair[[1]][!is.finite(pair[[1]]$actual_result),cols],pair[[2]][!is.finite(pair[[2]]$actual_result),cols])))
   }
   e$line_source_test_results <- list(legacy=close_l,nextgen=close_n)
 })

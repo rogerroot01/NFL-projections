@@ -5,6 +5,7 @@ library(readr)
 library(stringr)
 library(tidyr)
 library(DT)
+source("R/ensemble_vote.R", local = TRUE)
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
@@ -89,16 +90,19 @@ early_lines <- bind_rows(
 apply_backtest_lines <- function(base, line_source = "closing") {
   if (!identical(line_source, "early")) return(base)
   idx <- match(canonical_game_id(base$game_id), early_lines$game_id)
+  completed <- if(all(c("home_score","away_score") %in% names(base))) {
+    is.finite(base$home_score) & is.finite(base$away_score)
+  } else rep(TRUE,nrow(base))
   # Missing early snapshots must not silently become closing-line backtests.
-  base$spread_line <- early_lines$early_spread_line[idx]
-  base$total_line <- early_lines$early_total_line[idx]
+  base$spread_line[completed] <- early_lines$early_spread_line[idx[completed]]
+  base$total_line[completed] <- early_lines$early_total_line[idx[completed]]
   if ("home_implied" %in% names(base)) {
-    base$home_implied <- (base$total_line + base$spread_line) / 2
+    base$home_implied[completed] <- (base$total_line[completed] + base$spread_line[completed]) / 2
   }
   if ("away_implied" %in% names(base)) {
-    base$away_implied <- (base$total_line - base$spread_line) / 2
+    base$away_implied[completed] <- (base$total_line[completed] - base$spread_line[completed]) / 2
   }
-  if ("line" %in% names(base)) base$line <- NA_real_
+  if ("line" %in% names(base)) base$line[completed] <- NA_real_
   base
 }
 
@@ -1142,8 +1146,8 @@ cols_needed_for_file <- function(path) {
 read_model_file <- function(path) {
   nm <- basename(path)
   if (nm %in% names(compact_models)) {
-    return(apply_legacy_pregame_lines(
-      apply_current_lines(apply_pipeline_game_results(compact_models[[nm]]), preserve_completed = TRUE)
+    return(apply_current_lines(
+      apply_pipeline_game_results(compact_models[[nm]]), preserve_completed = TRUE
     ))
   }
   stop("Compact prepared data is missing for ", nm, ". Run prepare_data.R locally and deploy data/compact_models.rds plus data/model_inventory.rds.")
@@ -3216,19 +3220,11 @@ server <- function(input, output, session) {
           spread_line = first_non_na(spread_line),
           total_line = first_non_na(total_line),
           avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
-          agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
-          consensus_pick = case_when(
-            all(is.na(pick)) ~ NA_character_,
-            first(market) %in% c("spread", "straight_up") & sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Home",
-            first(market) %in% c("spread", "straight_up") & sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Away",
-            first(market) %in% c("spread", "straight_up") & avg_projection > market_line ~ "Home",
-            first(market) %in% c("spread", "straight_up") & avg_projection < market_line ~ "Away",
-            first(market) %in% c("spread", "straight_up") ~ NA_character_,
-            sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Over",
-            sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Under",
-            avg_projection > market_line ~ "Over",
-            avg_projection < market_line ~ "Under",
-            TRUE ~ NA_character_
+          agree_pct = ensemble_vote_agreement(pick),
+          consensus_pick = ifelse(
+            ensemble_majority_pick(pick, avg_projection, market_line) > 0,
+            ifelse(first(market) %in% c("spread", "straight_up"), "Home", "Over"),
+            ifelse(first(market) %in% c("spread", "straight_up"), "Away", "Under")
           ),
           actual_side = first_non_na(actual_side),
           actual_result = first_non_na(actual),
@@ -3329,19 +3325,11 @@ server <- function(input, output, session) {
           spread_line = first_non_na(spread_line),
           total_line = first_non_na(total_line),
           avg_edge = ifelse(is.na(market_line), NA_real_, avg_projection - market_line),
-          agree_pct = ifelse(all(is.na(pick)), NA_real_, max(mean(pick == 1, na.rm = TRUE), mean(pick == -1, na.rm = TRUE))),
-          consensus_pick = case_when(
-            all(is.na(pick)) ~ NA_character_,
-            first(market) %in% c("spread", "straight_up") & sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Home",
-            first(market) %in% c("spread", "straight_up") & sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Away",
-            first(market) %in% c("spread", "straight_up") & avg_projection > market_line ~ "Home",
-            first(market) %in% c("spread", "straight_up") & avg_projection < market_line ~ "Away",
-            first(market) %in% c("spread", "straight_up") ~ NA_character_,
-            sum(pick == 1, na.rm = TRUE) > sum(pick == -1, na.rm = TRUE) ~ "Over",
-            sum(pick == -1, na.rm = TRUE) > sum(pick == 1, na.rm = TRUE) ~ "Under",
-            avg_projection > market_line ~ "Over",
-            avg_projection < market_line ~ "Under",
-            TRUE ~ NA_character_
+          agree_pct = ensemble_vote_agreement(pick),
+          consensus_pick = ifelse(
+            ensemble_majority_pick(pick, avg_projection, market_line) > 0,
+            ifelse(first(market) %in% c("spread", "straight_up"), "Home", "Over"),
+            ifelse(first(market) %in% c("spread", "straight_up"), "Away", "Under")
           ),
           actual_side = first_non_na(actual_side),
           actual_result = first_non_na(actual),
