@@ -196,7 +196,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,7,DEN,AFC,AFC West,-0.75,1.5
 2026,7,DET,NFC,NFC North,0,0
 2026,7,GB,NFC,NFC North,-2,1.25
-2026,7,HOU,AFC,AFC South,-1,0
+2026,7,HOU,AFC,AFC South,0,0
 2026,7,IND,AFC,AFC South,-2.5,0.5
 2026,7,KC,AFC,AFC West,-3,0
 2026,7,LA,NFC,NFC West,-0.5,0
