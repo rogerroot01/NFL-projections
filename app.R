@@ -2403,6 +2403,7 @@ server <- function(input, output, session) {
   }
 
   summarize_consensus_table <- function(df) {
+    df <- df[is.finite(df$actual_result) & !is.na(df$consensus_pick), , drop = FALSE]
     if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
     summarize_consensus <- function(data, label) {
       tibble(
@@ -2432,6 +2433,7 @@ server <- function(input, output, session) {
   }
 
   consensus_splits_table <- function(df, market) {
+    df <- df[is.finite(df$actual_result) & !is.na(df$consensus_pick), , drop = FALSE]
     if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
 
     summarize_split <- function(data, category, split_label) {
@@ -5040,117 +5042,12 @@ server <- function(input, output, session) {
 
   output$cons_summary <- renderTable({
     req(legacy_consensus_built())
-    df <- consensus_display_rows()
-    if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
-    summarize_consensus <- function(data, label) {
-      tibble(
-        Season = label,
-        Games = nrow(data),
-        `Avg projections per game` = mean(data$projections),
-        `Avg models per game` = mean(data$models_used),
-        `Avg agreement` = mean(data$agree_pct),
-        Wins = sum(data$correct %in% TRUE, na.rm = TRUE),
-        Losses = sum(data$correct %in% FALSE, na.rm = TRUE),
-        Pushes = sum(is.na(data$correct)),
-        `Win %` = ifelse(sum(!is.na(data$correct)) > 0, sum(data$correct %in% TRUE, na.rm = TRUE) / sum(!is.na(data$correct)), NA_real_)
-      )
-    }
-    bind_rows(
-      summarize_consensus(df, "Total"),
-      df %>%
-        group_split(season) %>%
-        map_dfr(~ summarize_consensus(.x, as.character(first(.x$season))))
-    ) %>%
-      mutate(
-        `Avg projections per game` = sprintf("%.0f", `Avg projections per game`),
-        `Avg models per game` = sprintf("%.0f", `Avg models per game`),
-        `Avg agreement` = ifelse(is.na(`Avg agreement`), NA_character_, paste0(sprintf("%.1f", 100 * `Avg agreement`), "%")),
-        `Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%"))
-      )
+    summarize_consensus_table(consensus_display_rows())
   })
 
   output$cons_splits <- renderTable({
     req(legacy_consensus_built())
-    df <- consensus_display_rows()
-    if (nrow(df) == 0) return(tibble(Message = "No consensus rows for the current selections."))
-
-    market <- input$cons_market %||% "spread"
-    summarize_split <- function(data, category, split_label) {
-      graded <- sum(!is.na(data$correct))
-      tibble(
-        Category = category,
-        Split = split_label,
-        Games = nrow(data),
-        Wins = sum(data$correct %in% TRUE, na.rm = TRUE),
-        Losses = sum(data$correct %in% FALSE, na.rm = TRUE),
-        Pushes = sum(is.na(data$correct)),
-        `Win %` = ifelse(graded > 0, sum(data$correct %in% TRUE, na.rm = TRUE) / graded, NA_real_)
-      )
-    }
-
-    classify_favorite_side <- function(spread_line) {
-      case_when(
-        spread_line > 0 ~ "Home",
-        spread_line < 0 ~ "Away",
-        spread_line == 0 ~ "Pick'em",
-        TRUE ~ NA_character_
-      )
-    }
-
-    rows <- df %>%
-      mutate(
-        favorite_side = classify_favorite_side(spread_line),
-        selected_team_side = case_when(
-          market %in% c("spread", "straight_up") ~ consensus_pick,
-          market == "home_implied" ~ "Home",
-          market == "away_implied" ~ "Away",
-          TRUE ~ NA_character_
-        ),
-        favorite_role = case_when(
-          is.na(selected_team_side) | is.na(favorite_side) ~ NA_character_,
-          favorite_side == "Pick'em" ~ "Pick'em",
-          selected_team_side == favorite_side ~ "Favorite",
-          selected_team_side %in% c("Home", "Away") ~ "Underdog",
-          TRUE ~ NA_character_
-        ),
-        total_favorite_context = case_when(
-          favorite_side == "Home" ~ "Home favorite games",
-          favorite_side == "Away" ~ "Away favorite games",
-          favorite_side == "Pick'em" ~ "Pick'em games",
-          TRUE ~ NA_character_
-        )
-      )
-
-    overall <- summarize_split(rows, "Overall", "All consensus rows")
-
-    pick_splits <- rows %>%
-      filter(!is.na(consensus_pick)) %>%
-      group_split(consensus_pick) %>%
-      map_dfr(~ summarize_split(.x, "Consensus pick", first(.x$consensus_pick)))
-
-    home_away_splits <- if (market %in% c("spread", "straight_up", "home_implied", "away_implied")) {
-      rows %>%
-        filter(!is.na(selected_team_side)) %>%
-        group_split(selected_team_side) %>%
-        map_dfr(~ summarize_split(.x, "Home/Away", first(.x$selected_team_side)))
-    } else {
-      rows %>%
-        filter(!is.na(total_favorite_context)) %>%
-        group_split(total_favorite_context) %>%
-        map_dfr(~ summarize_split(.x, "Favorite context", first(.x$total_favorite_context)))
-    }
-
-    favorite_splits <- if (market == "total") {
-      tibble()
-    } else {
-      rows %>%
-        filter(!is.na(favorite_role)) %>%
-        group_split(favorite_role) %>%
-        map_dfr(~ summarize_split(.x, "Favorite/Underdog", first(.x$favorite_role)))
-    }
-
-    bind_rows(overall, pick_splits, home_away_splits, favorite_splits) %>%
-      mutate(`Win %` = ifelse(is.na(`Win %`), NA_character_, paste0(sprintf("%.1f", 100 * `Win %`), "%")))
+    consensus_splits_table(consensus_display_rows(), input$cons_market %||% "spread")
   })
 
   output$cons_games <- renderDT({
