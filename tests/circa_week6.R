@@ -32,14 +32,22 @@ shiny::testServer(app$serverFuncSource(), {
   session$setInputs(circa_build=1L)
   stopifnot(nrow(circa_results_state())==14L,nrow(circa_ranked_rows())>0L,
             grepl('Complete. Ranked 14',circa_status_state(),fixed=TRUE))
-  # A blocked/failed refresh must preserve this week's already verified input.
-  original <- download_circa_week_from_web
-  assign('download_circa_week_from_web',function(...)stop('HTTP 403 blocked'),envir=.GlobalEnv)
+  # A stale cached client must not trigger a website request either.
   session$setInputs(circa_refresh_web=1L)
   check(circa_lines_state())
-  stopifnot(nrow(circa_results_state())==14L,
-            grepl('keeping the loaded verified sheet',circa_status_state(),fixed=TRUE))
-  assign('download_circa_week_from_web',original,envir=.GlobalEnv)
+  stopifnot(nrow(circa_results_state())==14L)
 })
 unlink(upload)
-cat('CIRCA_WEEK6_PDF_WEB_UPLOAD_BUILD_OK\n')
+web_calls <- 0L
+download_circa_week_from_web <- function(...) {web_calls <<- web_calls+1L;stop('Unexpected website request')}
+shiny::testServer(app$serverFuncSource(), {
+  session$setInputs(circa_season=2026L,circa_week=7L)
+  stopifnot(nrow(circa_lines_state())==0L,grepl('Upload the official Circa PDF or CSV',circa_status_state(),fixed=TRUE))
+  session$setInputs(circa_week=8L)
+  stopifnot(nrow(circa_lines_state())==0L,grepl('Week 8',circa_status_state(),fixed=TRUE))
+  session$setInputs(circa_week=6L)
+  check(circa_lines_state())
+  stopifnot(web_calls==0L)
+})
+stopifnot(web_calls==0L,!grepl('circa_refresh_web',as.character(ui),fixed=TRUE))
+cat('CIRCA_PDF_UPLOAD_BUILD_AND_NO_STARTUP_WEB_REQUEST_OK\n')

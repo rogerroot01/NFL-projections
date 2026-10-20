@@ -1886,7 +1886,6 @@ ui <- fluidPage(
             column(6, numericInput("circa_season", "Season", value = circa_active_season, min = 2024, max = 2100, step = 1)),
             column(6, numericInput("circa_week", "Week", value = circa_active_week, min = 1, max = 22, step = 1))
           ),
-          actionButton("circa_refresh_web", "Refresh from Circa Sports", class = "btn-primary btn-block"),
           tags$a(
             "Open official Circa Million page",
             href = "https://www.circasports.com/circa-million",
@@ -1894,14 +1893,14 @@ ui <- fluidPage(
             rel = "noopener noreferrer"
           ),
           tags$hr(),
-          h5("Manual fallback"),
+          h5("Import weekly lines"),
           fileInput(
             "circa_lines_file",
             "Upload weekly Circa lines",
             accept = c(".pdf", ".csv")
           ),
           actionButton("circa_use_default", "Use bundled selected-week lines", class = "btn-default btn-block"),
-          helpText("The Circa week follows the Dashboard week. Verified bundled lines load when available; Refresh checks the official PDF, and PDF/CSV upload is a fallback."),
+          helpText("The Circa week follows the Dashboard week. Verified bundled lines load when available. Upload the official weekly PDF or CSV to replace them."),
           tags$hr(),
           selectInput(
             "circa_source",
@@ -2298,7 +2297,7 @@ server <- function(input, output, session) {
     if (nrow(circa_default_lines) > 0) {
       paste0("Bundled Week ", circa_active_week, " contest sheet loaded: ", nrow(circa_default_lines), " matchups. Click Build Circa dashboard.")
     } else {
-      paste0("Checking Circa Sports for the Week ", circa_active_week, " contest sheet.")
+      paste0("Upload the official Circa PDF or CSV for Week ", circa_active_week, ".")
     }
   )
   poolhost_lines_state <- reactiveVal(poolhost_default_lines)
@@ -3643,32 +3642,6 @@ server <- function(input, output, session) {
     showNotification(message, type = "error", duration = NULL, id = "circa-import-error")
   }
 
-  refresh_circa_week <- function(season, week) {
-    circa_status_state("Checking Circa Sports for the official weekly sheet...")
-    rows <- tryCatch(
-      withProgress(
-        message = "Refreshing official Circa lines, please wait...",
-        value = 0.35,
-        download_circa_week_from_web(season, week)
-      ),
-      error = function(e) {
-        loaded <- circa_lines_state()
-        if (nrow(loaded) > 0 && all(loaded$season == as.integer(season), loaded$week == as.integer(week))) {
-          message <- paste("Web refresh failed; keeping the loaded verified sheet.", conditionMessage(e))
-          circa_status_state(message)
-          showNotification(message, type = "warning", duration = 10)
-        } else {
-          reject_circa_lines(paste("Circa web refresh error:", conditionMessage(e)))
-        }
-        NULL
-      }
-    )
-    if (!is.null(rows)) {
-      source_url <- attr(rows, "source_url") %||% "https://www.circasports.com/circa-million"
-      set_circa_lines(rows, source_url)
-    }
-  }
-
   observeEvent(list(input$dashboard_season, input$dashboard_week), {
     season <- suppressWarnings(as.integer(input$dashboard_season))
     week <- suppressWarnings(as.integer(input$dashboard_week))
@@ -3690,13 +3663,10 @@ server <- function(input, output, session) {
     if (nrow(bundled) > 0) {
       set_circa_lines(bundled, paste("Bundled verified Week", week, "copy"))
     } else {
-      refresh_circa_week(season, week)
+      removeNotification("circa-import-error")
+      circa_status_state(paste0("Upload the official Circa PDF or CSV for ", season, " Week ", week, "."))
     }
   }, ignoreInit = FALSE)
-
-  observeEvent(input$circa_refresh_web, {
-    refresh_circa_week(input$circa_season %||% circa_active_season, input$circa_week %||% circa_active_week)
-  }, ignoreInit = TRUE)
 
   observeEvent(input$circa_lines_file, {
     req(input$circa_lines_file$datapath)
@@ -3737,14 +3707,14 @@ server <- function(input, output, session) {
     lines <- circa_lines_state()
     if (nrow(lines) == 0) {
       if (!str_detect(circa_status_state(), "error")) {
-        circa_status_state(paste0("No Circa lines are loaded for ", input$circa_season, " Week ", input$circa_week, ". Refresh or upload the official sheet."))
+        circa_status_state(paste0("No Circa lines are loaded for ", input$circa_season, " Week ", input$circa_week, ". Upload the official PDF or CSV."))
       }
       showNotification(circa_status_state(), type = "error", duration = NULL, id = "circa-import-error")
       circa_results_state(tibble())
       return()
     }
     if (!all(lines$season == as.integer(input$circa_season), lines$week == as.integer(input$circa_week))) {
-      circa_status_state("The loaded Circa sheet is for a different week. Refresh or upload the selected week's sheet.")
+      circa_status_state("The loaded Circa sheet is for a different week. Upload the selected week's PDF or CSV.")
       circa_results_state(tibble())
       return()
     }
