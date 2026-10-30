@@ -87,22 +87,31 @@ early_lines <- bind_rows(
   )
 ) %>% distinct(game_id, .keep_all = TRUE)
 
-apply_backtest_lines <- function(base, line_source = "closing") {
-  if (!identical(line_source, "early")) return(base)
-  idx <- match(canonical_game_id(base$game_id), early_lines$game_id)
-  completed <- if(all(c("home_score","away_score") %in% names(base))) {
-    is.finite(base$home_score) & is.finite(base$away_score)
-  } else rep(TRUE,nrow(base))
-  # Missing early snapshots must not silently become closing-line backtests.
-  base$spread_line[completed] <- early_lines$early_spread_line[idx[completed]]
-  base$total_line[completed] <- early_lines$early_total_line[idx[completed]]
-  if ("home_implied" %in% names(base)) {
-    base$home_implied[completed] <- (base$total_line[completed] + base$spread_line[completed]) / 2
+midweek_path <- file.path(app_data_dir,"midweek_lines_2026.csv")
+midweek_lines <- if(file.exists(midweek_path)) read_csv(midweek_path,show_col_types=FALSE) else tibble()
+saved_market_path <- file.path(app_data_dir,"pre_midweek_lines_2026.csv")
+saved_market_lines <- if(file.exists(saved_market_path)) read_csv(saved_market_path,show_col_types=FALSE) else tibble()
+apply_backtest_lines <- function(base, line_source = "midweek") {
+  completed <- if(all(c("home_score","away_score") %in% names(base)))
+    is.finite(base$home_score) & is.finite(base$away_score) else rep(TRUE,nrow(base))
+  ids <- canonical_game_id(base$game_id)
+  use <- rep(FALSE,nrow(base))
+  if(identical(line_source,"early")) {
+    i<-match(ids,early_lines$game_id);use<-completed | !is.na(i)
+    base$spread_line[use]<-early_lines$early_spread_line[i[use]]
+    base$total_line[use]<-early_lines$early_total_line[i[use]]
+  } else if(identical(line_source,"midweek") && nrow(midweek_lines)) {
+    i<-match(ids,canonical_game_id(midweek_lines$game_id));use<-!completed & !is.na(i)
+    base$spread_line[use]<-midweek_lines$spread_line[i[use]]
+    base$total_line[use]<-midweek_lines$total_line[i[use]]
+  } else if(identical(line_source,"closing") && nrow(saved_market_lines)) {
+    i<-match(ids,canonical_game_id(saved_market_lines$game_id));use<-!completed & !is.na(i)
+    base$spread_line[use]<-coalesce(saved_market_lines$market_spread_line,saved_market_lines$spread_line)[i[use]]
+    base$total_line[use]<-coalesce(saved_market_lines$market_total_line,saved_market_lines$total_line)[i[use]]
   }
-  if ("away_implied" %in% names(base)) {
-    base$away_implied[completed] <- (base$total_line[completed] - base$spread_line[completed]) / 2
-  }
-  if ("line" %in% names(base)) base$line[completed] <- NA_real_
+  if("home_implied"%in%names(base))base$home_implied[use]<-(base$total_line[use]+base$spread_line[use])/2
+  if("away_implied"%in%names(base))base$away_implied[use]<-(base$total_line[use]-base$spread_line[use])/2
+  if("line"%in%names(base))base$line[use]<-NA_real_
   base
 }
 
@@ -1076,6 +1085,20 @@ build_pipeline_game_results <- function(models) {
   )
 }
 pipeline_game_results <- build_pipeline_game_results(c(compact_models, nextgen_compact_models))
+# Add verified final scores as facts, without refitting any saved forecast.
+verified_results_path <- file.path(app_data_dir,"current_results_2026.csv")
+if(file.exists(verified_results_path)) {
+  verified<-read_csv(verified_results_path,show_col_types=FALSE) %>% filter(tolower(status)=="final")
+  verified$game_id<-canonical_game_id(paste(verified$season,verified$week,verified$away_team,verified$home_team,sep="_"))
+  i<-match(verified$game_id,pipeline_game_results$game_id);old<-which(!is.na(i))
+  stopifnot(all(verified$actual_home_pts[old]==pipeline_game_results$home_score[i[old]]),all(verified$actual_away_pts[old]==pipeline_game_results$away_score[i[old]]))
+  fresh<-which(is.na(i));li<-match(verified$game_id[fresh],current_lines$game_id)
+  if(length(fresh)) {
+    stopifnot(!anyNA(li))
+    pipeline_game_results<-bind_rows(pipeline_game_results,tibble(game_id=verified$game_id[fresh],home_score=verified$actual_home_pts[fresh],away_score=verified$actual_away_pts[fresh],spread_line=current_lines$current_spread_line[li],total_line=current_lines$current_total_line[li]))
+  }
+}
+
 
 apply_pipeline_game_results <- function(df) {
   if (!"game_id" %in% names(df)) return(df)
@@ -1634,10 +1657,10 @@ ui <- fluidPage(
           selectInput(
             "cons_line_source",
             "Backtest line source",
-            choices = c("Closing lines" = "closing", "Early lines" = "early"),
-            selected = "closing"
+            choices = c("Midweek / current odds" = "midweek", "Closing / saved lines" = "closing", "Early lines" = "early"),
+            selected = "midweek"
           ),
-          helpText("Closing uses saved game lines. Early uses weekly market snapshots. Games without early lines are omitted in Early mode."),
+          helpText("Midweek uses the dated current odds for upcoming games. Closing / saved retains the previous snapshot. Early uses the original weekly lines. Completed games retain their saved grading prices."),
           selectInput(
             "cons_injury_source",
             "Projection injury adjustment",
@@ -1712,10 +1735,10 @@ ui <- fluidPage(
           selectInput(
             "ng_cons_line_source",
             "Backtest line source",
-            choices = c("Closing lines" = "closing", "Early lines" = "early"),
-            selected = "closing"
+            choices = c("Midweek / current odds" = "midweek", "Closing / saved lines" = "closing", "Early lines" = "early"),
+            selected = "midweek"
           ),
-          helpText("Closing uses saved game lines. Early uses weekly market snapshots. Games without early lines are omitted in Early mode."),
+          helpText("Midweek uses the dated current odds for upcoming games. Closing / saved retains the previous snapshot. Early uses the original weekly lines. Completed games retain their saved grading prices."),
           selectInput(
             "ng_cons_injury_source",
             "Projection injury adjustment",

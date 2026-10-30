@@ -2151,7 +2151,7 @@
       "checksum": "10519c2c21d6b43c00fb7abd94a0469d"
     },
     "app.R": {
-      "checksum": "ce735dfbc8ac962f4c403a6f9645e9ef"
+      "checksum": "610c11ed2fae44123f4de45980903412"
     },
     "data/circa_million_2026_week_1.csv": {
       "checksum": "89ada6435784274be3533436d26df80d"
@@ -2172,7 +2172,7 @@
       "checksum": "a3cae3a772b8f9414464a1ffdbd098be"
     },
     "data/current_lines_2026.csv": {
-      "checksum": "c8bc3897a27fd2c95cbcf6406849be14"
+      "checksum": "320e949d8cc51f82ce7ddfc68d4c4fe7"
     },
     "data/dashboard_defaults.csv": {
       "checksum": "a7a1594a90b2a4a1300a30d00624640f"
@@ -2239,6 +2239,15 @@
     },
     "data/circa_million_2026_week_8.csv": {
       "checksum": "5d6de049dbc81c03a3df53b69c1ccc6f"
+    },
+    "data/midweek_lines_2026.csv": {
+      "checksum": "a0f17c8d886623ab6c106b825dd3c603"
+    },
+    "data/pre_midweek_lines_2026.csv": {
+      "checksum": "7c3682eb1c2df0abf5507d7c6365065e"
+    },
+    "data/current_results_2026.csv": {
+      "checksum": "e4b20037077ffd6a10f557f4f21ee3e6"
     }
   },
   "users": null

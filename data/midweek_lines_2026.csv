@@ -1,0 +1,27 @@
+game_id,season,week,away_team,home_team,spread_line,total_line,away_spread,home_spread,away_spread_price,home_spread_price,over_price,under_price,away_moneyline,home_moneyline,source,received_date,home_implied,away_implied,snapshot_id,market_phase
+2026_8_BAL_BUF,2026,8,BAL,BUF,3,54.5,3,-3,-105,-115,-110,-110,145,-175,User-supplied sportsbook board,2026-10-30,28.75,25.75,2026-10-30_midweek,Midweek
+2026_8_IND_JAX,2026,8,IND,JAX,10,46.5,10,-10,-115,-105,-110,-110,380,-500,User-supplied sportsbook board,2026-10-30,28.25,18.25,2026-10-30_midweek,Midweek
+2026_8_TEN_CIN,2026,8,TEN,CIN,12.5,46.5,12.5,-12.5,-112,-108,-110,-110,490,-675,User-supplied sportsbook board,2026-10-30,29.5,17.0,2026-10-30_midweek,Midweek
+2026_8_MIN_DET,2026,8,MIN,DET,3,46.5,3,-3,100,-120,100,-120,142,-170,User-supplied sportsbook board,2026-10-30,24.75,21.75,2026-10-30_midweek,Midweek
+2026_8_CLE_PIT,2026,8,CLE,PIT,3.5,39.5,3.5,-3.5,-110,-110,-105,-115,160,-192,User-supplied sportsbook board,2026-10-30,21.5,18.0,2026-10-30_midweek,Midweek
+2026_8_ARI_DAL,2026,8,ARI,DAL,7,54.5,7,-7,-112,-108,-112,-108,250,-310,User-supplied sportsbook board,2026-10-30,30.75,23.75,2026-10-30_midweek,Midweek
+2026_8_LV_NYJ,2026,8,LV,NYJ,1.5,45.5,1.5,-1.5,-110,-110,-110,-110,102,-122,User-supplied sportsbook board,2026-10-30,23.5,22.0,2026-10-30_midweek,Midweek
+2026_8_ATL_TB,2026,8,ATL,TB,2.5,43.5,2.5,-2.5,-110,-110,-108,-112,114,-135,User-supplied sportsbook board,2026-10-30,23.0,20.5,2026-10-30_midweek,Midweek
+2026_8_LAC_LA,2026,8,LAC,LA,6.5,45.5,6.5,-6.5,-102,-118,-105,-115,220,-270,User-supplied sportsbook board,2026-10-30,26.0,19.5,2026-10-30_midweek,Midweek
+2026_8_NE_MIA,2026,8,NE,MIA,-7,43.5,-7,7,-105,-115,-108,-112,-325,260,User-supplied sportsbook board,2026-10-30,18.25,25.25,2026-10-30_midweek,Midweek
+2026_8_KC_DEN,2026,8,KC,DEN,-1.5,40.5,-1.5,1.5,-105,-115,-112,-108,-118,-102,User-supplied sportsbook board,2026-10-30,19.5,21.0,2026-10-30_midweek,Midweek
+2026_8_PHI_WAS,2026,8,PHI,WAS,6,40.5,6,-6,-112,-108,-112,-108,215,-265,User-supplied sportsbook board,2026-10-30,23.25,17.25,2026-10-30_midweek,Midweek
+2026_8_CHI_SEA,2026,8,CHI,SEA,3,46.5,3,-3,-105,-115,-110,-110,142,-170,User-supplied sportsbook board,2026-10-30,24.75,21.75,2026-10-30_midweek,Midweek
+2026_9_JAX_BAL,2026,9,JAX,BAL,3,48.5,3,-3,-115,-105,-110,-110,130,-155,User-supplied sportsbook board,2026-10-30,25.75,22.75,2026-10-30_midweek,Midweek
+2026_9_CIN_ATL,2026,9,CIN,ATL,-3,49.5,-3,3,-120,100,-110,-110,-170,142,User-supplied sportsbook board,2026-10-30,23.25,26.25,2026-10-30_midweek,Midweek
+2026_9_NYG_PHI,2026,9,NYG,PHI,-1.5,40.5,-1.5,1.5,-110,-110,-110,-110,-122,102,User-supplied sportsbook board,2026-10-30,19.5,21.0,2026-10-30_midweek,Midweek
+2026_9_NYJ_KC,2026,9,NYJ,KC,9.5,43.5,9.5,-9.5,-110,-110,-110,-110,380,-500,User-supplied sportsbook board,2026-10-30,26.5,17.0,2026-10-30_midweek,Midweek
+2026_9_DAL_IND,2026,9,DAL,IND,-4.5,51.5,-4.5,4.5,-110,-110,-110,-110,-225,185,User-supplied sportsbook board,2026-10-30,23.5,28.0,2026-10-30_midweek,Midweek
+2026_9_DET_MIA,2026,9,DET,MIA,-7,48.5,-7,7,-115,-105,-110,-110,-410,320,User-supplied sportsbook board,2026-10-30,20.75,27.75,2026-10-30_midweek,Midweek
+2026_9_CLE_NO,2026,9,CLE,NO,2.5,43.5,2.5,-2.5,-110,-110,-102,-118,114,-135,User-supplied sportsbook board,2026-10-30,23.0,20.5,2026-10-30_midweek,Midweek
+2026_9_LA_WAS,2026,9,LA,WAS,-5.5,48.5,-5.5,5.5,-110,-110,-110,-110,-230,190,User-supplied sportsbook board,2026-10-30,21.5,27.0,2026-10-30_midweek,Midweek
+2026_9_LV_SF,2026,9,LV,SF,10,48.5,10,-10,-110,-110,-110,-110,425,-575,User-supplied sportsbook board,2026-10-30,29.25,19.25,2026-10-30_midweek,Midweek
+2026_9_HOU_LAC,2026,9,HOU,LAC,-3.5,42.5,-3.5,3.5,-110,-110,-110,-110,-185,154,User-supplied sportsbook board,2026-10-30,19.5,23.0,2026-10-30_midweek,Midweek
+2026_9_ARI_SEA,2026,9,ARI,SEA,10.5,44.5,10.5,-10.5,-110,-110,-110,-110,470,-650,User-supplied sportsbook board,2026-10-30,27.5,17.0,2026-10-30_midweek,Midweek
+2026_9_TB_CHI,2026,9,TB,CHI,6,47.5,6,-6,-110,-110,-110,-110,215,-265,User-supplied sportsbook board,2026-10-30,26.75,20.75,2026-10-30_midweek,Midweek
+2026_9_BUF_MIN,2026,9,BUF,MIN,-2.5,47.5,-2.5,2.5,-110,-110,-110,-110,-142,120,User-supplied sportsbook board,2026-10-30,22.5,25.0,2026-10-30_midweek,Midweek
