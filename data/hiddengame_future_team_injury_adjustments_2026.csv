@@ -243,7 +243,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,8,WAS,NFC,NFC East,-3.8,0.22
 2026,9,ARI,NFC,NFC West,0,0
 2026,9,ATL,NFC,NFC South,0,0
-2026,9,BAL,AFC,AFC North,0,0
+2026,9,BAL,AFC,AFC North,-2.51,0
 2026,9,BUF,AFC,AFC East,0,0
 2026,9,CAR,NFC,NFC South,0,0
 2026,9,CHI,NFC,NFC North,0,0
@@ -273,7 +273,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,9,WAS,NFC,NFC East,0,0
 2026,10,ARI,NFC,NFC West,0,0
 2026,10,ATL,NFC,NFC South,0,0
-2026,10,BAL,AFC,AFC North,0,0
+2026,10,BAL,AFC,AFC North,-1.68,0
 2026,10,BUF,AFC,AFC East,0,0
 2026,10,CAR,NFC,NFC South,0,0
 2026,10,CIN,AFC,AFC North,0,0
@@ -300,7 +300,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,10,TEN,AFC,AFC South,0,0
 2026,10,WAS,NFC,NFC East,0,0
 2026,11,ARI,NFC,NFC West,0,0
-2026,11,BAL,AFC,AFC North,0,0
+2026,11,BAL,AFC,AFC North,-0.84,0
 2026,11,BUF,AFC,AFC East,0,0
 2026,11,CAR,NFC,NFC South,0,0
 2026,11,CHI,NFC,NFC North,0,0
