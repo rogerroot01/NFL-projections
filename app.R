@@ -1761,7 +1761,7 @@ ui <- fluidPage(
           helpText("2026 source: Forecast Team Off Def Injuries. With both adjustments enabled, spread uses home F minus away G; home and away scores use H and I, and the total uses H plus I."),
           actionButton("ng_cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
-          sliderInput("ng_cons_min_win", "Minimum model win rate", min = if (nextgen_clean_mode) 0 else 40, max = 60, value = if (nextgen_clean_mode) 0 else 40, step = 1, post = "%"),
+          sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
           actionButton("ng_cons_run", "Build next-gen consensus", class = "btn-primary"),
           tags$hr(),
           downloadButton("ng_cons_download", "Download next-gen consensus rows")
