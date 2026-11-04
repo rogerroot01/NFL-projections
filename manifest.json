@@ -2181,10 +2181,10 @@
       "checksum": "1566b82aa78eb36eeb3f52a81baae026"
     },
     "data/forecast_team_off_def_injuries_2026.csv": {
-      "checksum": "08d82f88f1af8638a3ac8b6d4d637c25"
+      "checksum": "37b69903231f06d825b8b25c868bfaba"
     },
     "data/hiddengame_future_team_injury_adjustments_2026.csv": {
-      "checksum": "7b640460d94408103fbaf71d03dbae03"
+      "checksum": "b0508e9ee46bbd87d265d4f987e1a785"
     },
     "data/hiddengame_injury_adjustments.csv": {
       "checksum": "ddef9f944a5053d83721ead74abdc5c5"
@@ -2202,16 +2202,16 @@
       "checksum": "cc6aa5b5aa95e4c82b5649a10daa27fa"
     },
     "data/nextgen_compact_models.rds": {
-      "checksum": "9598f29c13755ad4d8b7a0204a3dc939"
+      "checksum": "ea74b5970bcd040503ddd771b3bb5579"
     },
     "data/nextgen_model_inventory.rds": {
       "checksum": "1b35c5c0db5ba70d8d74300fab3f3d17"
     },
     "data/nextgen_prediction_column_inventory.csv": {
-      "checksum": "c4d9ae2f7b67dc7792c023e22f2d1463"
+      "checksum": "1be50d9f95959d584e3d8f3e53739bdd"
     },
     "data/nextgen_pregame_2026_archive.rds": {
-      "checksum": "5a6c3ec06b3eeaae4a50ee6b541a760c"
+      "checksum": "a525600b0750751e05d5f53a80f512a7"
     },
     "data/poolhost_2026_week_3.csv": {
       "checksum": "a902681cb481d78ae8470596593683d2"
