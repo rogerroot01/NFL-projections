@@ -333,6 +333,14 @@ next_gen_family_labels <- c(
   xgboost_regression = "XGBoost Regression"
 )
 
+nextgen_vote_groups <- tibble::tribble(
+  ~id,                 ~label,           ~framework, ~source,               ~enabled,
+  "ng_early_direct",   "Early direct",   "early",    "direct",              TRUE,
+  "ng_early_implied",  "Early implied",  "early",    "implied_team_scores", TRUE,
+  "ng_late_direct",    "Late direct",    "late",     "direct",              TRUE,
+  "ng_late_implied",   "Late implied",   "late",     "implied_team_scores", FALSE
+)
+
 market_labels <- c(
   all = "All markets",
   spread = "Spread / score diff",
@@ -1712,24 +1720,18 @@ ui <- fluidPage(
           width = 3,
           actionButton("ng_cons_run_top", "Build next-gen consensus", class = "btn-primary"),
           tags$hr(),
-          checkboxGroupInput(
-            "ng_cons_frameworks",
-            "Frameworks",
-            choices = c("Early framework" = "early", "Late framework" = "late"),
-            selected = c("early", "late")
-          ),
-          checkboxGroupInput(
-            "ng_cons_families",
-            "Families",
-            choices = stats::setNames(names(next_gen_family_labels), next_gen_family_labels),
-            selected = names(next_gen_family_labels)
-          ),
-          checkboxGroupInput(
-            "ng_cons_projection_sources",
-            "Spread/total projection sources",
-            choices = c("Direct model projections" = "direct", "Implied from team scores" = "implied_team_scores"),
-            selected = c("direct", "implied_team_scores")
-          ),
+          tags$h4("Projection sources"),
+          helpText("Implied uses the projected team scores to build spreads and totals."),
+          do.call(tabsetPanel, c(list(id = "ng_projection_group", type = "pills"),
+            purrr::pmap(nextgen_vote_groups, function(id, label, framework, source, enabled) {
+              tabPanel(label,
+                checkboxInput(paste0(id, "_enabled"), "Use this group", value = enabled),
+                checkboxGroupInput(paste0(id, "_families"), "Families",
+                  choices = stats::setNames(names(next_gen_family_labels), next_gen_family_labels),
+                  selected = names(next_gen_family_labels))
+              )
+            })
+          )),
           checkboxGroupInput("ng_cons_seasons", "Backtest seasons", choices = c(2024, 2025), selected = c(2024, 2025)),
           checkboxGroupInput("ng_cons_future_seasons", "Future projection seasons", choices = 2026, selected = 2026),
           selectInput(
@@ -2600,7 +2602,9 @@ server <- function(input, output, session) {
 
   nextgen_filter_projection_sources <- function(cols, market, projection_sources) {
     projection_sources <- projection_sources %||% c("direct", "implied_team_scores")
-    if (!market %in% c("spread", "straight_up", "total")) return(cols)
+    if (!market %in% c("spread", "straight_up", "total")) {
+      return(if ("direct" %in% projection_sources) cols else character())
+    }
     if (length(projection_sources) == 0) return(character())
 
     is_implied <- str_detect(cols, regex("ImpliedFromTeamScores", TRUE))
@@ -3316,15 +3320,30 @@ server <- function(input, output, session) {
     consensus_rows(rows)
   }, ignoreInit = TRUE, priority = 100)
 
+  nextgen_selected_inventory <- reactive({
+    selected_groups <- purrr::pmap(nextgen_vote_groups, function(id, label, framework, source, enabled) {
+      use_group <- input[[paste0(id, "_enabled")]]
+      families <- input[[paste0(id, "_families")]]
+      if (is.null(use_group)) {
+        use_group <- enabled
+        families <- names(next_gen_family_labels)
+      }
+      if (!isTRUE(use_group)) families <- character()
+      tibble(framework = rep(framework, length(families)),
+             family = as.character(families), source = rep(source, length(families)))
+    })
+    sources <- bind_rows(selected_groups) %>%
+      group_by(framework, family) %>%
+      summarise(projection_sources = list(source), .groups = "drop")
+    inner_join(nextgen_inventory, sources, by = c("framework", "family"))
+  })
+
   build_nextgen_consensus_rows <- function() {
     nextgen_consensus_status("Building next-gen consensus...")
     if (!nextgen_data_available) {
       nextgen_consensus_status("Next-gen prepared data is missing. Run prepare_data_nextgen.R and deploy the nextgen RDS files.")
       return(tibble())
     }
-    frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
-    families <- input$ng_cons_families %||% names(next_gen_family_labels)
-    projection_sources <- input$ng_cons_projection_sources %||% c("direct", "implied_team_scores")
     markets <- dashboard_market_keys
     line_source <- input$ng_cons_line_source %||% "closing"
     injury_source <- input$ng_cons_injury_source %||% "apply"
@@ -3337,8 +3356,7 @@ server <- function(input, output, session) {
         nextgen_consensus_status("No seasons selected.")
         return(tibble())
       }
-      selected <- nextgen_inventory %>%
-        filter(framework %in% frameworks, family %in% families, season %in% selected_seasons)
+      selected <- nextgen_selected_inventory() %>% filter(season %in% selected_seasons)
       if (nrow(selected) == 0) {
         nextgen_consensus_status("No next-gen model files matched the selected frameworks, families, and seasons.")
         return(tibble())
@@ -3347,7 +3365,7 @@ server <- function(input, output, session) {
       incProgress(0.2, detail = "Collecting next-gen model projections")
       long <- purrr::map_dfr(markets, function(market) {
         min_win <- if (identical(market, "straight_up")) 0 else (input$ng_cons_min_win %||% 40) / 100
-        pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label) {
+        pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label, projection_sources) {
           long_nextgen_predictions_for_file(
             tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
             market,
@@ -3405,7 +3423,7 @@ server <- function(input, output, session) {
       }
       nextgen_consensus_status(paste0(
         "Complete. Built ", nrow(rows), " next-gen consensus rows across ", length(markets), " markets from ", nrow(selected),
-        " model files using ", paste(projection_sources, collapse = " + "), " projection sources. Use the Market dropdown to view one market at a time."
+        " model files. Use the Market dropdown to view one market at a time."
       ))
       rows
     })
@@ -3531,15 +3549,11 @@ server <- function(input, output, session) {
 
   build_circa_nextgen_source <- function(lines, include_all = FALSE) {
     if (!nextgen_data_available) return(tibble())
-    frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
-    families <- input$ng_cons_families %||% names(next_gen_family_labels)
-    projection_sources <- input$ng_cons_projection_sources %||% c("direct", "implied_team_scores")
     seasons <- unique(as.integer(lines$season))
-    selected <- nextgen_inventory %>%
-      filter(framework %in% frameworks, family %in% families, season %in% seasons)
+    selected <- nextgen_selected_inventory() %>% filter(season %in% seasons)
     if (nrow(selected) == 0) return(tibble())
     min_win <- if (include_all) 0 else (input$ng_cons_min_win %||% 40) / 100
-    long <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label) {
+    long <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label, projection_sources) {
       long_nextgen_predictions_for_file(
         tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
         "spread",
@@ -3549,7 +3563,9 @@ server <- function(input, output, session) {
         isTRUE(input$ng_cons_apply_amortization),
         projection_sources
       )
-    }) %>%
+    })
+    if (!nrow(long)) return(tibble())
+    long <- long %>%
       inner_join(
         lines %>% select(game_id, circa_away_line, circa_home_line),
         by = "game_id"
@@ -3651,26 +3667,25 @@ server <- function(input, output, session) {
       long <- bind_rows(long, legacy)
     }
     if ("next_gen" %in% required && nextgen_data_available) {
-      frameworks <- input$ng_cons_frameworks %||% unique(nextgen_inventory$framework)
-      families <- input$ng_cons_families %||% names(next_gen_family_labels)
-      selected <- nextgen_inventory %>%
-        filter(framework %in% frameworks, family %in% families,
-               season == first(lines$season))
+      selected <- nextgen_selected_inventory() %>% filter(season == first(lines$season))
       nextgen <- pmap_dfr(selected, function(path, file, season, framework, sample,
-                                             family, family_label) {
+                                             family, family_label, projection_sources) {
         long_nextgen_predictions_for_file(
           tibble(path = path, file = file, season = season, framework = framework,
                  sample = sample, family = family, family_label = family_label),
           "total", 0, input$ng_cons_line_source %||% "closing",
           input$ng_cons_injury_source %||% "apply",
           isTRUE(input$ng_cons_apply_amortization),
-          input$ng_cons_projection_sources %||% c("direct", "implied_team_scores")
+          projection_sources
         )
-      }) %>%
-        semi_join(monday, by = "game_id") %>%
-        mutate(source = "Next-gen")
-      long <- bind_rows(long, nextgen)
+      })
+      if (nrow(nextgen)) {
+        long <- bind_rows(long, nextgen %>%
+          semi_join(monday, by = "game_id") %>%
+          mutate(source = "Next-gen"))
+      }
     }
+    if (!nrow(long)) stop("Total-score projections are missing for the selected model groups.")
     source_means <- long %>%
       filter(is.finite(projection)) %>%
       group_by(game_id, source) %>%
