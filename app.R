@@ -1048,7 +1048,11 @@ nextgen_inventory <- if (nextgen_data_available) {
     family_label = character()
   )
 }
-nextgen_compact_models <- if (nextgen_data_available) readRDS(nextgen_compact_models_rds) else list()
+nextgen_original_models <- if (nextgen_data_available) readRDS(nextgen_compact_models_rds) else list()
+nextgen_clean_path <- file.path(app_data_dir, "nextgen_clean_refit_models.rds")
+nextgen_clean_mode <- nextgen_data_available && file.exists(nextgen_clean_path)
+nextgen_compact_models <- if (nextgen_clean_mode) readRDS(nextgen_clean_path) else nextgen_original_models
+if (nextgen_clean_mode) stopifnot(identical(names(nextgen_compact_models), names(nextgen_original_models)))
 
 # Some Billy exports carry frozen forecasts without their final scores. Resolve
 # completed-game facts from scored pipeline exports, independently of forecasts
@@ -1084,7 +1088,7 @@ build_pipeline_game_results <- function(models) {
     }), .groups = "drop"
   )
 }
-pipeline_game_results <- build_pipeline_game_results(c(compact_models, nextgen_compact_models))
+pipeline_game_results <- build_pipeline_game_results(c(compact_models, nextgen_original_models))
 # Add verified final scores as facts, without refitting any saved forecast.
 verified_results_path <- file.path(app_data_dir,"current_results_2026.csv")
 if(file.exists(verified_results_path)) {
@@ -1701,6 +1705,8 @@ ui <- fluidPage(
     ),
     tabPanel(
       "Next-Gen Consensus",
+      if (nextgen_clean_mode) tags$p(class = "alert alert-info",
+        "Historical selections are retrospective. Model win-rate filters use earlier seasons only. The 2024 view has no earlier record."),
       sidebarLayout(
         sidebarPanel(
           width = 3,
@@ -1753,7 +1759,7 @@ ui <- fluidPage(
           helpText("2026 source: Forecast Team Off Def Injuries. With both adjustments enabled, spread uses home F minus away G; home and away scores use H and I, and the total uses H plus I."),
           actionButton("ng_cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
-          sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
+          sliderInput("ng_cons_min_win", "Minimum model win rate", min = if (nextgen_clean_mode) 0 else 40, max = 60, value = if (nextgen_clean_mode) 0 else 40, step = 1, post = "%"),
           actionButton("ng_cons_run", "Build next-gen consensus", class = "btn-primary"),
           tags$hr(),
           downloadButton("ng_cons_download", "Download next-gen consensus rows")
@@ -2647,8 +2653,25 @@ server <- function(input, output, session) {
       vals <- suppressWarnings(as.numeric(df[[col]]))
       proj <- nextgen_projection_candidates_for_cover(col)
       proj <- proj[proj %in% names(df)][1] %||% NA_character_
+      market <- nextgen_cover_market(col)
+      if (nextgen_clean_mode && !is.na(proj) && market != "all") {
+        home <- get_line(df, "home_score")
+        away <- get_line(df, "away_score")
+        spread <- get_line(df, "spread_line")
+        total <- get_line(df, "total_line")
+        actual <- switch(market, spread = home - away, total = home + away,
+                         home_implied = home, away_implied = away)
+        line <- switch(market, spread = spread, total = total,
+                       home_implied = (total + spread) / 2,
+                       away_implied = (total - spread) / 2)
+        actual_side <- sign(actual - line)
+        projected_side <- sign(as.numeric(df[[proj]]) - line)
+        settled <- !is.na(actual_side) & !is.na(projected_side) &
+          actual_side != 0 & projected_side != 0
+        vals <- ifelse(settled, as.integer(actual_side == projected_side), NA_integer_)
+      }
       tibble(
-        market = nextgen_cover_market(col),
+        market = market,
         result_col = col,
         projection_col = proj,
         projection_source = nextgen_projection_source(proj),
@@ -2672,8 +2695,8 @@ server <- function(input, output, session) {
       ungroup()
   }
 
-  historical_nextgen_model_scores <- function(market) {
-    selected <- nextgen_inventory %>% filter(season %in% c(2024, 2025))
+  historical_nextgen_model_scores <- function(market, before_season = Inf) {
+    selected <- nextgen_inventory %>% filter(season %in% c(2024, 2025), season < before_season)
     rows <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label) {
       detect_nextgen_cover_summary(read_nextgen_model_file(path)) %>%
         filter(!is.na(projection_col)) %>%
@@ -2722,7 +2745,14 @@ server <- function(input, output, session) {
 
     score_market <- if (identical(market, "straight_up")) "spread" else market
     use_historical_score_lookup <- !identical(meta$sample, "test") || suppressWarnings(as.integer(meta$season)) >= 2026L
-    if (isTRUE(use_historical_score_lookup)) {
+    if (nextgen_clean_mode) {
+      prior_scores <- historical_nextgen_model_scores(market, before_season = as.integer(meta$season))
+      score_lookup <- if (nrow(prior_scores)) {
+        prior_scores %>% filter(framework == meta$framework, family == meta$family) %>%
+          select(projection_col, model_result_col, model_picks, model_win_pct)
+      } else tibble(projection_col = character(), model_result_col = character(),
+                    model_picks = integer(), model_win_pct = numeric())
+    } else if (isTRUE(use_historical_score_lookup)) {
       score_lookup <- historical_nextgen_model_scores(market) %>%
         filter(framework == meta$framework, family == meta$family) %>%
         select(projection_col, model_result_col, model_picks, model_win_pct)
@@ -2731,7 +2761,8 @@ server <- function(input, output, session) {
         filter(market == score_market, !is.na(projection_col)) %>%
         select(projection_col, model_result_col = result_col, model_picks = picks, model_win_pct = win_pct)
     }
-    if ((nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) &&
+    if (!nextgen_clean_mode &&
+        (nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) &&
         market == "home_implied" &&
         all(c("actual_market_result", "predicted_market_result") %in% names(df))) {
       actual_market_result <- suppressWarnings(as.numeric(df[["actual_market_result"]]))
@@ -2747,7 +2778,7 @@ server <- function(input, output, session) {
         )
       }
     }
-    if (nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct))) {
+    if (!nextgen_clean_mode && (nrow(score_lookup) == 0 || all(is.na(score_lookup$model_win_pct)))) {
       score_lookup <- historical_nextgen_model_scores(market) %>%
         filter(framework == meta$framework, family == meta$family) %>%
         select(projection_col, model_result_col, model_picks, model_win_pct)
@@ -2837,7 +2868,8 @@ server <- function(input, output, session) {
 
     out %>%
       filter(!is.na(projection), !is.na(market_line)) %>%
-      filter(!is.na(model_win_pct), model_win_pct >= min_win_pct)
+      filter((nextgen_clean_mode & (min_win_pct == 0 | as.integer(meta$season) == 2024L)) |
+             (!is.na(model_win_pct) & model_win_pct >= min_win_pct))
   }
 
   bind_nextgen_family <- function(id, family_key) {
@@ -3362,6 +3394,15 @@ server <- function(input, output, session) {
         ) %>%
         filter(is.na(agree_pct) | agree_pct >= min_agree) %>%
         arrange(market, season, week, game_id)
+      if (nextgen_clean_mode) {
+        rows <- rows %>% mutate(
+          forecast_version = "clean_refit",
+          selection_context = if_else(
+            season < max(nextgen_inventory$season) | !is.na(actual_result),
+            "retrospective_review", "unsettled_at_export"
+          )
+        )
+      }
       nextgen_consensus_status(paste0(
         "Complete. Built ", nrow(rows), " next-gen consensus rows across ", length(markets), " markets from ", nrow(selected),
         " model files using ", paste(projection_sources, collapse = " + "), " projection sources. Use the Market dropdown to view one market at a time."

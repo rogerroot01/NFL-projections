@@ -2148,43 +2148,43 @@
   },
   "files": {
     "README.md": {
-      "checksum": "10519c2c21d6b43c00fb7abd94a0469d"
+      "checksum": "0722f9959a343b537e3c6b14613926db"
     },
     "app.R": {
-      "checksum": "610c11ed2fae44123f4de45980903412"
+      "checksum": "25972463b4f0002cf117ef92387094ba"
     },
     "data/circa_million_2026_week_1.csv": {
-      "checksum": "89ada6435784274be3533436d26df80d"
+      "checksum": "2ecf611daf37604024c4f8b3e90f7e80"
     },
     "data/circa_million_2026_week_3.csv": {
-      "checksum": "6085bba5e26da672fbef1f0fdda4e186"
+      "checksum": "6075bcaaa567fbc816ac84182e4e33e4"
     },
     "data/circa_million_2026_week_4.csv": {
-      "checksum": "d397c6693dca9097a2c25b40d87e2538"
+      "checksum": "ada53ecbecafa4fda16993617d4d53d7"
     },
     "data/circa_million_2026_week_5.csv": {
-      "checksum": "2ab7f5fe5f0da816dcbdb6a6fc2ec75d"
+      "checksum": "dd89e5302f6d5e3ec9fe7d9ba70fc09c"
     },
     "data/circa_million_2026_week_6.csv": {
-      "checksum": "093910ada62c58828eedb9ff8a9e4c6a"
+      "checksum": "216ca5289231252e6206439742b3b6e8"
     },
     "data/compact_models.rds": {
       "checksum": "e6cfc0185f979144ab43616559f66344"
     },
     "data/current_lines_2026.csv": {
-      "checksum": "9a9b52fab1c24dbb9902a6aca78e67a4"
+      "checksum": "f97156b4f94f82d50284c2293f8ef139"
     },
     "data/dashboard_defaults.csv": {
-      "checksum": "a7a1594a90b2a4a1300a30d00624640f"
+      "checksum": "0c429f0ebc477f6a30231e51c3e7e51c"
     },
     "data/early_lines.csv": {
-      "checksum": "1566b82aa78eb36eeb3f52a81baae026"
+      "checksum": "5bf9f23ac1599fcb52b48116c01e537f"
     },
     "data/forecast_team_off_def_injuries_2026.csv": {
-      "checksum": "37b69903231f06d825b8b25c868bfaba"
+      "checksum": "5aecb981a3d84c90a6952c27a7526985"
     },
     "data/hiddengame_future_team_injury_adjustments_2026.csv": {
-      "checksum": "b0508e9ee46bbd87d265d4f987e1a785"
+      "checksum": "3cd2b9ac1f41a52b0d83c8713d69299d"
     },
     "data/hiddengame_injury_adjustments.csv": {
       "checksum": "ddef9f944a5053d83721ead74abdc5c5"
@@ -2196,7 +2196,7 @@
       "checksum": "ffa60f5542b65a9ec973adac4a4b94c2"
     },
     "data/legacy_pregame_lines_2026.csv": {
-      "checksum": "d486ce9fbe6dc74634a5191a8d07dd8d"
+      "checksum": "4ae259854515234a8ffe081e85faf1df"
     },
     "data/model_inventory.rds": {
       "checksum": "cc6aa5b5aa95e4c82b5649a10daa27fa"
@@ -2208,22 +2208,22 @@
       "checksum": "1b35c5c0db5ba70d8d74300fab3f3d17"
     },
     "data/nextgen_prediction_column_inventory.csv": {
-      "checksum": "1be50d9f95959d584e3d8f3e53739bdd"
+      "checksum": "57a11368119c814c884adf782c2f675a"
     },
     "data/nextgen_pregame_2026_archive.rds": {
       "checksum": "a525600b0750751e05d5f53a80f512a7"
     },
     "data/poolhost_2026_week_3.csv": {
-      "checksum": "a902681cb481d78ae8470596593683d2"
+      "checksum": "4b633461a8945f40612416376be10f76"
     },
     "data/prediction_column_inventory.csv": {
-      "checksum": "1df68c9e24d6096d8098bd09fe6e609d"
+      "checksum": "902499db9113b34f5a93e97746f04e1a"
     },
     "prediction_column_inventory.csv": {
-      "checksum": "107e9102f3c79c858f2b2619c40f8181"
+      "checksum": "cacdae376a16716cedcf5ca7ccd034bc"
     },
     "refresh_forecast_adjustments.R": {
-      "checksum": "6dbe7638db356e9b600db5060c67206d"
+      "checksum": "a7507509af8c1ec0607b252fa8208648"
     },
     "www/ensemble-icon.png": {
       "checksum": "33e48f584eb62b03fa6b1a88519156e6"
@@ -2238,16 +2238,19 @@
       "checksum": "f1ffe1a3c4cd250e5a5c588f371e9d05"
     },
     "data/circa_million_2026_week_8.csv": {
-      "checksum": "5d6de049dbc81c03a3df53b69c1ccc6f"
+      "checksum": "967011e38d38ac474b5e557de36471ae"
     },
     "data/midweek_lines_2026.csv": {
-      "checksum": "cdbf45dd59310be9a912309a1535d18a"
+      "checksum": "2e948bf2476acb388262b8dc72958820"
     },
     "data/pre_midweek_lines_2026.csv": {
-      "checksum": "7c3682eb1c2df0abf5507d7c6365065e"
+      "checksum": "6025b4a23c256c6b9bd145a102424312"
     },
     "data/current_results_2026.csv": {
-      "checksum": "f3901dddef848da7529be33014a5138d"
+      "checksum": "bc647f5a3a005a8b7bd3012c85baa484"
+    },
+    "data/nextgen_clean_refit_models.rds": {
+      "checksum": "cdf05777a0163de19eee27994f3051f1"
     }
   },
   "users": null
