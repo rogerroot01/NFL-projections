@@ -268,7 +268,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,9,NYJ,AFC,AFC East,0,0.12
 2026,9,PHI,NFC,NFC East,-5.03,0
 2026,9,SEA,NFC,NFC West,0,0
-2026,9,SF,NFC,NFC West,0,0
+2026,9,SF,NFC,NFC West,-3.49,0
 2026,9,TB,NFC,NFC South,0,1.15
 2026,9,WAS,NFC,NFC East,-3.17,0.18
 2026,10,ARI,NFC,NFC West,-1.19,0
