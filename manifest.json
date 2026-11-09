@@ -2148,10 +2148,10 @@
   },
   "files": {
     "README.md": {
-      "checksum": "d3f50a468bde290a1829849df31d154e"
+      "checksum": "73835f7a63998f3371d51cbce2bd26f4"
     },
     "app.R": {
-      "checksum": "9cd070d513142705df5f20e4892f5fc0"
+      "checksum": "ccd46e365160305ba3332b24647915c2"
     },
     "data/circa_million_2026_week_1.csv": {
       "checksum": "89ada6435784274be3533436d26df80d"
@@ -2181,10 +2181,10 @@
       "checksum": "1566b82aa78eb36eeb3f52a81baae026"
     },
     "data/forecast_team_off_def_injuries_2026.csv": {
-      "checksum": "52c49ecef3da97d5d965210348b9992e"
+      "checksum": "7b459e29a9b4105cc4cc52b192713f3a"
     },
     "data/hiddengame_future_team_injury_adjustments_2026.csv": {
-      "checksum": "616254742d94e0815cc4b6dee6e0d4ee"
+      "checksum": "3c4c11c091268f35036e051782cc1a7c"
     },
     "data/hiddengame_injury_adjustments.csv": {
       "checksum": "ddef9f944a5053d83721ead74abdc5c5"
@@ -2253,7 +2253,7 @@
       "checksum": "cdf05777a0163de19eee27994f3051f1"
     },
     "R/nextgen_probability.R": {
-      "checksum": "9ad8e6a8e1785695e1f1d1304471f7cf"
+      "checksum": "a91b894d106c959b6fdf11f554d983b3"
     },
     "data/nextgen_probability.rds": {
       "checksum": "944c4abc6fd6b9853800417a12e6d8aa"
