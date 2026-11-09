@@ -4,6 +4,10 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 2L || length(args) > 3L) {
   stop("Usage: Rscript tools/build_nextgen_probability.R <completed Next Gen audit directory> <new output.rds> [prior probability.rds]")
 }
+framework <- match.arg(Sys.getenv("NEXTGEN_PROBABILITY_FRAMEWORK", "early"), c("early", "late"))
+if (framework == "late" && length(args) != 3L) {
+  stop("The late refit requires a prior probability bundle with locked settings.")
+}
 audit <- normalizePath(args[1], winslash = "/", mustWork = TRUE)
 output <- file.path(normalizePath(dirname(args[2]), winslash = "/", mustWork = TRUE), basename(args[2]))
 stopifnot(!file.exists(output))
@@ -30,8 +34,7 @@ cat("Verified completed Next Gen handoff", feature_hash, "\n")
 
 # Use the original spread feature selection and preprocessing, with a binary target.
 helpers <- new.env()
-helper_path <- file.path(audit, "Football_projection_pipeline_exclusion",
-                         "New_Models_Early_2025/00_v12_modeling_helpers.R")
+helper_path <- file.path(audit, "fits", "2024", framework, "A", "tune", "00_v12_modeling_helpers.R")
 # The shared helper creates a default output directory on source. Confine it to scratch.
 source_helpers <- function() {
   previous <- setwd(tempdir())
@@ -40,6 +43,9 @@ source_helpers <- function() {
 }
 source_helpers()
 helpers$QUIET_MODEL_RUN <- TRUE
+min_train_week <- helpers$MIN_TRAIN_WEEK
+stopifnot(min_train_week == switch(framework, early = 1, late = 9))
+cat("Fitting", framework, "framework using historical Week", min_train_week, "onward\n")
 games <- helpers$collapse_to_game_level(helpers$load_v12_data(features_path))
 stopifnot(!anyNA(games$game_id), !anyDuplicated(games$game_id))
 games$actual <- ifelse(games$home_score > games$away_score, 1L,
@@ -48,9 +54,8 @@ blocked <- unique(c(unlist(feature_gate$blocked_fields), helpers$exact_leakage_c
                     helpers$market_cols, "season", "actual"))
 
 training <- function(season) {
-  # Match the Next Gen season exclusions, with no early/late week filter.
   games[games$season < season & !games$season %in% helpers$EXCLUDE_TRAIN_SEASONS &
-          !is.na(games$actual), , drop = FALSE]
+          games$week >= min_train_week & !is.na(games$actual), , drop = FALSE]
 }
 
 # Read the actual audited production spread grids, including the guarded
@@ -88,7 +93,6 @@ feature_limits <- c(Inf, Inf, c$MAX_FEATURES_TREE, d$MAX_FEATURES_RF,
                     e$MAX_FEATURES_GBM, f$MAX_FEATURES_XGB)
 names(feature_limits) <- names(grid)
 seed <- 20260512L
-cat("Production search", sum(vapply(grid, nrow, integer(1))), "candidate settings across", length(grid), "families\n")
 
 model_data <- function(train, forecast) {
   stopifnot(nrow(train) > 0, nrow(forecast) > 0, max(train$season) < min(forecast$season))
@@ -168,8 +172,6 @@ log_loss <- function(actual, probability) {
 }
 
 tuning_season <- 2023L
-tuning_train <- training(tuning_season)
-tuning_games <- games[games$season == tuning_season & !is.na(games$actual), , drop = FALSE]
 search_spec <- list(grid = grid, controls = list(A = a, B = b, C = c, D = d, E = e, F = f), seed = seed)
 if (length(args) == 3L) {
   previous <- readRDS(args[3])
@@ -178,8 +180,15 @@ if (length(args) == 3L) {
   selected <- previous$settings
   tuning_results <- previous$tuning_results
   stopifnot(identical(names(selected), names(grid)))
-  cat("Reusing locked 2023 classification settings\n")
+  tuning_fit_seasons <- previous$tuning_fit_seasons
+  settings_source_sha256 <- sha256(args[3])
+  cat("Refitting with locked 2023 classification settings. No hyperparameter search.\n")
 } else {
+  cat("Production search", sum(vapply(grid, nrow, integer(1))), "candidate settings across", length(grid), "families\n")
+  tuning_train <- training(tuning_season)
+  tuning_fit_seasons <- sort(unique(tuning_train$season))
+  tuning_games <- games[games$season == tuning_season & !is.na(games$actual), , drop = FALSE]
+  settings_source_sha256 <- NULL
   tune <- model_data(tuning_train, tuning_games)
   script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
   search_key <- digest::digest(list(feature_hash, sha256(helper_path), search_spec,
@@ -245,6 +254,7 @@ predictions <- list()
 fit_audit <- list()
 for (season in 2024:2025) {
   train <- training(season)
+  cat("Training for", season, "on", nrow(train), "prior games\n")
   forecast <- games[games$season == season, , drop = FALSE]
   data <- model_data(train, forecast)
   for (family in names(grid)) {
@@ -261,9 +271,11 @@ for (season in 2024:2025) {
     cat("Backtest complete", season, family, nrow(forecast), "games\n")
   }
 }
-bundle <- list(schema = 1L, predictions = do.call(rbind, predictions), settings = selected,
+bundle <- list(schema = 1L, framework = framework, min_train_week = min_train_week,
+               settings_source_sha256 = settings_source_sha256,
+               predictions = do.call(rbind, predictions), settings = selected,
                search_spec = search_spec, tuning_results = tuning_results,
-               tuning_season = tuning_season, tuning_fit_seasons = sort(unique(tuning_train$season)),
+               tuning_season = tuning_season, tuning_fit_seasons = tuning_fit_seasons,
                feature_sha256 = feature_hash, spread_export_sha256 = score_hash,
                feature_helper_sha256 = sha256(helper_path), fit_audit = fit_audit)
 stopifnot(nrow(bundle$predictions) > 0, !anyDuplicated(bundle$predictions[c("game_id", "family")]))

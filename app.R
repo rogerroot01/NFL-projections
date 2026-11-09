@@ -7,8 +7,9 @@ library(tidyr)
 library(DT)
 source("R/ensemble_vote.R", local = TRUE)
 source("R/nextgen_probability.R", local = TRUE)
-nextgen_probability_path <- file.path("data", "nextgen_probability.rds")
-nextgen_probability_bundle <- if (file.exists(nextgen_probability_path)) readRDS(nextgen_probability_path) else NULL
+nextgen_probability_paths <- c(Early = "data/nextgen_probability.rds",
+                               Late = "data/nextgen_probability_late.rds")
+nextgen_probability_bundles <- lapply(nextgen_probability_paths[file.exists(nextgen_probability_paths)], readRDS)
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
@@ -1788,7 +1789,7 @@ ui <- fluidPage(
         )
       )
     ),
-    tabPanel("NextGen Probability", nextgen_probability_ui("nextgen_probability", nextgen_probability_bundle)),
+    tabPanel("NextGen Probability", nextgen_probability_ui("nextgen_probability", nextgen_probability_bundles)),
     tabPanel(
       "Consensus",
       sidebarLayout(
@@ -2091,7 +2092,7 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-  nextgen_probability_server("nextgen_probability", nextgen_probability_bundle)
+  nextgen_probability_server("nextgen_probability", nextgen_probability_bundles)
   show_forecast_adjustments <- function() {
     showModal(modalDialog(
       title = "2026 forecast adjustments",

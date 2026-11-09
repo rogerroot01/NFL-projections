@@ -59,9 +59,10 @@ first. The app does not fetch DraftKings contest lines or submit picks.
 
 This standalone tab shows the 2024 and 2025 backtests for six outright-winner
 probability families and an equal-weight average. Every family uses the audited
-post-interaction Next Gen spread inputs. The existing season exclusions apply,
-and training includes every available week. Ties stay in the game table and
-are excluded from classification and probability scoring.
+post-interaction Next Gen spread inputs. The Early framework trains on all
+eligible weeks, and the Late framework trains on Week 9 onward, matching the
+score models. Both use the same prior-season exclusions and score the same
+held-out games. Ties stay in the game table and are excluded from scoring.
 
 Run the standalone build from the Wrangler root after the complete, reviewed
 Next Gen run. Pass its audit directory, which contains the audited feature
@@ -73,6 +74,8 @@ checks that the receipts match those files before it fits anything.
 The initial search reuses the audited production family grids and seed (20260512).
 It chooses each family's settings by log loss on 2023 using
 only earlier seasons for fitting. Pass the previous probability RDS as a
-third argument to reuse those settings on a later build. Review the new file
-before installing it as data/nextgen_probability.rds. The app reads that file
-at startup. The normal Next Gen refresh does not call this script.
+third argument to refit with those settings. The framework defaults to
+Early. Set `NEXTGEN_PROBABILITY_FRAMEWORK=late` and pass the locked settings
+bundle for the Late refit. After review, install Early as
+`data/nextgen_probability.rds` and Late as `data/nextgen_probability_late.rds`.
+The app reads both at startup. The normal Next Gen refresh does not call this script.
