@@ -2148,10 +2148,10 @@
   },
   "files": {
     "README.md": {
-      "checksum": "10519c2c21d6b43c00fb7abd94a0469d"
+      "checksum": "b098c11d0cd55610a84b619c1f635ad5"
     },
     "app.R": {
-      "checksum": "2d99d4759f055c83808789de667ba926"
+      "checksum": "e951456e09590c976c902f4176b199af"
     },
     "data/circa_million_2026_week_1.csv": {
       "checksum": "89ada6435784274be3533436d26df80d"
@@ -2251,6 +2251,12 @@
     },
     "data/nextgen_clean_refit_models.rds": {
       "checksum": "cdf05777a0163de19eee27994f3051f1"
+    },
+    "R/nextgen_probability.R": {
+      "checksum": "f564868df58c29c215052442f604f814"
+    },
+    "data/nextgen_probability.rds": {
+      "checksum": "2c051f5d3edd315e32adcc41f6c02110"
     }
   },
   "users": null

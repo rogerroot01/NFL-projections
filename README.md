@@ -53,3 +53,26 @@ both allow selecting the final five from the top eight eligible games. Their
 handicap; +10.5 underdogs and -10 favorites remain eligible. If the active week has
 no bundled PoolHost sheet, paste and load that week's sheet in PoolHost Picks
 first. The app does not fetch DraftKings contest lines or submit picks.
+
+
+## NextGen Probability
+
+This standalone tab shows the 2024 and 2025 backtests for six outright-winner
+probability families and an equal-weight average. Every family uses the audited
+post-interaction Next Gen spread inputs. The existing season exclusions apply,
+and training includes every available week. Ties stay in the game table and
+are excluded from classification and probability scoring.
+
+Run the standalone build from the Wrangler root after the complete, reviewed
+Next Gen run. Pass its audit directory, which contains the audited feature
+matrix, leakage checks, final score export and approval receipts. The build
+checks that the receipts match those files before it fits anything.
+
+    Rscript tools/build_nextgen_probability.R "<completed Next Gen audit directory>" "<new output.rds>"
+
+The initial search reuses the audited production family grids and seed (20260512).
+It chooses each family's settings by log loss on 2023 using
+only earlier seasons for fitting. Pass the previous probability RDS as a
+third argument to reuse those settings on a later build. Review the new file
+before installing it as data/nextgen_probability.rds. The app reads that file
+at startup. The normal Next Gen refresh does not call this script.
