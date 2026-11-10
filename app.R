@@ -1725,7 +1725,7 @@ ui <- fluidPage(
           actionButton("ng_cons_run_top", "Build next-gen consensus", class = "btn-primary"),
           tags$hr(),
           tags$h4("Projection sources"),
-          helpText("Implied uses the projected team scores to build spreads and totals."),
+          helpText("Implied uses the projected team scores to build spreads and totals. Either group can use those scores for team totals, counted once per model."),
           do.call(tabsetPanel, c(list(id = "ng_projection_group", type = "pills"),
             purrr::pmap(nextgen_vote_groups, function(id, label, framework, source, enabled) {
               tabPanel(label,
@@ -2608,8 +2608,10 @@ server <- function(input, output, session) {
 
   nextgen_filter_projection_sources <- function(cols, market, projection_sources) {
     projection_sources <- projection_sources %||% c("direct", "implied_team_scores")
-    if (!market %in% c("spread", "straight_up", "total")) {
-      return(if ("direct" %in% projection_sources) cols else character())
+    if (market %in% c("home_implied", "away_implied")) {
+      # Both groups share the same team-score forecast.
+      if (any(projection_sources %in% c("direct", "implied_team_scores"))) return(cols)
+      return(character())
     }
     if (length(projection_sources) == 0) return(character())
 
@@ -2814,6 +2816,8 @@ server <- function(input, output, session) {
     base <- apply_backtest_lines(base, line_source)
     base <- apply_projection_adjustments(base, injury_source, apply_amortization)
 
+    implied_only_team_total <- market %in% c("home_implied", "away_implied") &&
+      "implied_team_scores" %in% projection_sources && !"direct" %in% projection_sources
     out <- map_dfr(cols, function(col) {
       model_score <- score_lookup %>% filter(projection_col == col) %>% dplyr::slice_head(n = 1)
       if (nrow(model_score) == 0) {
@@ -2863,7 +2867,7 @@ server <- function(input, output, session) {
         file = meta$file,
         split = meta$sample,
         projection_col = col,
-        projection_source = nextgen_projection_source(col),
+        projection_source = if (implied_only_team_total) "Implied from team scores" else nextgen_projection_source(col),
         projection = pred,
         market_line = line,
         actual = actual,
