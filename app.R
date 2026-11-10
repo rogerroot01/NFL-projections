@@ -337,6 +337,9 @@ next_gen_family_labels <- c(
   xgboost_regression = "XGBoost Regression"
 )
 
+default_consensus_win_rate <- 50
+default_source_agreement <- 55
+
 nextgen_vote_groups <- tibble::tribble(
   ~id,                 ~label,           ~framework, ~source,               ~enabled,
   "ng_early_direct",   "Early direct",   "early",    "direct",              TRUE,
@@ -1401,7 +1404,7 @@ market_comparison_ui <- function(id) {
 
 ui <- fluidPage(
   tags$head(
-    tags$title("NFL Ensemble Model"),
+    tags$title("NFL Ensemble Model 1.0"),
     tags$link(rel = "icon", type = "image/png", href = "ensemble-icon.png"),
     tags$link(rel = "apple-touch-icon", href = "ensemble-icon.png"),
     tags$style(HTML("
@@ -1622,14 +1625,14 @@ ui <- fluidPage(
     div(
       class = "splash-card",
       tags$img(src = "nfl-logo.png", class = "splash-nfl-logo", alt = "NFL logo"),
-      h1(class = "splash-title", "NFL Ensemble Model"),
+      h1(class = "splash-title", "NFL Ensemble Model 1.0"),
       div(class = "splash-subtitle", "Projection wrangler for model families and consensus signals."),
       actionButton("splash_enter", "Enter Model")
     )
   ),
   div(
     class = "app-header",
-    h2("NFL Ensemble Model"),
+    h2("NFL Ensemble Model 1.0"),
     if (!compact_data_available) {
       div(
         class = "alert alert-danger prepared-badge",
@@ -1690,8 +1693,8 @@ ui <- fluidPage(
           ),
           helpText("2026 source: Forecast Team Off Def Injuries. With both adjustments enabled, spread uses home F minus away G; home and away scores use H and I, and the total uses H plus I."),
           actionButton("cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
-          sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
-          sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
+          sliderInput("cons_agree", "Minimum agreement", min = 50, max = 100, value = default_source_agreement, step = 5, post = "%"),
+          sliderInput("cons_min_win", "Minimum model win rate", min = 40, max = 60, value = default_consensus_win_rate, step = 1, post = "%"),
           actionButton("cons_run", "Build consensus", class = "btn-primary"),
           tags$hr(),
           downloadButton("cons_download", "Download consensus rows")
@@ -1764,8 +1767,8 @@ ui <- fluidPage(
           ),
           helpText("2026 source: Forecast Team Off Def Injuries. With both adjustments enabled, spread uses home F minus away G; home and away scores use H and I, and the total uses H plus I."),
           actionButton("ng_cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
-          sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = 60, step = 5, post = "%"),
-          sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = 40, step = 1, post = "%"),
+          sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = default_source_agreement, step = 5, post = "%"),
+          sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = default_consensus_win_rate, step = 1, post = "%"),
           actionButton("ng_cons_run", "Build next-gen consensus", class = "btn-primary"),
           tags$hr(),
           downloadButton("ng_cons_download", "Download next-gen consensus rows")
@@ -3227,7 +3230,7 @@ server <- function(input, output, session) {
     line_source <- input$cons_line_source %||% "closing"
     injury_source <- input$cons_injury_source %||% "apply"
     apply_amortization <- isTRUE(input$cons_apply_amortization)
-    min_agree <- (input$cons_agree %||% 50) / 100
+    min_agree <- (input$cons_agree %||% default_source_agreement) / 100
     withProgress(message = "Building consensus, please wait...", value = 0, {
       selected_seasons <- unique(c(as.integer(input$cons_seasons %||% integer()), as.integer(input$cons_future_seasons %||% integer())))
       if (length(selected_seasons) == 0 || all(is.na(selected_seasons))) {
@@ -3243,7 +3246,7 @@ server <- function(input, output, session) {
 
       incProgress(0.2, detail = "Collecting model projections")
       long <- purrr::map_dfr(markets, function(market) {
-        min_win <- if (identical(market, "straight_up")) 0 else (input$cons_min_win %||% 40) / 100
+        min_win <- if (identical(market, "straight_up")) 0 else (input$cons_min_win %||% default_consensus_win_rate) / 100
         pmap_dfr(selected, function(path, file, season, family, family_label, split) {
           long_predictions_for_file(
             tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
@@ -3358,7 +3361,7 @@ server <- function(input, output, session) {
     line_source <- input$ng_cons_line_source %||% "closing"
     injury_source <- input$ng_cons_injury_source %||% "apply"
     apply_amortization <- isTRUE(input$ng_cons_apply_amortization)
-    min_agree <- (input$ng_cons_agree %||% 50) / 100
+    min_agree <- (input$ng_cons_agree %||% default_source_agreement) / 100
 
     withProgress(message = "Building next-gen consensus, please wait...", value = 0, {
       selected_seasons <- unique(c(as.integer(input$ng_cons_seasons %||% integer()), as.integer(input$ng_cons_future_seasons %||% integer())))
@@ -3374,7 +3377,7 @@ server <- function(input, output, session) {
 
       incProgress(0.2, detail = "Collecting next-gen model projections")
       long <- purrr::map_dfr(markets, function(market) {
-        min_win <- if (identical(market, "straight_up")) 0 else (input$ng_cons_min_win %||% 40) / 100
+        min_win <- if (identical(market, "straight_up")) 0 else (input$ng_cons_min_win %||% default_consensus_win_rate) / 100
         pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label, projection_sources) {
           long_nextgen_predictions_for_file(
             tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
@@ -3525,7 +3528,7 @@ server <- function(input, output, session) {
     seasons <- unique(as.integer(lines$season))
     selected <- inventory %>% filter(family %in% families, season %in% seasons)
     if (nrow(selected) == 0) return(tibble())
-    min_win <- if (include_all) 0 else (input$cons_min_win %||% 40) / 100
+    min_win <- if (include_all) 0 else (input$cons_min_win %||% default_consensus_win_rate) / 100
     long <- pmap_dfr(selected, function(path, file, season, family, family_label, split) {
       long_predictions_for_file(
         tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
@@ -3554,7 +3557,7 @@ server <- function(input, output, session) {
       ungroup() %>%
       select(-.signal_key, -.home_first)
     aggregate_circa_model_rows(long, "Legacy",
-                               if (include_all) 0 else (input$cons_agree %||% 50) / 100)
+                               if (include_all) 0 else (input$cons_agree %||% default_source_agreement) / 100)
   }
 
   build_circa_nextgen_source <- function(lines, include_all = FALSE) {
@@ -3562,7 +3565,7 @@ server <- function(input, output, session) {
     seasons <- unique(as.integer(lines$season))
     selected <- nextgen_selected_inventory() %>% filter(season %in% seasons)
     if (nrow(selected) == 0) return(tibble())
-    min_win <- if (include_all) 0 else (input$ng_cons_min_win %||% 40) / 100
+    min_win <- if (include_all) 0 else (input$ng_cons_min_win %||% default_consensus_win_rate) / 100
     long <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label, projection_sources) {
       long_nextgen_predictions_for_file(
         tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
@@ -3582,7 +3585,7 @@ server <- function(input, output, session) {
       ) %>%
       mutate(circa_market_line = -circa_home_line)
     aggregate_circa_model_rows(long, "Next-gen",
-                               if (include_all) 0 else (input$ng_cons_agree %||% 50) / 100)
+                               if (include_all) 0 else (input$ng_cons_agree %||% default_source_agreement) / 100)
   }
 
   combine_circa_sources <- function(source_rows, selected_source, include_all = FALSE) {
