@@ -1120,6 +1120,27 @@ if(file.exists(verified_results_path)) {
 }
 
 
+# Choose the latest labeled board for the first week with unplayed games.
+latest_live_line_source <- function(schedule_ids, final_ids, boards) {
+  season_ids <- schedule_ids[startsWith(schedule_ids, "2026_")]
+  weeks <- as.integer(sub("^2026_([0-9]+)_.*$", "\\1", season_ids))
+  pending <- !season_ids %in% final_ids
+  if (!any(pending) || !all(c("game_id", "market_phase", "received_date") %in% names(boards)))
+    return("early")
+  active_ids <- season_ids[pending & weeks == min(weeks[pending])]
+  phase <- tolower(trimws(boards$market_phase))
+  valid <- canonical_game_id(boards$game_id) %in% active_ids &
+    is.finite(boards$spread_line) & is.finite(boards$total_line)
+  date <- substr(as.character(boards$received_date), 1L, 10L)
+  date[is.na(date) | !grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", date)] <- ""
+  last_early <- max(c("", date[valid & phase %in% c("early", "early week")]))
+  last_midweek <- max(c("", date[valid & phase %in% c("midweek", "midweek / current odds", "current")]))
+  if (nzchar(last_midweek) && last_midweek >= last_early) "midweek" else "early"
+}
+default_live_line_source <- latest_live_line_source(
+  current_lines$game_id, pipeline_game_results$game_id, midweek_lines
+)
+
 apply_pipeline_game_results <- function(df) {
   if (!"game_id" %in% names(df)) return(df)
   df$game_id <- canonical_game_id(df$game_id)
@@ -1678,9 +1699,9 @@ ui <- fluidPage(
             "cons_line_source",
             "Backtest line source",
             choices = c("Midweek / current odds" = "midweek", "Closing / saved lines" = "closing", "Early lines" = "early"),
-            selected = "midweek"
+            selected = default_live_line_source
           ),
-          helpText("Midweek uses the dated current odds for upcoming games. Closing / saved retains the previous snapshot. Early uses the original weekly lines. Completed games retain their saved grading prices."),
+          helpText("Defaults to the latest Early or Midweek board for the active week. Choose Closing / saved lines for saved-line backtests."),
           selectInput(
             "cons_injury_source",
             "Projection injury adjustment",
@@ -1752,9 +1773,9 @@ ui <- fluidPage(
             "ng_cons_line_source",
             "Backtest line source",
             choices = c("Midweek / current odds" = "midweek", "Closing / saved lines" = "closing", "Early lines" = "early"),
-            selected = "midweek"
+            selected = default_live_line_source
           ),
-          helpText("Midweek uses the dated current odds for upcoming games. Closing / saved retains the previous snapshot. Early uses the original weekly lines. Completed games retain their saved grading prices."),
+          helpText("Defaults to the latest Early or Midweek board for the active week. Choose Closing / saved lines for saved-line backtests."),
           selectInput(
             "ng_cons_injury_source",
             "Projection injury adjustment",
@@ -3228,7 +3249,7 @@ server <- function(input, output, session) {
     consensus_status("Building consensus...")
     families <- input$cons_families %||% default_legacy_families
     markets <- dashboard_market_keys
-    line_source <- input$cons_line_source %||% "closing"
+    line_source <- input$cons_line_source %||% default_live_line_source
     injury_source <- input$cons_injury_source %||% "apply"
     apply_amortization <- isTRUE(input$cons_apply_amortization)
     min_agree <- (input$cons_agree %||% default_source_agreement) / 100
@@ -3359,7 +3380,7 @@ server <- function(input, output, session) {
       return(tibble())
     }
     markets <- dashboard_market_keys
-    line_source <- input$ng_cons_line_source %||% "closing"
+    line_source <- input$ng_cons_line_source %||% default_live_line_source
     injury_source <- input$ng_cons_injury_source %||% "apply"
     apply_amortization <- isTRUE(input$ng_cons_apply_amortization)
     min_agree <- (input$ng_cons_agree %||% default_source_agreement) / 100
@@ -3535,7 +3556,7 @@ server <- function(input, output, session) {
         tibble(path = path, file = file, season = season, family = family, family_label = family_label, split = split),
         "spread",
         min_win,
-        input$cons_line_source %||% "closing",
+        input$cons_line_source %||% default_live_line_source,
         input$cons_injury_source %||% "apply",
         isTRUE(input$cons_apply_amortization)
       )
@@ -3572,7 +3593,7 @@ server <- function(input, output, session) {
         tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
         "spread",
         min_win,
-        input$ng_cons_line_source %||% "closing",
+        input$ng_cons_line_source %||% default_live_line_source,
         input$ng_cons_injury_source %||% "apply",
         isTRUE(input$ng_cons_apply_amortization),
         projection_sources
@@ -3666,7 +3687,7 @@ server <- function(input, output, session) {
         long_predictions_for_file(
           tibble(path = path, file = file, season = season, family = family,
                  family_label = family_label, split = split),
-          "total", 0, input$cons_line_source %||% "closing",
+          "total", 0, input$cons_line_source %||% default_live_line_source,
           input$cons_injury_source %||% "apply",
           isTRUE(input$cons_apply_amortization)
         )
@@ -3687,7 +3708,7 @@ server <- function(input, output, session) {
         long_nextgen_predictions_for_file(
           tibble(path = path, file = file, season = season, framework = framework,
                  sample = sample, family = family, family_label = family_label),
-          "total", 0, input$ng_cons_line_source %||% "closing",
+          "total", 0, input$ng_cons_line_source %||% default_live_line_source,
           input$ng_cons_injury_source %||% "apply",
           isTRUE(input$ng_cons_apply_amortization),
           projection_sources
@@ -4841,9 +4862,9 @@ server <- function(input, output, session) {
     )
     line_source <- switch(
       source_key,
-      legacy = input$cons_line_source %||% "closing",
-      next_gen = input$ng_cons_line_source %||% "closing",
-      combined = paste(unique(c(input$cons_line_source %||% "closing", input$ng_cons_line_source %||% "closing")), collapse = "+"),
+      legacy = input$cons_line_source %||% default_live_line_source,
+      next_gen = input$ng_cons_line_source %||% default_live_line_source,
+      combined = paste(unique(c(input$cons_line_source %||% default_live_line_source, input$ng_cons_line_source %||% default_live_line_source)), collapse = "+"),
       NA_character_
     )
     injury_adjustment <- switch(
