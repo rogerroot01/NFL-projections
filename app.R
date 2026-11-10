@@ -338,6 +338,7 @@ next_gen_family_labels <- c(
 )
 
 default_consensus_win_rate <- 50
+default_legacy_families <- c("ScoresTrees", "ScoresLateReg", "Billy")
 default_source_agreement <- 55
 
 nextgen_vote_groups <- tibble::tribble(
@@ -1663,7 +1664,7 @@ ui <- fluidPage(
             "cons_families",
             "Families",
             choices = stats::setNames(names(family_labels), family_labels),
-            selected = c("ScoresTrees", "ScoresLateReg", "Billy", "BillyTrees")
+            selected = default_legacy_families
           ),
           checkboxGroupInput("cons_seasons", "Backtest seasons", choices = backtest_seasons, selected = backtest_seasons),
           checkboxGroupInput("cons_future_seasons", "Future projection seasons", choices = future_seasons, selected = future_seasons),
@@ -3225,7 +3226,7 @@ server <- function(input, output, session) {
 
   build_consensus_rows <- function() {
     consensus_status("Building consensus...")
-    families <- input$cons_families %||% names(family_labels)
+    families <- input$cons_families %||% default_legacy_families
     markets <- dashboard_market_keys
     line_source <- input$cons_line_source %||% "closing"
     injury_source <- input$cons_injury_source %||% "apply"
