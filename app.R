@@ -339,6 +339,14 @@ next_gen_family_labels <- c(
 
 default_consensus_win_rate <- 50
 default_legacy_families <- c("ScoresTrees", "ScoresLateReg", "Billy")
+
+nextgen_default_families <- function(group_id) {
+  families <- names(next_gen_family_labels)
+  if (identical(group_id, "ng_late_direct")) {
+    families <- setdiff(families, c("decision_tree_rpart", "random_forest_ranger"))
+  }
+  families
+}
 default_source_agreement <- 55
 
 nextgen_vote_groups <- tibble::tribble(
@@ -1757,7 +1765,7 @@ ui <- fluidPage(
                 checkboxInput(paste0(id, "_enabled"), "Use this group", value = enabled),
                 checkboxGroupInput(paste0(id, "_families"), "Families",
                   choices = stats::setNames(names(next_gen_family_labels), next_gen_family_labels),
-                  selected = names(next_gen_family_labels))
+                  selected = nextgen_default_families(id))
               )
             })
           )),
@@ -3361,7 +3369,7 @@ server <- function(input, output, session) {
       families <- input[[paste0(id, "_families")]]
       if (is.null(use_group)) {
         use_group <- enabled
-        families <- names(next_gen_family_labels)
+        families <- nextgen_default_families(id)
       }
       if (!isTRUE(use_group)) families <- character()
       tibble(framework = rep(framework, length(families)),
