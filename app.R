@@ -341,6 +341,9 @@ default_consensus_win_rate <- 50
 default_legacy_families <- c("ScoresTrees", "ScoresLateReg", "Billy")
 
 nextgen_default_families <- function(group_id) {
+  if (identical(group_id, "ng_early_implied")) {
+    return(c("elastic_net_lasso", "decision_tree_rpart"))
+  }
   families <- names(next_gen_family_labels)
   if (identical(group_id, "ng_late_direct")) {
     families <- setdiff(families, c("decision_tree_rpart", "random_forest_ranger"))
