@@ -29,6 +29,14 @@ nextgen_probability_comparison <- function(ensembles) {
   bind_rows(summaries, .id = "Framework")
 }
 
+nextgen_probability_period_rows <- function(rows, period) {
+  if (identical(period, "2026")) {
+    rows[rows$season == 2026L & is.finite(rows$home_score) & is.finite(rows$away_score), , drop = FALSE]
+  } else {
+    rows[rows$season %in% c(2024L, 2025L), , drop = FALSE]
+  }
+}
+
 nextgen_probability_ui <- function(id, bundles) {
   ns <- NS(id)
   if (!length(bundles)) {
@@ -37,10 +45,15 @@ nextgen_probability_ui <- function(id, bundles) {
   }
   bundle <- bundles[[1L]]
   rows <- bundle$predictions
+  current <- nextgen_probability_period_rows(rows, "2026")
+  has_current <- nrow(current) > 0L
+  periods <- c("2024–2025 backtest" = "backtest")
+  if (has_current) periods <- c(periods, "2026 results" = "2026")
   sidebarLayout(
     sidebarPanel(
       width = 3,
-      selectInput(ns("season"), "Backtest season", choices = sort(unique(rows$season), decreasing = TRUE)),
+      selectInput(ns("period"), "Detail period", choices = periods,
+                  selected = if (has_current) "2026" else "backtest"),
       selectInput(ns("framework"), "Training framework", choices = names(bundles)),
       checkboxGroupInput(ns("families"), "Families", choices = names(bundle$settings),
                          selected = names(bundle$settings)),
@@ -51,10 +64,14 @@ nextgen_probability_ui <- function(id, bundles) {
       tags$p(class = "alert alert-info",
              "Both frameworks use the audited Next Gen spread inputs and the same settings selected on 2023. Early trains on all eligible prior weeks. Late trains on Week 9 onward. Both forecast the same held-out games. Scoring excludes tied games."),
       if (length(bundles) > 1L) tagList(
-        h4("Framework comparison"),
-        tableOutput(ns("comparison"))
+        h4("Framework comparison · 2024–2025 backtest"),
+        tableOutput(ns("comparison")),
+        if (has_current) tagList(
+          h4(sprintf("Framework comparison · 2026 through Week %d", max(current$week))),
+          tableOutput(ns("comparison_2026"))
+        )
       ),
-      h4("Backtest summary"),
+      textOutput(ns("summary_title"), container = h4),
       tableOutput(ns("summary")),
       h4("Weekly results"),
       DTOutput(ns("weekly")),
@@ -71,15 +88,24 @@ nextgen_probability_server <- function(id, bundles) {
     filtered <- reactive({
       validate(need(length(input$families) > 0L, "Select at least one family."))
       lapply(bundles, function(bundle) {
-        bundle$predictions |>
-          filter(.data$season == as.integer(input$season), .data$family %in% input$families)
+        filter(bundle$predictions, .data$family %in% input$families)
       })
     })
-    selected <- reactive(filtered()[[req(input$framework)]])
+    comparison <- function(period) {
+      ensembles <- lapply(filtered(), function(rows) {
+        nextgen_probability_ensemble(nextgen_probability_period_rows(rows, period))
+      })
+      nextgen_probability_comparison(ensembles)
+    }
+    selected <- reactive(nextgen_probability_period_rows(
+      filtered()[[req(input$framework)]], req(input$period)))
     ensemble <- reactive(nextgen_probability_ensemble(selected()))
-    output$comparison <- renderTable({
-      nextgen_probability_comparison(lapply(filtered(), nextgen_probability_ensemble))
-    }, striped = TRUE, bordered = TRUE, digits = 4)
+    output$comparison <- renderTable(comparison("backtest"), striped = TRUE, bordered = TRUE, digits = 4)
+    output$comparison_2026 <- renderTable(comparison("2026"), striped = TRUE, bordered = TRUE, digits = 4)
+    output$summary_title <- renderText({
+      period <- if (identical(input$period, "2026")) "2026" else "2024–2025 backtest"
+      paste("Family results", req(input$framework), period, sep = " · ")
+    })
     output$summary <- renderTable({
       by_family <- lapply(split(selected(), selected()$family), nextgen_probability_summary)
       bind_rows(c(list(Ensemble = nextgen_probability_summary(ensemble())), by_family), .id = "Family")
@@ -93,7 +119,7 @@ nextgen_probability_server <- function(id, bundles) {
     })
     game_table <- reactive({
       rows <- ensemble() |>
-        transmute(Week = .data$week, Away = .data$away_team, Home = .data$home_team,
+        transmute(Season = .data$season, Week = .data$week, Away = .data$away_team, Home = .data$home_team,
                   HomeWinPct = round(100 * .data$home_win_probability, 2),
                   Pick = case_when(.data$home_win_probability > 0.5 ~ .data$home_team,
                                    .data$home_win_probability < 0.5 ~ .data$away_team,
@@ -106,13 +132,16 @@ nextgen_probability_server <- function(id, bundles) {
                                   paste(.data$away_score, .data$home_score, sep = "–"), NA_character_))
       if (length(input$week) && nzchar(input$week)) rows <- filter(rows, .data$Week == as.integer(input$week))
       names(rows)[names(rows) == "HomeWinPct"] <- "Home win %"
-      arrange(rows, .data$Week, .data$Away)
+      arrange(rows, .data$Season, .data$Week, .data$Away)
     })
     output$games <- renderDT({
       datatable(game_table(), rownames = FALSE, options = list(pageLength = 20))
     })
     output$download <- downloadHandler(
-      filename = function() paste0("nextgen-probability-", tolower(input$framework), "-", input$season, ".csv"),
+      filename = function() {
+        period <- if (identical(input$period, "2026")) "2026" else "2024-2025"
+        paste0("nextgen-probability-", tolower(input$framework), "-", period, ".csv")
+      },
       content = function(path) write.csv(game_table(), path, row.names = FALSE, na = "")
     )
   })

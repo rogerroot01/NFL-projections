@@ -1,11 +1,12 @@
 # Standalone build. The Wrangler reads the output; it never fits a model.
 options(encoding = "UTF-8")
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2L || length(args) > 3L) {
-  stop("Usage: Rscript tools/build_nextgen_probability.R <completed Next Gen audit directory> <new output.rds> [prior probability.rds]")
+if (length(args) < 2L || length(args) > 4L) {
+  stop("Usage: Rscript tools/build_nextgen_probability.R <completed Next Gen audit directory> <new output.rds> [prior probability.rds] [reviewed weekly refresh directory for 2026]")
 }
+current_replay <- length(args) == 4L
 framework <- match.arg(Sys.getenv("NEXTGEN_PROBABILITY_FRAMEWORK", "early"), c("early", "late"))
-if (framework == "late" && length(args) != 3L) {
+if (framework == "late" && length(args) < 3L) {
   stop("The late refit requires a prior probability bundle with locked settings.")
 }
 audit <- normalizePath(args[1], winslash = "/", mustWork = TRUE)
@@ -173,8 +174,11 @@ log_loss <- function(actual, probability) {
 
 tuning_season <- 2023L
 search_spec <- list(grid = grid, controls = list(A = a, B = b, C = c, D = d, E = e, F = f), seed = seed)
-if (length(args) == 3L) {
+if (length(args) >= 3L) {
   previous <- readRDS(args[3])
+  if (current_replay) stopifnot(identical(previous$framework, framework),
+    identical(previous$feature_sha256, feature_hash), identical(previous$spread_export_sha256, score_hash),
+    identical(previous$feature_helper_sha256, sha256(helper_path)))
   stopifnot(identical(previous$schema, 1L), identical(previous$tuning_season, tuning_season),
             identical(previous$search_spec, search_spec))
   selected <- previous$settings
@@ -250,20 +254,67 @@ if (length(args) == 3L) {
 }
 stopifnot(identical(vapply(tuning_results, nrow, integer(1)), vapply(grid, nrow, integer(1))))
 
+if (current_replay) {
+  weekly <- normalizePath(args[4], winslash = "/", mustWork = TRUE)
+  fresh_features <- file.path(weekly, "nextgen", "feature_ready", "dataV12.RData")
+  fresh_gate <- jsonlite::read_json(file.path(dirname(fresh_features), "feature_gate.json"))
+  fresh_mutation_path <- file.path(dirname(fresh_features), "asymmetric_audit.json")
+  fresh_mutation <- jsonlite::read_json(fresh_mutation_path)
+  weekly_review <- jsonlite::read_json(file.path(weekly, "public_review", "manual_numeric_review.json"))
+  current_hash <- sha256(fresh_features)
+  stopifnot(identical(fresh_gate$status, "passed"), identical(fresh_mutation$status, "passed"),
+    identical(weekly_review$status, "approved"), identical(fresh_gate$data_sha256, current_hash),
+    identical(fresh_mutation$data_sha256, current_hash), isTRUE(fresh_gate$training_only_imputation),
+    isTRUE(fresh_mutation$frozen_training_matches_approved),
+    isTRUE(fresh_mutation$current_forecast_matrix_matches_unperturbed),
+    length(fresh_mutation$changed_predictors) == 0L,
+    identical(weekly_review$evidence_sha256$asymmetric_audit.json, sha256(fresh_mutation_path)))
+  blocked <- unique(c(blocked, unlist(fresh_gate$blocked_fields)))
+  latest <- helpers$collapse_to_game_level(helpers$load_v12_data(fresh_features))
+  forecast_2026 <- latest[latest$season == 2026L, , drop = FALSE]
+  finals_path <- file.path(weekly, "official_finals.csv")
+  finals <- read.csv(finals_path, stringsAsFactors = FALSE)
+  stopifnot(all(finals$season == 2026L), all(finals$status == "Final"),
+    all(is.finite(finals$actual_home_pts)), all(is.finite(finals$actual_away_pts)),
+    nrow(finals) == weekly_review$official_finals, !anyDuplicated(forecast_2026$game_id))
+  finals$game_id <- sprintf("%04d_%02d_%s_%s", finals$season, finals$week, finals$away_team, finals$home_team)
+  stopifnot(!anyDuplicated(finals$game_id))
+  matched <- match(forecast_2026$game_id, finals$game_id)
+  has_final <- !is.na(matched)
+  stopifnot(identical(setdiff(finals$game_id, forecast_2026$game_id), "2026_08_ATL_TB"),
+    nrow(forecast_2026) == 271L, sum(has_final) == 135L, max(finals$week) == 9L,
+    all(forecast_2026$home_score[has_final] == finals$actual_home_pts[matched[has_final]]),
+    all(forecast_2026$away_score[has_final] == finals$actual_away_pts[matched[has_final]]),
+    !any(is.finite(forecast_2026$home_score[!has_final])),
+    !any(is.finite(forecast_2026$away_score[!has_final])))
+  # Pass only pregame inputs to the model. Attach independently matched finals after scoring.
+  forecast_2026$home_score <- forecast_2026$away_score <- NA_real_
+  forecast_2026$actual <- NA_integer_
+  replay_provenance <- list(feature_sha256 = current_hash, finals_sha256 = sha256(finals_path),
+                            graded_games = sum(has_final), through_week = max(finals$week),
+                            excluded_game = setdiff(finals$game_id, forecast_2026$game_id))
+}
+
 predictions <- list()
 fit_audit <- list()
-for (season in 2024:2025) {
+for (season in if (current_replay) 2026L else 2024:2025) {
   train <- training(season)
   cat("Training for", season, "on", nrow(train), "prior games\n")
-  forecast <- games[games$season == season, , drop = FALSE]
+  forecast <- if (current_replay) forecast_2026 else games[games$season == season, , drop = FALSE]
   data <- model_data(train, forecast)
   for (family in names(grid)) {
     config <- selected[[family]]$config
     probability <- predict_probability(family, config, data)
     key <- paste(season, family, sep = "|")
-    predictions[[key]] <- data.frame(forecast[c("game_id", "season", "week", "home_team", "away_team",
-                                                 "home_score", "away_score", "actual")],
-                                     family = family, home_win_probability = probability)
+    result <- forecast[c("game_id", "season", "week", "home_team", "away_team",
+                         "home_score", "away_score", "actual")]
+    if (current_replay) {
+      result$home_score <- finals$actual_home_pts[matched]
+      result$away_score <- finals$actual_away_pts[matched]
+      result$actual <- ifelse(result$home_score > result$away_score, 1L,
+                             ifelse(result$home_score < result$away_score, 0L, NA_integer_))
+    }
+    predictions[[key]] <- data.frame(result, family = family, home_win_probability = probability)
     fit_audit[[key]] <- list(season = season, family = family, train_seasons = sort(unique(train$season)),
                              train_weeks = sort(unique(train$week)), training_games = nrow(train),
                              forecast_games = nrow(forecast),
@@ -278,6 +329,15 @@ bundle <- list(schema = 1L, framework = framework, min_train_week = min_train_we
                tuning_season = tuning_season, tuning_fit_seasons = tuning_fit_seasons,
                feature_sha256 = feature_hash, spread_export_sha256 = score_hash,
                feature_helper_sha256 = sha256(helper_path), fit_audit = fit_audit)
+if (current_replay) {
+  replay <- bundle$predictions
+  replay_fits <- bundle$fit_audit
+  bundle <- previous
+  historical <- bundle$predictions$season %in% c(2024L, 2025L)
+  bundle$predictions <- rbind(bundle$predictions[historical, , drop = FALSE], replay)
+  bundle$fit_audit <- c(bundle$fit_audit[!names(bundle$fit_audit) %in% names(replay_fits)], replay_fits)
+  bundle$season_2026 <- replay_provenance
+}
 stopifnot(nrow(bundle$predictions) > 0, !anyDuplicated(bundle$predictions[c("game_id", "family")]))
 temporary <- tempfile("nextgen-probability-", tmpdir = dirname(output))
 saveRDS(bundle, temporary, version = 3)
