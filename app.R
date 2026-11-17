@@ -338,24 +338,25 @@ next_gen_family_labels <- c(
 )
 
 default_consensus_win_rate <- 50
+default_nextgen_win_rate <- 40
 default_legacy_families <- c("ScoresTrees", "ScoresLateReg", "Billy")
 
 nextgen_default_families <- function(group_id) {
-  if (identical(group_id, "ng_early_implied")) {
-    return(c("elastic_net_lasso", "decision_tree_rpart"))
-  }
-  families <- names(next_gen_family_labels)
-  if (identical(group_id, "ng_late_direct")) {
-    families <- setdiff(families, c("decision_tree_rpart", "random_forest_ranger"))
-  }
-  families
+  switch(group_id,
+    ng_early_direct = c("weighted_linear_regression", "decision_tree_rpart",
+                        "gbm_boosted_trees", "xgboost_regression"),
+    ng_late_direct = c("elastic_net_lasso", "weighted_linear_regression", "decision_tree_rpart",
+                       "random_forest_ranger", "xgboost_regression"),
+    ng_early_implied = c("elastic_net_lasso", "decision_tree_rpart"),
+    names(next_gen_family_labels)
+  )
 }
 default_source_agreement <- 55
 
 nextgen_vote_groups <- tibble::tribble(
   ~id,                 ~label,           ~framework, ~source,               ~enabled,
   "ng_early_direct",   "Early direct",   "early",    "direct",              TRUE,
-  "ng_early_implied",  "Early implied",  "early",    "implied_team_scores", TRUE,
+  "ng_early_implied",  "Early implied",  "early",    "implied_team_scores", FALSE,
   "ng_late_direct",    "Late direct",    "late",     "direct",              TRUE,
   "ng_late_implied",   "Late implied",   "late",     "implied_team_scores", FALSE
 )
@@ -1801,7 +1802,7 @@ ui <- fluidPage(
           helpText("2026 source: Forecast Team Off Def Injuries. With both adjustments enabled, spread uses home F minus away G; home and away scores use H and I, and the total uses H plus I."),
           actionButton("ng_cons_view_adjustments", "View 2026 adjustments", class = "btn-default"),
           sliderInput("ng_cons_agree", "Minimum agreement", min = 50, max = 100, value = default_source_agreement, step = 5, post = "%"),
-          sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = default_consensus_win_rate, step = 1, post = "%"),
+          sliderInput("ng_cons_min_win", "Minimum model win rate", min = 40, max = 60, value = default_nextgen_win_rate, step = 1, post = "%"),
           actionButton("ng_cons_run", "Build next-gen consensus", class = "btn-primary"),
           tags$hr(),
           downloadButton("ng_cons_download", "Download next-gen consensus rows")
@@ -3410,7 +3411,7 @@ server <- function(input, output, session) {
 
       incProgress(0.2, detail = "Collecting next-gen model projections")
       long <- purrr::map_dfr(markets, function(market) {
-        min_win <- if (identical(market, "straight_up")) 0 else (input$ng_cons_min_win %||% default_consensus_win_rate) / 100
+        min_win <- if (identical(market, "straight_up")) 0 else (input$ng_cons_min_win %||% default_nextgen_win_rate) / 100
         pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label, projection_sources) {
           long_nextgen_predictions_for_file(
             tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
@@ -3598,7 +3599,7 @@ server <- function(input, output, session) {
     seasons <- unique(as.integer(lines$season))
     selected <- nextgen_selected_inventory() %>% filter(season %in% seasons)
     if (nrow(selected) == 0) return(tibble())
-    min_win <- if (include_all) 0 else (input$ng_cons_min_win %||% default_consensus_win_rate) / 100
+    min_win <- if (include_all) 0 else (input$ng_cons_min_win %||% default_nextgen_win_rate) / 100
     long <- pmap_dfr(selected, function(path, file, season, framework, sample, family, family_label, projection_sources) {
       long_nextgen_predictions_for_file(
         tibble(path = path, file = file, season = season, framework = framework, sample = sample, family = family, family_label = family_label),
