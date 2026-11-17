@@ -1,4 +1,17 @@
 game_id,season,week,away_team,home_team,spread_line,total_line,away_spread,home_spread,away_spread_price,home_spread_price,over_price,under_price,away_moneyline,home_moneyline,source,received_date,home_implied,away_implied,snapshot_id,market_phase
+2026_11_IND_HOU,2026,11,IND,HOU,12.5,44.5,12.5,-12.5,-112,-108,-105,-115,500,-700,Owner-supplied sportsbook board,2026-11-17,28.5,16.0,2026-11-17_early_week11,Early Week
+2026_11_NO_CHI,2026,11,NO,CHI,11.5,49.5,11.5,-11.5,-108,-112,-105,-115,490,-675,Owner-supplied sportsbook board,2026-11-17,30.5,19.0,2026-11-17_early_week11,Early Week
+2026_11_MIA_BUF,2026,11,MIA,BUF,16.5,45.5,16.5,-16.5,-112,-108,-110,-110,750,-1200,Owner-supplied sportsbook board,2026-11-17,31.0,14.5,2026-11-17_early_week11,Early Week
+2026_11_ARI_KC,2026,11,ARI,KC,16.5,41.5,16.5,-16.5,-115,-105,-108,-112,1000,-1800,Owner-supplied sportsbook board,2026-11-17,29.0,12.5,2026-11-17_early_week11,Early Week
+2026_11_TEN_DAL,2026,11,TEN,DAL,8.5,54.5,8.5,-8.5,-115,-105,-120,100,330,-425,Owner-supplied sportsbook board,2026-11-17,31.5,23.0,2026-11-17_early_week11,Early Week
+2026_11_TB_DET,2026,11,TB,DET,6.5,46.5,6.5,-6.5,-112,-108,-110,-110,220,-270,Owner-supplied sportsbook board,2026-11-17,26.5,20.0,2026-11-17_early_week11,Early Week
+2026_11_PIT_PHI,2026,11,PIT,PHI,-4.5,38.5,-4.5,4.5,-105,-115,-108,-112,-218,180,Owner-supplied sportsbook board,2026-11-17,17.0,21.5,2026-11-17_early_week11,Early Week
+2026_11_BAL_CAR,2026,11,BAL,CAR,2.5,43.5,2.5,-2.5,-105,-115,-115,-105,120,-142,Owner-supplied sportsbook board,2026-11-17,23.0,20.5,2026-11-17_early_week11,Early Week
+2026_11_NYJ_LAC,2026,11,NYJ,LAC,3,40.5,3,-3,-115,-105,-105,-115,130,-155,Owner-supplied sportsbook board,2026-11-17,21.75,18.75,2026-11-17_early_week11,Early Week
+2026_11_JAX_NYG,2026,11,JAX,NYG,-6,46.5,-6,6,-110,-110,-110,-110,-265,215,Owner-supplied sportsbook board,2026-11-17,20.25,26.25,2026-11-17_early_week11,Early Week
+2026_11_LV_DEN,2026,11,LV,DEN,10,40.5,10,-10,-108,-112,-108,-112,410,-550,Owner-supplied sportsbook board,2026-11-17,25.25,15.25,2026-11-17_early_week11,Early Week
+2026_11_MIN_SF,2026,11,MIN,SF,3,46.5,3,-3,-108,-112,-108,-112,136,-162,Owner-supplied sportsbook board,2026-11-17,24.75,21.75,2026-11-17_early_week11,Early Week
+2026_11_CIN_WAS,2026,11,CIN,WAS,-6.5,52.5,-6.5,6.5,-102,-118,-115,-105,-290,235,Owner-supplied sportsbook board,2026-11-17,23.0,29.5,2026-11-17_early_week11,Early Week
 2026_10_LAC_BAL,2026,10,LAC,BAL,4.5,38.5,4.5,-4.5,-108,-112,-115,-105,185,-225,Owner-supplied sportsbook board,2026-11-16,21.5,17.0,2026-11-16_current_week10_mnf,Current
 2026_11_IND_HOU,2026,11,IND,HOU,10.5,44.5,10.5,-10.5,-112,-108,-105,-115,410,-550,Owner-supplied sportsbook board,2026-11-16,27.5,17.0,2026-11-16_early_week11,Early Week
 2026_11_NO_CHI,2026,11,NO,CHI,10,48.5,10,-10,-112,-108,-115,-105,380,-500,Owner-supplied sportsbook board,2026-11-16,29.25,19.25,2026-11-16_early_week11,Early Week
