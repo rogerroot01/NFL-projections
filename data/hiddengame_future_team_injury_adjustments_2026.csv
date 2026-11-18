@@ -303,7 +303,7 @@ season,week,team,conference,division,off_injury_adj,def_injury_adj
 2026,11,BAL,AFC,AFC North,0.0,0.32
 2026,11,BUF,AFC,AFC East,-1.19,-0.75
 2026,11,CAR,NFC,NFC South,-0.38,0.32
-2026,11,CHI,NFC,NFC North,0.00,-0.864
+2026,11,CHI,NFC,NFC North,0.00,0.006
 2026,11,CIN,AFC,AFC North,-0.42,0.21
 2026,11,DAL,NFC,NFC East,-0.50,0.14
 2026,11,DEN,AFC,AFC West,0.00,0.00
