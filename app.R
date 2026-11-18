@@ -10,6 +10,10 @@ source("R/nextgen_probability.R", local = TRUE)
 nextgen_probability_paths <- c(Early = "data/nextgen_probability.rds",
                                Late = "data/nextgen_probability_late.rds")
 nextgen_probability_bundles <- lapply(nextgen_probability_paths[file.exists(nextgen_probability_paths)], readRDS)
+source("R/nextgen_cover_probability.R", local = TRUE, encoding = "UTF-8")
+nextgen_ats_rows <- nextgen_ats_probability_data(
+  readRDS("data/nextgen_cover.rds"), readRDS("data/nextgen_win_cover.rds"),
+  nextgen_probability_bundles[["Early"]])
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
@@ -1826,7 +1830,8 @@ ui <- fluidPage(
         )
       )
     ),
-    tabPanel("NextGen Probability", nextgen_probability_ui("nextgen_probability", nextgen_probability_bundles)),
+    tabPanel("Next Gen Win %", nextgen_probability_ui("nextgen_probability", nextgen_probability_bundles)),
+    tabPanel("Next Gen Cover %", nextgen_ats_probability_ui("nextgen_cover", nextgen_ats_rows)),
     tabPanel(
       "Consensus",
       sidebarLayout(
@@ -2130,6 +2135,7 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   nextgen_probability_server("nextgen_probability", nextgen_probability_bundles)
+  nextgen_ats_probability_server("nextgen_cover", nextgen_ats_rows)
   show_forecast_adjustments <- function() {
     showModal(modalDialog(
       title = "2026 forecast adjustments",

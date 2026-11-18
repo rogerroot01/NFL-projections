@@ -2151,7 +2151,7 @@
       "checksum": "73835f7a63998f3371d51cbce2bd26f4"
     },
     "app.R": {
-      "checksum": "5999390949e6e7d7a5d62336046dd851"
+      "checksum": "a0fd5d500fec9c3b599aeb8f6a8504d1"
     },
     "data/circa_million_2026_week_1.csv": {
       "checksum": "89ada6435784274be3533436d26df80d"
@@ -2256,13 +2256,25 @@
       "checksum": "cba85d3e71d8482dbb059b57d7f50fe7"
     },
     "data/nextgen_probability.rds": {
-      "checksum": "72aff596f54d22e29aeee3f0a0f37b59"
+      "checksum": "644b7b30148ab5ddaaf007612ad90344"
     },
     "data/nextgen_probability_late.rds": {
-      "checksum": "5d9a8d179757901ce2d571b4f7c2258a"
+      "checksum": "2c8fa26834fbcc21756328a417b0cdcf"
     },
     "data/circa_million_2026_week_10.csv": {
       "checksum": "0cb056e4fbaca1f32eb74448500ff143"
+    },
+    "R/nextgen_cover_probability.R": {
+      "checksum": "223dcb5bb78bc4ebcc2469347d6944cc"
+    },
+    "tools/build_nextgen_cover.R": {
+      "checksum": "f464d9238aa67fc7e48e9ec1840e19c0"
+    },
+    "data/nextgen_cover.rds": {
+      "checksum": "cdff3e4baeb42d4658587f9812a73a86"
+    },
+    "data/nextgen_win_cover.rds": {
+      "checksum": "44dfe73f693792467a43607fa0ad0f16"
     }
   },
   "users": null
