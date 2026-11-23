@@ -2181,10 +2181,10 @@
       "checksum": "6c5d7dc5c2ea4d670d37c11d0d879ae1"
     },
     "data/forecast_team_off_def_injuries_2026.csv": {
-      "checksum": "6e8422fe586138b33d9e93827878a78c"
+      "checksum": "6b15c454cc69cf0b2c59e0886d6da410"
     },
     "data/hiddengame_future_team_injury_adjustments_2026.csv": {
-      "checksum": "1dc193f1182352b86d8ad9914c07da48"
+      "checksum": "89f0e8d3df0688c5be7dd390abee6c51"
     },
     "data/hiddengame_injury_adjustments.csv": {
       "checksum": "c11ad7d4d450731a0bf079c62d6dac5a"
@@ -2247,7 +2247,7 @@
       "checksum": "9f8a5c1bcff55c835c184f5a91fdd756"
     },
     "data/current_results_2026.csv": {
-      "checksum": "b4062a09c1fdbf3db4bb1fba4fceb8f5"
+      "checksum": "89aac7e6563c00b08be7be5caaa773a4"
     },
     "data/nextgen_clean_refit_models.rds": {
       "checksum": "09062574250bd58b0d921a0975f5ef6f"
