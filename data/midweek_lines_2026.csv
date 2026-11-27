@@ -73,7 +73,6 @@ game_id,season,week,away_team,home_team,spread_line,total_line,away_spread,home_
 2026_12_CHI_DET,2026,12,CHI,DET,-2.5,54.5,-2.5,2.5,-112,-108,-115,-105,-135,114,Owner-supplied DraftKings board,2026-11-19,26.0,28.5,2026-11-19_midweek_weeks11_12,Midweek
 2026_12_PHI_DAL,2026,12,PHI,DAL,8.5,47.5,8.5,-8.5,-110,-110,-110,-110,310,-395,Owner-supplied DraftKings board,2026-11-19,28.0,19.5,2026-11-19_midweek_weeks11_12,Midweek
 2026_12_KC_BUF,2026,12,KC,BUF,3.0,50.5,3.0,-3.0,-115,-105,-105,-115,136,-162,Owner-supplied DraftKings board,2026-11-19,26.75,23.75,2026-11-19_midweek_weeks11_12,Midweek
-2026_12_TEN_JAX,2026,12,TEN,JAC,14.5,47.5,14.5,-14.5,-110,-110,-110,-110,750,-1200,Owner-supplied DraftKings board,2026-11-19,31.0,16.5,2026-11-19_midweek_weeks11_12,Midweek
 2026_12_DEN_PIT,2026,12,DEN,PIT,-4.5,36.5,-4.5,4.5,-119,-101,-112,-107,-239,198,Owner-supplied DraftKings board,2026-11-27,16.0,20.5,2026-11-27_midweek_weeks12_13,Midweek
 2026_12_NYG_IND,2026,12,NYG,IND,-6,41.5,-6,6,-110,-109,-111,-108,-288,236,Owner-supplied DraftKings board,2026-11-27,17.75,23.75,2026-11-27_midweek_weeks12_13,Midweek
 2026_12_ATL_MIN,2026,12,ATL,MIN,7,41.5,7,-7,-119,-101,-109,-110,259,-320,Owner-supplied DraftKings board,2026-11-27,24.25,17.25,2026-11-27_midweek_weeks12_13,Midweek
